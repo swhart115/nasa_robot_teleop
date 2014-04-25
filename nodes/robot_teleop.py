@@ -129,7 +129,7 @@ class RobotTeleop :
                     r = self.moveit_interface.execute_plan(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback() -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
-                    rospy.sleep(2.5)
+                    rospy.sleep(3)
                     self.reset_group_marker(feedback.marker_name)
                 if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
                     self.reset_group_marker(feedback.marker_name)

@@ -55,11 +55,33 @@ class MoveItInterface :
             print "ERROR creating SRDF model"
             return False
 
-    def add_group(self, group_name) :
-        self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
+    def add_group(self, group_name, joint_tolerance=0.01, position_tolerance=0.01, orientation_tolerance=0.1) :
+        try :
+            self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
+            self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
+            self.groups[group_name].set_goal_position_tolerance(position_tolerance)
+            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
+            self.print_group_info(group_name)
+            return True
+        except :
+            print "MoveItInterface()::add_group() -- Robot ", self.robot_name, " has no group: ", group_name
+            return False
 
     def has_group(self, group_name) :
         return self.robot.has_group(group_name)
+
+    def print_group_info(self, group_name) :
+        if self.has_group(group_name) :
+            print "============================================================"
+            print "============ Robot Name: %s" % self.robot_name
+            print "============ Group: ", group_name
+            print "============ Control Frame: ", self.groups[group_name].get_planning_frame()
+            print "============ Goal Tolerance: ", self.groups[group_name].get_goal_tolerance()
+            print "============ Goal Joint Tolerance: ", self.groups[group_name].get_goal_joint_tolerance()
+            print "============ Goal Position Tolerance: ", self.groups[group_name].get_goal_position_tolerance()
+            print "============ Goal Orientation Tolerance: ", self.groups[group_name].get_goal_orientation_tolerance()
+            if self.groups[group_name].has_end_effector_link() :
+                print "============ End Effector Link: ", self.groups[group_name].get_end_effector_link()
 
     def print_basic_info(self) :
         print "============================================================"
