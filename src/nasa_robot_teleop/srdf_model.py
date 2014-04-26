@@ -23,6 +23,7 @@ class SRDFModel :
         self.group_states = {}
         self.virtual_joints = {}
         self.end_effectors = {}
+        self.group_end_effectors = {}
         self.disable_collisions = {}
 
     def parse_from_file(self, filename) :
@@ -53,6 +54,8 @@ class SRDFModel :
                 self.groups.append(group_name)
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []
+                self.group_states[group_name] = dict()
+
                 print "SRDFModel::parse_from_file() -- adding group " + group_name
 
                 for group_elem in elem.getchildren() :
@@ -69,9 +72,10 @@ class SRDFModel :
                         self.group_joints[group_name].append(group_elem.attrib["name"])
 
             if elem.tag == "group_state" :
+                print "SRDFModel::parse_from_file() -- adding group state: " + elem.attrib["name"]
+
                 group_name = elem.attrib["group"]
                 group_state_name = elem.attrib["name"]
-                self.group_states[group_name] = dict()
                 self.group_states[group_name][group_state_name] = GroupState(group_name, group_state_name)
                 for group_elem in elem.getchildren() :
                     if group_elem.tag == "joint" :
@@ -91,6 +95,16 @@ class SRDFModel :
                 self.end_effectors[ee].name = ee
                 self.end_effectors[ee].group = elem.attrib["group"]
                 self.end_effectors[ee].parent_link = elem.attrib["parent_link"]
+                if "parent_group" in elem.attrib:
+                    self.end_effectors[ee].parent_group = elem.attrib["parent_group"]
+
+                ee = elem.attrib["group"]
+                self.group_end_effectors[ee] = EndEffector()
+                self.group_end_effectors[ee].name = elem.attrib["name"]
+                self.group_end_effectors[ee].group = elem.attrib["group"]
+                self.group_end_effectors[ee].parent_link = elem.attrib["parent_link"]
+                if "parent_group" in elem.attrib:
+                    self.group_end_effectors[ee].parent_group = elem.attrib["parent_group"]
 
             if elem.tag == "disable_collisions" :
                 l1 = elem.attrib["link1"]
@@ -180,6 +194,7 @@ class EndEffector :
     def __init__(self) :
         self.name = ""
         self.group = ""
+        self.parent_group = ""
         self.parent_link = ""
 
     def print_end_effector(self) :
@@ -187,6 +202,7 @@ class EndEffector :
         print "\tname: ", self.name
         print "\tgroup: ", self.group
         print "\tparent_link: ", self.parent_link
+        print "\tparent_group: ", self.parent_group
 
 class VirtualJoint :
     def __init__(self) :

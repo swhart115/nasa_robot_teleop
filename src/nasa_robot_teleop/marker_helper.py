@@ -4,6 +4,15 @@ from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import *
 
+def makeEmptyMarker( dummyBox=True ):
+    global marker_pos
+    int_marker = InteractiveMarker()
+    int_marker.header.frame_id = "/base_link"
+    int_marker.pose.position.y = -3.0 * marker_pos
+    marker_pos += 1
+    int_marker.scale = 1
+    return int_marker
+
 def makeBox( msg ):
     marker = Marker()
     marker.type = Marker.CUBE
