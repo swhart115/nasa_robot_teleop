@@ -37,16 +37,16 @@ def makeSphere( msg, scale ):
     marker.color.a = 1.0
     return marker
 
-def makeMesh( msg, mesh_str, p, sf=1 ):
+def makeMesh( msg, mesh_str, p, sf=1, alpha=1 ):
     marker = Marker()
     marker.type = Marker.MESH_RESOURCE
     marker.scale.x = sf
     marker.scale.y = sf
     marker.scale.z = sf
-    marker.color.r = 0.0
-    marker.color.g = 0.5
-    marker.color.b = 0.0
-    marker.color.a = 0.5
+    marker.color.r = 1.0
+    marker.color.g = 1.0
+    marker.color.b = 1.0
+    marker.color.a = alpha
     marker.pose = p
     marker.mesh_resource = mesh_str
     return marker

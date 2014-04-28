@@ -56,8 +56,6 @@ class SRDFModel :
                 self.group_joints[group_name] = []
                 self.group_states[group_name] = dict()
 
-                print "SRDFModel::parse_from_file() -- adding group " + group_name
-
                 for group_elem in elem.getchildren() :
                     self.base_links[elem.attrib["name"]] = None
                     self.tip_links[elem.attrib["name"]] = None
@@ -72,7 +70,6 @@ class SRDFModel :
                         self.group_joints[group_name].append(group_elem.attrib["name"])
 
             if elem.tag == "group_state" :
-                print "SRDFModel::parse_from_file() -- adding group state: " + elem.attrib["name"]
 
                 group_name = elem.attrib["group"]
                 group_state_name = elem.attrib["name"]
@@ -113,6 +110,16 @@ class SRDFModel :
                 self.disable_collisions[(l1,l2)] = r
 
         return True
+
+    def has_tip_link(self, group) :
+        return group in self.tip_links and self.tip_links[group] != None
+
+    def get_tip_link(self, group) :
+        if group in self.tip_links and self.tip_links[group] != None :
+            return self.tip_links[group]
+        else :
+            print "No Tip Link for Group ", group
+            return ""
 
     def get_groups(self) :
         return self.groups
@@ -167,7 +174,7 @@ class SRDFModel :
         print "Group: "
         print "\tname: ", group
         print "\tbase_link: ", self.base_links[group]
-        print "\ttipLink: ", self.tip_links[group]
+        print "\ttip_link: ", self.tip_links[group]
         for l in self.group_links[group] :
             print "\tlink: ", l
         for j in self.group_joints[group] :
