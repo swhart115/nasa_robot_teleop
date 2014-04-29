@@ -43,6 +43,7 @@ class RobotTeleop(threading.Thread) :
         self.stored_poses = {}
         self.group_menu_handles = {}
         self.pose_update_thread = {}
+        self.pose_store = {}
 
         self.end_effector_link_data = {}
 
@@ -74,6 +75,7 @@ class RobotTeleop(threading.Thread) :
 
         # set up menu info
         self.menu_options = []
+        self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Turn on Joint Control", True))
         self.menu_options.append(("Stored Poses", False))
 
@@ -207,7 +209,12 @@ class RobotTeleop(threading.Thread) :
                     self.reset_group_marker(feedback.marker_name)
 
     def process_feedback(self, feedback) :
-        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+
+        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_DOWN:
+            if feedback.marker_name in self.manipulator_group_names :
+                self.pose_store[feedback.marker_name] = feedback.pose
+
+        elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.manipulator_group_names :
                 pt = geometry_msgs.msg.PoseStamped()
                 pt.header = feedback.header
@@ -223,6 +230,38 @@ class RobotTeleop(threading.Thread) :
                 if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
                     self.reset_group_marker(feedback.marker_name)
 
+        elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE :
+            if feedback.marker_name in self.manipulator_group_names :
+                if not feedback.marker_name in self.pose_store: return
+                p = toMsg(fromMsg(self.pose_store[feedback.marker_name]).Inverse()*fromMsg(feedback.pose))
+                r = (kdl.Rotation.Quaternion(p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w)).GetRPY()
+                # print "delta p: ", p
+                axis_name =  feedback.control_name
+                axis_id = self.axis_map(axis_name)
+                axis_delta = self.get_axis(axis_name, p, r)
+
+                self.moveit_interface.groups[feedback.marker_name].shift_pose_target(axis_id, axis_delta)
+                self.pose_store[feedback.marker_name] = feedback.pose
+                # print self.moveit_interface.groups[feedback.marker_name].plan()
+
+    def axis_map(self, n) :
+        if n == "move_x": return 0
+        elif n == "move_z": return 1
+        elif n == "move_y": return 2
+        elif n == "rotate_x": return 3
+        elif n == "rotate_z": return 4
+        elif n == "rotate_y": return 5
+
+    def get_axis(self, n, p, r) :
+        d = 0
+        if n == "move_x": d=p.position.x
+        elif n == "move_z": d=p.position.y
+        elif n == "move_y": d=p.position.z
+        elif n == "rotate_x": d=r[0]
+        elif n == "rotate_z": d=r[1]
+        elif n == "rotate_y": d=r[2]
+        # print "Axis[", n, "], shift : ", d
+        return d
 
     def run(self) :
         while True :
@@ -235,41 +274,15 @@ class RobotTeleop(threading.Thread) :
                                 for link in self.end_effector_link_data[group].get_links() :
                                     if self.end_effector_link_data[group].get_link_data(link) :
                                         (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
-                                        # control.markers = []
                                         for marker in control.markers :
                                             if marker.text == link :
-                                                # print "\tfound link: ", marker.text
-                                                # print marker.pose
                                                 marker.pose = pose
                                                 marker.action = Marker.MODIFY
-                                            # control.markers.append( marker )
-
-                                        # menu_control.markers.append( marker )
-
-                    #     menu_control = InteractiveMarkerControl()
-                    #     menu_control.interaction_mode = InteractiveMarkerControl.MENU
-
-                    #     self.markers[group].controls = []
-                    #     for link in self.end_effector_link_data[group].get_links() :
-                    #         if self.end_effector_link_data[group].get_link_data(link) :
-                    #             (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
-                    #             marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
-                    #             menu_control.markers.append( marker )
-
-                    #         # insert marker and menus
-                    #         self.markers[group].controls.append(menu_control)
-                    #         # self.server.insert(self.markers[group], self.process_feedback)
-
-                    #     # Set up stored pose sub menu
-                    #     # self.setup_stored_pose_menu(group)
-
-                    # # add menus to server
-                    # self.server.insert(self.markers[group], self.process_feedback)
-                    # self.marker_menus[group].apply( self.server, group )
+                        self.server.insert(self.markers[group], self.process_feedback)
                 self.server.applyChanges()
             except :
                 rospy.logdebug("RobotTeleop::run() -- could not update thread")
-            rospy.sleep(.1)
+            rospy.sleep(1.5)
 
 
 class PoseUpdateThread(threading.Thread) :
