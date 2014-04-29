@@ -1,5 +1,5 @@
-from nasa_robot_teleop.xml_reflection.basics import *
-import nasa_robot_teleop.xml_reflection.core as xmlr
+from xml_reflection.basics import *
+import xml_reflection.core as xmlr
 
 # Add a 'namespace' for names so that things don't conflict between URDF and SDF?
 # A type registry? How to scope that? Just make a 'global' type pointer?
