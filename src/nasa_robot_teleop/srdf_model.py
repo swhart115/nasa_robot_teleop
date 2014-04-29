@@ -26,6 +26,12 @@ class SRDFModel :
         self.group_end_effectors = {}
         self.disable_collisions = {}
 
+    def get_group_links(self, group) :
+        return self.group_links[group]
+
+    def get_group_joints(self, group) :
+        return self.group_joints[group]
+
     def parse_from_file(self, filename) :
         try:
             print "SRDFModel::parse_from_file() -- opening SRDF file: ", filename

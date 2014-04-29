@@ -23,9 +23,10 @@ from nasa_robot_teleop.moveit_interface import *
 from nasa_robot_teleop.marker_helper import *
 from nasa_robot_teleop.kdl_posemath import *
 
-class RobotTeleop :
+class RobotTeleop(threading.Thread) :
 
     def __init__(self, robot_name, manipulator_group_names, joint_group_names):
+        super(RobotTeleop,self).__init__()
 
         self.robot_name = robot_name
         self.manipulator_group_names = manipulator_group_names
@@ -41,6 +42,8 @@ class RobotTeleop :
         self.stored_poses = {}
         self.group_menu_handles = {}
         self.pose_update_thread = {}
+
+        self.end_effector_link_data = {}
 
         # interactive marker server
         self.server = InteractiveMarkerServer(str(self.robot_name + "_teleop"))
@@ -62,6 +65,7 @@ class RobotTeleop :
 
         # set the control frames for all types of groups
         for n in self.group_names :
+            # print "setting control frame: ", self.moveit_interface.get_control_frame(n), " for group: ", n
             self.control_frames[n] = self.moveit_interface.get_control_frame(n)
 
         # what do we have?
@@ -69,7 +73,6 @@ class RobotTeleop :
 
         # set up menu info
         self.menu_options = []
-        self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Turn on Joint Control", True))
         self.menu_options.append(("Stored Poses", False))
 
@@ -79,10 +82,13 @@ class RobotTeleop :
             for state_name in self.moveit_interface.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.moveit_interface.get_stored_group_state(group, state_name)
 
-
         # start update threads for manipulators
         for n in self.manipulator_group_names :
             self.start_pose_update_thread(n)
+
+        for n in self.moveit_interface.get_end_effector_names() :
+            self.end_effector_link_data[n] = EndEffectorLinkData(self.moveit_interface.get_control_frame(n), self.tf_listener)
+            self.end_effector_link_data[n].populate_data(self.moveit_interface.get_group_links(n), self.moveit_interface.get_urdf_model())
 
         # initialize markers
         self.initialize_group_markers()
@@ -133,10 +139,17 @@ class RobotTeleop :
                 marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
                 menu_control.markers.append( marker )
 
+                # add other links
+                for link in self.end_effector_link_data[group].get_links() :
+                    if self.end_effector_link_data[group].get_link_data(link) :
+                        (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
+                        marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
+                        marker.text = link
+                        menu_control.markers.append( marker )
+
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)
                 self.server.insert(self.markers[group], self.process_feedback)
-
 
             # Set up stored pose sub menu
             self.setup_stored_pose_menu(group)
@@ -160,7 +173,7 @@ class RobotTeleop :
     def start_pose_update_thread(self, group) :
         self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
         try :
-            self.pose_update_thread[group] = PoseUpdateThread(group, self.root_frame, self.control_frames[group], self.tf_listener)
+            self.pose_update_thread[group] = PoseUpdateThread(group, self.root_frame, self.control_frames[group], self.tf_listener, None)
             self.pose_update_thread[group].start()
         except :
             rospy.logerr("RobotTeleop::start_pose_update_thread() -- unable to start group update thread")
@@ -210,8 +223,53 @@ class RobotTeleop :
                     self.reset_group_marker(feedback.marker_name)
 
 
+    def run(self) :
+        while True :
+            try :
+                for group in self.moveit_interface.groups.keys():
+                    if self.moveit_interface.get_group_type(group) == "endeffector" :
+
+                        for control in self.markers[group].controls :
+                            if control.interaction_mode == InteractiveMarkerControl.BUTTON :
+                                for link in self.end_effector_link_data[group].get_links() :
+                                    if self.end_effector_link_data[group].get_link_data(link) :
+                                        (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
+                                        control.markers = []
+                                        for marker in control.markers :
+                                            if marker.text == link :
+                                                marker.pose = pose
+                                            control.markers.append( marker )
+
+                                        # menu_control.markers.append( marker )
+ 
+                    #     menu_control = InteractiveMarkerControl()
+                    #     menu_control.interaction_mode = InteractiveMarkerControl.MENU
+
+                    #     self.markers[group].controls = []
+                    #     for link in self.end_effector_link_data[group].get_links() :
+                    #         if self.end_effector_link_data[group].get_link_data(link) :
+                    #             (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
+                    #             marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
+                    #             menu_control.markers.append( marker )
+
+                    #         # insert marker and menus
+                    #         self.markers[group].controls.append(menu_control)
+                    #         # self.server.insert(self.markers[group], self.process_feedback)
+
+                    #     # Set up stored pose sub menu
+                    #     # self.setup_stored_pose_menu(group)
+
+                    # # add menus to server
+                    # self.server.insert(self.markers[group], self.process_feedback)
+                    # self.marker_menus[group].apply( self.server, group )
+                self.server.applyChanges()
+            except :
+                rospy.logdebug("RobotTeleop::run() -- could not update thread")
+            rospy.sleep(.1)
+
+
 class PoseUpdateThread(threading.Thread) :
-    def __init__(self, name, root_frame, control_frame, tf_listener) :
+    def __init__(self, name, root_frame, control_frame, tf_listener, offset_pose) :
         super(PoseUpdateThread,self).__init__()
         self.name = name
         self.pose_data = geometry_msgs.msg.PoseStamped()
@@ -219,13 +277,28 @@ class PoseUpdateThread(threading.Thread) :
         self.control_frame = control_frame
         self.root_frame = root_frame
         self.is_valid = False
+        self.offset_pose = offset_pose
+        if offset_pose != None :
+            self.T_offset = fromMsg(self.offset_pose)
+        # print "Creating new PoseUpdateThread"
+        # print "\tname: ", name
+        # print "\tcontrol frame: ", control_frame
+        # print "\troot frame: ", root_frame
+        # print "\toffset_pose: ", offset_pose
+
 
     def run(self) :
         while True :
             try :
                 self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(2.0))
                 (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
-                self.pose_data = toPose(trans, rot)
+                if self.offset_pose != None :
+                    T = fromMsg(toPose(trans, rot))
+                    self.pose_data = toMsg(T*self.T_offset)
+                    # if self.control_frame == "r2/right_index_distal" :
+                    #     print T
+                else :
+                    self.pose_data = toPose(trans, rot)
                 self.is_valid = True
             except :
                 rospy.logdebug("PoseUpdateThread::run() -- could not update thread")
@@ -234,6 +307,78 @@ class PoseUpdateThread(threading.Thread) :
     def get_pose_data(self) :
         self.is_valid = False
         return self.pose_data
+
+class EndEffectorLinkData :
+
+    def __init__(self, root_frame, tf_listener) :
+
+        self.link_meshes = {}
+        self.link_origins = {}
+        self.offset_pose_data = {}
+        self.offset_update_thread = {}
+        self.links = []
+        self.root_frame = root_frame
+        self.tf_listener = tf_listener
+
+    def add_link(self, link, mesh, origin) :
+        self.link_meshes[link] = mesh
+        self.link_origins[link] = origin
+        self.links.append(link)
+
+    def populate_data(self, links, urdf) :
+
+        for link in links :
+            if not link in urdf.link_map :
+                print "EndEffectorLinkData::populate_data() -- link: ", link, " not found in URDF model"
+                return
+
+            model_link = urdf.link_map[link]
+
+            if model_link :
+                if model_link.visual  :
+                    if model_link.visual.geometry  :
+                        if model_link.visual.geometry.filename  :
+                            mesh = model_link.visual.geometry.filename
+
+                            p = geometry_msgs.msg.Pose()
+                            q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
+                            p.position.x = model_link.visual.origin.xyz[0]
+                            p.position.y = model_link.visual.origin.xyz[1]
+                            p.position.z = model_link.visual.origin.xyz[2]
+                            p.orientation.x = q[0]
+                            p.orientation.y = q[1]
+                            p.orientation.z = q[2]
+                            p.orientation.w = q[3]
+                            self.add_link(link, mesh, p)
+                            # print p
+
+        self.start_offset_update_thread()
+
+
+    def has_link(self, link) :
+        return link in self.links
+
+    def get_links(self) :
+        return self.links
+
+    def get_link_data(self, link) :
+        if not self.has_link(link) : return False
+        if not self.offset_update_thread[link].get_pose_data() : return False
+        return (self.link_meshes[link], self.offset_update_thread[link].get_pose_data())
+
+    def start_offset_update_thread(self) :
+        for link in self.links :
+            self.offset_pose_data[link] = geometry_msgs.msg.PoseStamped()
+            try :
+                self.offset_update_thread[link] = PoseUpdateThread(link, self.root_frame, link, self.tf_listener, self.link_origins[link])
+                self.offset_update_thread[link].start()
+            except :
+                rospy.logerr("EndEffectorLinkData::start_offset_update_thread() -- unable to start end effector link offset update thread")
+
+    def get_link_offset(self, link) :
+        return self.offset_pose_data[link]
+
+
 
 if __name__=="__main__":
 
@@ -261,6 +406,7 @@ if __name__=="__main__":
     if is_valid :
         try :
             robot = RobotTeleop(robot, manipulator_groups, joint_groups)
+            robot.start()
         except rospy.ROSInterruptException :
             pass
 

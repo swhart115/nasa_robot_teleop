@@ -194,6 +194,18 @@ class MoveItInterface :
 
         return p
 
+    def get_group_links(self, group) :
+        return self.srdf_model.get_group_links(group)
+
+    def get_group_joints(self, group) :
+        return self.srdf_model.get_group_joints(group)
+
+    def get_urdf_model(self) :
+        return self.urdf_model
+
+    def get_srdf_model(self) :
+        return self.srdf_model
+
     def joint_state_callback(self, data):
         self.currentState = data
 
