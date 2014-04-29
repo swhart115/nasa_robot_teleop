@@ -44,6 +44,7 @@ class RobotTeleop(threading.Thread) :
         self.group_menu_handles = {}
         self.pose_update_thread = {}
         self.pose_store = {}
+        self.auto_execute = {}
 
         self.end_effector_link_data = {}
 
@@ -76,7 +77,9 @@ class RobotTeleop(threading.Thread) :
         # set up menu info
         self.menu_options = []
         self.menu_options.append(("Sync To Actual", False))
-        self.menu_options.append(("Turn on Joint Control", True))
+        self.menu_options.append(("Execute On Move", True))
+        self.menu_options.append(("Execute", False))
+        # self.menu_options.append(("Turn on Joint Control", True))
         self.menu_options.append(("Stored Poses", False))
 
         # get stored poses from model
@@ -104,6 +107,7 @@ class RobotTeleop(threading.Thread) :
 
         for group in self.moveit_interface.groups.keys() :
 
+            self.auto_execute[group] = False
             self.markers[group] = InteractiveMarker()
             self.markers[group].name = group
             self.marker_menus[group] = MenuHandler()
@@ -145,10 +149,11 @@ class RobotTeleop(threading.Thread) :
                 # add other links
                 for link in self.end_effector_link_data[group].get_links() :
                     if self.end_effector_link_data[group].get_link_data(link) :
-                        (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
-                        marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
-                        marker.text = link
-                        menu_control.markers.append( marker )
+                        if link != self.control_frames[group]:
+                            (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
+                            marker = makeMesh( self.markers[group], mesh, pose, sf=1.02, alpha=0.1 )
+                            marker.text = link
+                            menu_control.markers.append( marker )
 
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)
@@ -220,15 +225,28 @@ class RobotTeleop(threading.Thread) :
                 pt.header = feedback.header
                 pt.pose = feedback.pose
                 self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
-                r = self.moveit_interface.execute_plan(feedback.marker_name)
-                if not r :
-                    rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
+                if self.auto_execute[feedback.marker_name] :
+                    r = self.moveit_interface.execute_plan(feedback.marker_name)
+                    if not r :
+                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
                 handle = feedback.menu_entry_id
                 if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
                     self.reset_group_marker(feedback.marker_name)
+                if handle == self.group_menu_handles[(feedback.marker_name,"Execute On Move")] :
+                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                    if state == MenuHandler.CHECKED:
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                        self.auto_execute[feedback.marker_name] = False
+                    else :
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                        self.auto_execute[feedback.marker_name] = True
+                if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
+                    r = self.moveit_interface.execute_plan(feedback.marker_name)
+                    if not r :
+                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
 
         elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE :
             if feedback.marker_name in self.manipulator_group_names :
@@ -243,6 +261,10 @@ class RobotTeleop(threading.Thread) :
                 self.moveit_interface.groups[feedback.marker_name].shift_pose_target(axis_id, axis_delta)
                 self.pose_store[feedback.marker_name] = feedback.pose
                 # print self.moveit_interface.groups[feedback.marker_name].plan()
+
+        self.marker_menus[feedback.marker_name].reApply( self.server )
+        self.server.applyChanges()
+
 
     def axis_map(self, n) :
         if n == "move_x": return 0
@@ -275,7 +297,7 @@ class RobotTeleop(threading.Thread) :
                                     if self.end_effector_link_data[group].get_link_data(link) :
                                         (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
                                         for marker in control.markers :
-                                            if marker.text == link :
+                                            if marker.text == link and link != self.control_frames[group]:
                                                 marker.pose = pose
                                                 marker.action = Marker.MODIFY
                         self.server.insert(self.markers[group], self.process_feedback)
