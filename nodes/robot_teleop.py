@@ -16,6 +16,7 @@ from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import TransformStamped
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
+from visualization_msgs.msg import Marker
 
 import PyKDL as kdl
 
@@ -234,14 +235,17 @@ class RobotTeleop(threading.Thread) :
                                 for link in self.end_effector_link_data[group].get_links() :
                                     if self.end_effector_link_data[group].get_link_data(link) :
                                         (mesh, pose) = self.end_effector_link_data[group].get_link_data(link)
-                                        control.markers = []
+                                        # control.markers = []
                                         for marker in control.markers :
                                             if marker.text == link :
+                                                # print "\tfound link: ", marker.text
+                                                # print marker.pose
                                                 marker.pose = pose
-                                            control.markers.append( marker )
+                                                marker.action = Marker.MODIFY
+                                            # control.markers.append( marker )
 
                                         # menu_control.markers.append( marker )
- 
+
                     #     menu_control = InteractiveMarkerControl()
                     #     menu_control.interaction_mode = InteractiveMarkerControl.MENU
 
