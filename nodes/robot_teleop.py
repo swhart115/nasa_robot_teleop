@@ -79,12 +79,14 @@ class RobotTeleop(threading.Thread) :
         self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Execute On Move", True))
         self.menu_options.append(("Execute", False))
+        self.menu_options.append(("Show Path", True))
         # self.menu_options.append(("Turn on Joint Control", True))
         self.menu_options.append(("Stored Poses", False))
 
         # get stored poses from model
         for group in self.group_names :
             self.stored_poses[group] = {}
+            self.moveit_interface.set_display_mode(group, "last_point")
             for state_name in self.moveit_interface.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.moveit_interface.get_stored_group_state(group, state_name)
 
@@ -224,11 +226,15 @@ class RobotTeleop(threading.Thread) :
                 pt = geometry_msgs.msg.PoseStamped()
                 pt.header = feedback.header
                 pt.pose = feedback.pose
-                self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
                 if self.auto_execute[feedback.marker_name] :
+                    self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
                     r = self.moveit_interface.execute_plan(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
+                else :
+                    rospy.loginfo("CREATING PLAN")
+                    self.moveit_interface.groups[feedback.marker_name].clear_pose_targets()
+                    self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
@@ -243,6 +249,14 @@ class RobotTeleop(threading.Thread) :
                     else :
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
                         self.auto_execute[feedback.marker_name] = True
+                if handle == self.group_menu_handles[(feedback.marker_name,"Show Path")] :
+                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                    if state == MenuHandler.CHECKED:
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                        self.moveit_interface.set_display_mode(feedback.marker_name, "last_point")
+                    else :
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                        self.moveit_interface.set_display_mode(feedback.marker_name, "all_points")
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
                     r = self.moveit_interface.execute_plan(feedback.marker_name)
                     if not r :
