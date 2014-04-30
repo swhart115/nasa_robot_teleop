@@ -349,7 +349,6 @@ class MoveItInterface :
 
         return markers
 
-
     def get_z_rotation_frame(self, theta) :
         T = kdl.Frame()
         T.M.DoRotZ(theta)
