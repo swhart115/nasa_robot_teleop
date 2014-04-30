@@ -358,8 +358,9 @@ class MoveItInterface :
     def link_has_mesh(self, link) :
         if link.visual :
             if link.visual.geometry :
-                if link.visual.geometry.filename :
-                    return True
+                if isinstance(link.visual.geometry, urdf.Mesh) :
+                    if link.visual.geometry.filename :
+                        return True
         else :
             return False
 
