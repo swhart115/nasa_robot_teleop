@@ -1,4 +1,4 @@
-from nasa_robot_teleop.xml_reflection.basics import *
+from basics import *
 import sys
 import copy
 
