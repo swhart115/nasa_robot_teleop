@@ -32,8 +32,10 @@ class MoveItInterface :
         self.group_types = {}
         self.control_frames = {}
         self.control_meshes = {}
+        self.end_effector_map = {}
         self.trajectory_publishers = {}
         self.display_modes = {}
+        self.trajectory_display_markers = {}
         self.marker_store = visualization_msgs.msg.MarkerArray()
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
@@ -92,6 +94,7 @@ class MoveItInterface :
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
                 for ee in self.srdf_model.end_effectors.keys() :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
+                        self.end_effector_map[group_name] = ee
                         self.add_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=0.05, position_tolerance=0.02, orientation_tolerance=0.05)
             elif self.srdf_model.has_tip_link(group_name) :
@@ -201,6 +204,13 @@ class MoveItInterface :
     def get_srdf_model(self) :
         return self.srdf_model
 
+    def get_trajectory_display_markers(self, group) :
+        if group in self.trajectory_display_markers :
+            return self.trajectory_display_markers[group]
+        else :
+            return visualization_msgs.msg.MarkerArray()
+
+
     def set_display_mode(self, group, mode) :
         self.display_modes[group] = mode
 
@@ -223,8 +233,9 @@ class MoveItInterface :
             display_trajectory.trajectory_start = self.robot.get_current_state()
             display_trajectory.trajectory.append(plan)
             self.trajectory_publishers[group].publish(display_trajectory)
-            path_visualization_marker_array = self.joint_trajectory_to_marker_array(plan, group, self.display_modes[group])
-            self.path_visualization.publish(path_visualization_marker_array)
+            if self.group_types[group] != "endeffector" :
+                path_visualization_marker_array = self.joint_trajectory_to_marker_array(plan, group, self.display_modes[group])
+                self.path_visualization.publish(path_visualization_marker_array)
 
     def create_joint_plan_to_target(self, group_name, js) :
         print "== Robot Name: %s" % self.robot_name
@@ -285,11 +296,9 @@ class MoveItInterface :
         joint_start = self.robot.get_current_state().joint_state
         num_points = len(plan.joint_trajectory.points)
         idx = 0
-
         pt_id = 0.0
-
         if display_mode == "all_points" :
-            for point in plan.joint_trajectory.points :
+            for point in plan.joint_trajectory.points[1:num_points-1] :
                 a = 1-((pt_id/float(num_points))*0.8)
                 waypoint_markers = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, idx, a)
                 idx += len(waypoint_markers)
@@ -300,7 +309,16 @@ class MoveItInterface :
             waypoint_markers = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, points.positions, idx, 1)
             for m in waypoint_markers: markers.markers.append(m)
 
+            # if self.groups[group].has_end_effector_link() :
+            #     ee_joints = self.srdf_model.get_group_joints(self.end_effector_map[group])
+            #     # this needs tobe in arm group frame with T_offset to from arm group frame to ee root frame
+            #     end_effector_markers = self.create_end_effector_marker_array(self.groups[group].get_end_effector_link(), group, ee_joints, joint_start, idx, 1) 
+            #     for m in end_effector_markers: markers.markers.append(m)
+            #     idx += len(end_effector_markers)
+
         self.marker_store = markers
+        self.trajectory_display_markers[group] = copy.deepcopy(markers)
+
         return markers
 
     def create_marker_array_from_joint_array(self, names, joints, idx, alpha) :
@@ -348,6 +366,48 @@ class MoveItInterface :
                 markers.append(marker)
 
         return markers
+
+    def create_end_effector_marker_array(root, group, joints_names, joint_data, idx, alpha) :
+
+        ee_links = self.get_group_links(group)
+        markers = []
+        now = rospy.get_rostime()
+
+        for link in ee_links :
+
+            self.tf_listener.waitForTransform(link, ee_root, rospy.Time(0), rospy.Duration(2.0))
+            (trans, rot) = self.tf_listener.lookupTransform(ee_root, link, rospy.Time(0))
+            T_kin = fromMsg(toPose(trans, rot))
+            T_viz = fromMsg(self.link_origin_to_pose(self.urdf_model.link_map[link]))
+
+            marker = visualization_msgs.msg.Marker()
+
+            if self.link_has_mesh(self.urdf_model.link_map[link]) :
+                T_link = T_kin*T_viz
+                marker.pose = toMsg(T_link)
+                marker.header.frame_id = root
+                marker.header.stamp = now
+                marker.ns = self.robot_name
+                marker.mesh_use_embedded_materials = True
+                marker.frame_locked = False
+                marker.text = joint
+                marker.id = idx
+                marker.scale.x = 1
+                marker.scale.y = 1
+                marker.scale.z = 1
+                marker.color.a = alpha
+                marker.color.r = 0.5
+                marker.color.g = 0.5
+                marker.color.b = 1
+                idx += 1
+                marker.mesh_resource = child_link.visual.geometry.filename
+                marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+                marker.action = visualization_msgs.msg.Marker.ADD
+                markers.append(marker)
+
+        return markers
+
+
 
     def get_z_rotation_frame(self, theta) :
         T = kdl.Frame()

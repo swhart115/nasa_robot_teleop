@@ -76,12 +76,12 @@ class RobotTeleop(threading.Thread) :
 
         # set up menu info
         self.menu_options = []
+        self.menu_options.append(("Stored Poses", False))
         self.menu_options.append(("Sync To Actual", False))
-        self.menu_options.append(("Execute On Move", True))
         self.menu_options.append(("Execute", False))
+        self.menu_options.append(("Execute On Move", True))
         self.menu_options.append(("Show Path", True))
         # self.menu_options.append(("Turn on Joint Control", True))
-        self.menu_options.append(("Stored Poses", False))
 
         # get stored poses from model
         for group in self.group_names :
@@ -296,7 +296,6 @@ class RobotTeleop(threading.Thread) :
         elif n == "rotate_x": d=r[0]
         elif n == "rotate_z": d=r[1]
         elif n == "rotate_y": d=r[2]
-        # print "Axis[", n, "], shift : ", d
         return d
 
     def run(self) :
@@ -304,7 +303,6 @@ class RobotTeleop(threading.Thread) :
             try :
                 for group in self.moveit_interface.groups.keys():
                     if self.moveit_interface.get_group_type(group) == "endeffector" :
-
                         for control in self.markers[group].controls :
                             if control.interaction_mode == InteractiveMarkerControl.BUTTON :
                                 for link in self.end_effector_link_data[group].get_links() :
@@ -333,12 +331,6 @@ class PoseUpdateThread(threading.Thread) :
         self.offset_pose = offset_pose
         if offset_pose != None :
             self.T_offset = fromMsg(self.offset_pose)
-        # print "Creating new PoseUpdateThread"
-        # print "\tname: ", name
-        # print "\tcontrol frame: ", control_frame
-        # print "\troot frame: ", root_frame
-        # print "\toffset_pose: ", offset_pose
-
 
     def run(self) :
         while True :
