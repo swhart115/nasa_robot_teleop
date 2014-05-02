@@ -47,7 +47,6 @@ class RobotTeleop(threading.Thread) :
         self.pose_update_thread = {}
         self.pose_store = {}
         self.auto_execute = {}
-
         self.end_effector_link_data = {}
 
         # interactive marker server
@@ -58,7 +57,7 @@ class RobotTeleop(threading.Thread) :
         self.moveit_interface = MoveItInterface(self.robot_name,str(self.robot_name + "_moveit_config"))
         self.root_frame = self.moveit_interface.get_planning_frame()
 
-        # add user specified goups
+        # add user specified groups
         for n in self.manipulator_group_names :
             self.moveit_interface.add_group(n, group_type="manipulator")
         for n in self.joint_group_names :
@@ -70,7 +69,6 @@ class RobotTeleop(threading.Thread) :
 
         # set the control frames for all types of groups
         for n in self.group_names :
-            # print "setting control frame: ", self.moveit_interface.get_control_frame(n), " for group: ", n
             self.control_frames[n] = self.moveit_interface.get_control_frame(n)
 
         # what do we have?
@@ -88,7 +86,6 @@ class RobotTeleop(threading.Thread) :
         # get stored poses from model
         for group in self.group_names :
             self.stored_poses[group] = {}
-            self.moveit_interface.set_display_mode(group, "last_point")
             for state_name in self.moveit_interface.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.moveit_interface.get_stored_group_state(group, state_name)
 
@@ -96,11 +93,16 @@ class RobotTeleop(threading.Thread) :
         for n in self.manipulator_group_names :
             self.start_pose_update_thread(n)
 
+        # Create EndEffectorHelper objects to help with EE displays
         for n in self.moveit_interface.get_end_effector_names() :
             self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.moveit_interface.get_control_frame(n), self.tf_listener)
             ee_links = self.moveit_interface.get_group_links(n)
             ee_links.append(self.moveit_interface.get_control_frame(n))
             self.end_effector_link_data[n].populate_data(self.moveit_interface.get_group_links(n), self.moveit_interface.get_urdf_model())
+
+        # set group to display only last point in path by default (can turn on full train from menu)
+        for group in self.group_names :
+            self.moveit_interface.set_display_mode(group, "last_point")
 
         # initialize markers
         self.initialize_group_markers()
@@ -194,6 +196,7 @@ class RobotTeleop(threading.Thread) :
                 self.group_pose_data[group] = copy.deepcopy(self.pose_update_thread[group].get_pose_data())
                 self.server.setPose(self.markers[group].name, self.group_pose_data[group])
                 self.server.applyChanges()
+                # What?! do it again? Why? Huh?!
                 self.server.setPose(self.markers[group].name, self.group_pose_data[group])
                 self.server.applyChanges()
                 _marker_valid = True
@@ -262,41 +265,41 @@ class RobotTeleop(threading.Thread) :
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
 
-        elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE :
-            if feedback.marker_name in self.manipulator_group_names :
-                if not feedback.marker_name in self.pose_store: return
-                p = toMsg(fromMsg(self.pose_store[feedback.marker_name]).Inverse()*fromMsg(feedback.pose))
-                r = (kdl.Rotation.Quaternion(p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w)).GetRPY()
-                # print "delta p: ", p
-                axis_name =  feedback.control_name
-                axis_id = self.axis_map(axis_name)
-                axis_delta = self.get_axis(axis_name, p, r)
+        # elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE :
+        #     if feedback.marker_name in self.manipulator_group_names :
+        #         if not feedback.marker_name in self.pose_store: return
+        #         p = toMsg(fromMsg(self.pose_store[feedback.marker_name]).Inverse()*fromMsg(feedback.pose))
+        #         r = (kdl.Rotation.Quaternion(p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w)).GetRPY()
+        #         # print "delta p: ", p
+        #         axis_name =  feedback.control_name
+        #         axis_id = self.axis_map(axis_name)
+        #         axis_delta = self.get_axis(axis_name, p, r)
 
-                self.moveit_interface.groups[feedback.marker_name].shift_pose_target(axis_id, axis_delta)
-                self.pose_store[feedback.marker_name] = feedback.pose
-                # print self.moveit_interface.groups[feedback.marker_name].plan()
+        #         self.moveit_interface.groups[feedback.marker_name].shift_pose_target(axis_id, axis_delta)
+        #         self.pose_store[feedback.marker_name] = feedback.pose
+        #         # print self.moveit_interface.groups[feedback.marker_name].plan()
 
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
 
 
-    def axis_map(self, n) :
-        if n == "move_x": return 0
-        elif n == "move_z": return 1
-        elif n == "move_y": return 2
-        elif n == "rotate_x": return 3
-        elif n == "rotate_z": return 4
-        elif n == "rotate_y": return 5
+    # def axis_map(self, n) :
+    #     if n == "move_x": return 0
+    #     elif n == "move_z": return 1
+    #     elif n == "move_y": return 2
+    #     elif n == "rotate_x": return 3
+    #     elif n == "rotate_z": return 4
+    #     elif n == "rotate_y": return 5
 
-    def get_axis(self, n, p, r) :
-        d = 0
-        if n == "move_x": d=p.position.x
-        elif n == "move_z": d=p.position.y
-        elif n == "move_y": d=p.position.z
-        elif n == "rotate_x": d=r[0]
-        elif n == "rotate_z": d=r[1]
-        elif n == "rotate_y": d=r[2]
-        return d
+    # def get_axis(self, n, p, r) :
+    #     d = 0
+    #     if n == "move_x": d=p.position.x
+    #     elif n == "move_z": d=p.position.y
+    #     elif n == "move_y": d=p.position.z
+    #     elif n == "rotate_x": d=r[0]
+    #     elif n == "rotate_z": d=r[1]
+    #     elif n == "rotate_y": d=r[2]
+    #     return d
 
     def run(self) :
         c = 0
@@ -320,9 +323,6 @@ class RobotTeleop(threading.Thread) :
             except :
                 rospy.logdebug("RobotTeleop::run() -- could not update thread")
             rospy.sleep(1.5)
-
-
-
 
 
 

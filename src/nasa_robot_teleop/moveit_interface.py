@@ -40,6 +40,7 @@ class MoveItInterface :
         self.trajectory_poses = {}
         self.trajectory_display_markers = {}
         self.end_effector_display = {}
+        self.plan_generated = {}
         self.marker_store = visualization_msgs.msg.MarkerArray()
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
@@ -54,6 +55,7 @@ class MoveItInterface :
         self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray)
         for g in self.robot.get_group_names() :
             self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory)
+            self.plan_generated[g] = False
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False)
 
         self.tf_listener = tf.TransformListener()
@@ -160,7 +162,6 @@ class MoveItInterface :
         return ee_list
 
     def get_control_frame(self, group_name) :
-
         if self.has_group(group_name) :
             if self.groups[group_name].has_end_effector_link() :
                 return self.groups[group_name].get_end_effector_link()
@@ -211,16 +212,12 @@ class MoveItInterface :
         return self.srdf_model
 
     def get_trajectory_display_markers(self, group) :
-        if group in self.trajectory_display_markers :
-            return self.trajectory_display_markers[group]
-        else :
-            return visualization_msgs.msg.MarkerArray()
+        if group in self.trajectory_display_markers : return self.trajectory_display_markers[group]
+        else : return visualization_msgs.msg.MarkerArray()
 
     def get_base_frame(self, group) :
-        if group in self.base_frames :
-            return self.base_frames[group]
-        else :
-            return ""
+        if group in self.base_frames : return self.base_frames[group]
+        else : return ""
 
     def set_base_frame(self, group, base_frame) :
         self.base_frames[group] = base_frame
@@ -264,6 +261,7 @@ class MoveItInterface :
         plan = self.groups[group_name].plan()
         print "===== Joint Plan Found"
         self.publish_path_data(plan, group_name)
+        self.plan_generated[group_name] = True
 
     def create_plan_to_target(self, group_name, pt) :
         if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
@@ -274,7 +272,9 @@ class MoveItInterface :
         print "===== Generating Plan"
         self.groups[group_name].set_pose_target(pt)
         plan = self.groups[group_name].plan()
+        print "===== Plan Found"
         self.publish_path_data(plan, group_name)
+        self.plan_generated[group_name] = True
 
     def create_random_target(self, group_name) :
         print "== Robot Name: %s" % self.robot_name
@@ -282,13 +282,19 @@ class MoveItInterface :
         print "===== Generating Random Joint Plan"
         self.groups[group_name].set_random_target()
         plan = self.groups[group_name].plan()
+        print "===== Random Joint Plan Found"
         self.publish_path_data(plan, group_name)
+        self.plan_generated[group_name] = True
 
     def execute_plan(self, group_name) :
-        print "====== Executing Plan for Group: %s" % group_name
-        r = self.groups[group_name].go(False)
-        print "====== Plan Execution: %s" % r
-        return r
+        if self.plan_generated[group_name] :
+            print "====== Executing Plan for Group: %s" % group_name
+            r = self.groups[group_name].go(False)
+            print "====== Plan Execution: %s" % r
+            return r
+        else :
+            print "====== No Plan for Group %s yet generated." % group_name
+            return False
 
     def add_collision_object(self, p, s, n) :
         p.header.frame_id = self.robot.get_planning_frame()
@@ -312,13 +318,12 @@ class MoveItInterface :
         self.obstacle_publisher.publish(self.obstacle_markers)
 
     def joint_trajectory_to_marker_array(self, plan, group, display_mode) :
+
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         joint_start = self.robot.get_current_state().joint_state
         num_points = len(plan.joint_trajectory.points)
-
-        if num_points == 0 :
-            return markers
+        if num_points == 0 : return markers
 
         idx = 0
         pt_id = 0.0
@@ -329,6 +334,7 @@ class MoveItInterface :
             self.set_control_offset(group, toPose(trans, rot))
 
         if display_mode == "all_points" :
+            print display_mode
             for point in plan.joint_trajectory.points[1:num_points-1] :
                 a = 1-((pt_id/float(num_points))*0.8)
                 waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, idx, a)

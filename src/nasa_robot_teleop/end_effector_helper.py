@@ -95,20 +95,19 @@ class EndEffectorHelper :
         return self.root_frame
 
     def get_current_position_marker_array(self, offset=None, root="", scale=1, color=(0,1,0,1), idx=0) :
-        markers = MarkerArray()
 
-        if root=="":
-            root = self.root_frame
+        markers = MarkerArray()
+        if root=="": root = self.root_frame
 
         for link in self.get_links() :
             if self.get_link_data(link) :
+
                 (mesh, pose) = self.get_link_data(link)
+
                 marker = Marker()
 
-                if offset==None :
-                    marker.pose = pose
-                else :
-                    marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
+                if offset==None : marker.pose = pose
+                else : marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
 
                 marker.header.frame_id = root
                 marker.header.stamp = rospy.get_rostime()
