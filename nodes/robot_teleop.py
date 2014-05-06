@@ -28,7 +28,7 @@ from nasa_robot_teleop.end_effector_helper import *
 
 class RobotTeleop(threading.Thread) :
 
-    def __init__(self, robot_name, manipulator_group_names, joint_group_names):
+    def __init__(self, robot_name, config_package, manipulator_group_names, joint_group_names):
         super(RobotTeleop,self).__init__()
 
         self.robot_name = robot_name
@@ -54,7 +54,10 @@ class RobotTeleop(threading.Thread) :
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
 
         # set up MoveIt! interface
-        self.moveit_interface = MoveItInterface(self.robot_name,str(self.robot_name + "_moveit_config"))
+        if config_package=="" :
+            config_package =  str(self.robot_name + "_moveit_config")
+
+        self.moveit_interface = MoveItInterface(self.robot_name,config_package)
         self.root_frame = self.moveit_interface.get_planning_frame()
 
         # add user specified groups
@@ -137,6 +140,7 @@ class RobotTeleop(threading.Thread) :
             elif  self.moveit_interface.get_group_type(group) == "joint" :
 
                 self.markers[group].header.frame_id = self.moveit_interface.get_control_frame(group)
+                print self.markers[group].header.frame_id
                 mesh = self.moveit_interface.get_control_mesh(group)
                 pose = self.moveit_interface.get_control_mesh_pose_offset(group)
                 marker = makeMesh( self.markers[group] , mesh, pose, sf=1.02, alpha=0.1 )
@@ -347,11 +351,16 @@ if __name__=="__main__":
         rospy.logerr("usage:\n$ rosrun nasa_robot_teleop robot_teleop.py _robot:=<robot_name> _manipulator_groups:=[group_name_1, ..., group_name_n] ... _joint_groups=[group_name_1, ..., group_name_n]")
         is_valid = False
 
+    try :
+        config_package = rospy.get_param("~config_package")
+    except KeyError :
+        config_package = ""
+
     joint_groups = rospy.get_param("~joint_groups")
 
     if is_valid :
         try :
-            robot = RobotTeleop(robot, manipulator_groups, joint_groups)
+            robot = RobotTeleop(robot, config_package, manipulator_groups, joint_groups)
             robot.start()
         except rospy.ROSInterruptException :
             pass

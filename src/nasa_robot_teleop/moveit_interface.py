@@ -335,8 +335,9 @@ class MoveItInterface :
 
         if display_mode == "all_points" :
             print display_mode
-            for point in plan.joint_trajectory.points[1:num_points-1] :
+            for point in plan.joint_trajectory.points[1:num_points-1:3] :
                 a = 1-((pt_id/float(num_points))*0.8)
+                a = 1
                 waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, idx, a)
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
