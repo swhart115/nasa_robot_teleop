@@ -334,6 +334,7 @@ if __name__=="__main__":
     parser.add_argument('-c, --config', dest='config', help='e.g. r2_fullbody_moveit_config')
     parser.add_argument('-m, --manipulatorgroups', nargs="*", dest='manipulatorgroups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
     parser.add_argument('-j, --jointgroups', nargs="*", dest='jointgroups', help='space limited string e.g. "head waist"')
+    parser.add_argument('positional', nargs='*')
     args = parser.parse_args()
 
     rospy.init_node("RobotTeleop")
@@ -348,4 +349,3 @@ if __name__=="__main__":
     r = rospy.Rate(50.0)
     while not rospy.is_shutdown():
         r.sleep()
-
