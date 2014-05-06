@@ -1,0 +1,8 @@
+<?xml version="1.0" ?>
+<launch>
+    <arg name="robot"              default="r2" />
+    <arg name="config"             default="r2_moveit_config" />
+    <arg name="manipulator_groups" default="left_arm right_arm" />
+    <arg name="joint_groups"       default="head waist" />
+    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -c $(arg config) -m $(arg manipulator_groups) -j $(arg joint_groups)" output="screen" />
+</launch>
