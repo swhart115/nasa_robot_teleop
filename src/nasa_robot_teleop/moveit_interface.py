@@ -71,6 +71,7 @@ class MoveItInterface :
         self.srdf_model = SRDFModel(self.robot_name)
 
         try :
+            print "============= MoveIt! config package: ", config_package
             srdf_filename = str(RosPack().get_path(config_package) + "/config/" + self.robot_name + ".srdf")
             print "============ SRDF Filename: ", srdf_filename
             if self.srdf_model.parse_from_file(srdf_filename) :

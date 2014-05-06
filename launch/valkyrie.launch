@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <launch>
     <arg name="robot"              default="v1" />
-    <arg name="config"             default="v1" />
+    <arg name="config"             default="v1_moveit_config" />
     <arg name="manipulator_groups" default="left_arm left_leg right_arm right_leg" />
     <arg name="joint_groups"       default="head waist" />
     <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -c $(arg config) -m $(arg manipulator_groups) -j $(arg joint_groups)" output="screen" />
