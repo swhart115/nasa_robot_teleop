@@ -4,5 +4,5 @@
     <arg name="config"             default="v1_moveit_config" />
     <arg name="manipulator_groups" default="left_arm left_leg right_arm right_leg" />
     <arg name="joint_groups"       default="head waist" />
-    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -c $(arg config) -m $(arg manipulator_groups) -j $(arg joint_groups)" output="screen" />
+    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
 </launch>
