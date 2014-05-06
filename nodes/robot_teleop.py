@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import argparse
 
 import rospy
 import roslib; roslib.load_manifest("nasa_robot_teleop")
@@ -328,46 +329,24 @@ class RobotTeleop(threading.Thread) :
                 rospy.logdebug("RobotTeleop::run() -- could not update thread")
             rospy.sleep(1.5)
 
-
-
 if __name__=="__main__":
+    parser = argparse.ArgumentParser(description='Robot Teleop')
+    parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
+    parser.add_argument('-c, --config', dest='config', help='e.g. r2_fullbody_moveit_config')
+    parser.add_argument('-m, --manipulatorgroups', nargs="*", dest='manipulatorgroups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
+    parser.add_argument('-j, --jointgroups', nargs="*", dest='jointgroups', help='space limited string e.g. "head waist"')
+    args = parser.parse_args()
 
     rospy.init_node("RobotTeleop")
 
-    robot  = ""
-    manipulator_groups = []
-    joint_groups = []
-    is_valid = True
+    try:
+        robot = RobotTeleop(args.robot, args.config, args.manipulatorgroups, args.jointgroups)
+        robot.start()
+    except rospy.ROSInterruptException:
+        # TODO: should not pass
+        pass
 
-    try :
-        robot = rospy.get_param("~robot")
-    except KeyError :
-        rospy.logerr("usage:\n$ rosrun nasa_robot_teleop robot_teleop.py _robot:=<robot_name> _manipulator_groups:=[group_name_1, ..., group_name_n] ... optional: _joint_groups=[group_name_1, ..., group_name_n]")
-        is_valid = False
-
-    try :
-        manipulator_groups = rospy.get_param("~manipulator_groups")
-    except KeyError :
-        rospy.logerr("usage:\n$ rosrun nasa_robot_teleop robot_teleop.py _robot:=<robot_name> _manipulator_groups:=[group_name_1, ..., group_name_n] ... _joint_groups=[group_name_1, ..., group_name_n]")
-        is_valid = False
-
-    try :
-        config_package = rospy.get_param("~config_package")
-    except KeyError :
-        config_package = ""
-
-    joint_groups = rospy.get_param("~joint_groups")
-
-    if is_valid :
-        try :
-            robot = RobotTeleop(robot, config_package, manipulator_groups, joint_groups)
-            robot.start()
-        except rospy.ROSInterruptException :
-            pass
-
-        r = rospy.Rate(50.0)
-        while not rospy.is_shutdown():
-            r.sleep()
-        rospy.spin()
-
+    r = rospy.Rate(50.0)
+    while not rospy.is_shutdown():
+        r.sleep()
 
