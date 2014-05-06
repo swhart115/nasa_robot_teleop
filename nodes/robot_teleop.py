@@ -140,7 +140,6 @@ class RobotTeleop(threading.Thread) :
             elif  self.moveit_interface.get_group_type(group) == "joint" :
 
                 self.markers[group].header.frame_id = self.moveit_interface.get_control_frame(group)
-                print self.markers[group].header.frame_id
                 mesh = self.moveit_interface.get_control_mesh(group)
                 pose = self.moveit_interface.get_control_mesh_pose_offset(group)
                 marker = makeMesh( self.markers[group] , mesh, pose, sf=1.02, alpha=0.1 )

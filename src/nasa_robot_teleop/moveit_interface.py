@@ -334,7 +334,6 @@ class MoveItInterface :
             self.set_control_offset(group, toPose(trans, rot))
 
         if display_mode == "all_points" :
-            print display_mode
             for point in plan.joint_trajectory.points[1:num_points-1:3] :
                 a = 1-((pt_id/float(num_points))*0.8)
                 a = 1
