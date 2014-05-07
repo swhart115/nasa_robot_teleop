@@ -45,8 +45,8 @@ class MoveItInterface :
         self.marker_store = visualization_msgs.msg.MarkerArray()
         self.stored_plans = {}
 
-        self.plan_color = (0.5,0.1,0.5,1.0)
-        self.path_increment = 3
+        self.plan_color = (0.1,0.1,0.75,1)
+        self.path_increment = 2
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
         self.robot = moveit_commander.RobotCommander()
@@ -353,10 +353,10 @@ class MoveItInterface :
                         rot = self.normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
-                offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
-                for m in end_effector_markers.markers: markers.markers.append(m)
-                idx += len(end_effector_markers.markers)
+                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
+                    for m in end_effector_markers.markers: markers.markers.append(m)
+                    idx += len(end_effector_markers.markers)
 
         elif display_mode == "last_point" :
 
