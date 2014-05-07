@@ -42,6 +42,7 @@ class MoveItInterface :
         self.end_effector_display = {}
         self.plan_generated = {}
         self.marker_store = visualization_msgs.msg.MarkerArray()
+        self.stored_plans = {}
 
         self.plan_color = (0.5,0.1,0.5,1.0)
         self.path_increment = 1
@@ -59,6 +60,7 @@ class MoveItInterface :
         for g in self.robot.get_group_names() :
             self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory)
             self.plan_generated[g] = False
+            self.stored_plans[g] = None
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False)
 
         self.tf_listener = tf.TransformListener()
@@ -262,9 +264,9 @@ class MoveItInterface :
         js.header.frame_id = self.get_planning_frame()
         print "===== Generating Joint Plan "
         self.groups[group_name].set_joint_value_target(js)
-        plan = self.groups[group_name].plan()
+        self.stored_plans[group_name] = self.groups[group_name].plan()
         print "===== Joint Plan Found"
-        self.publish_path_data(plan, group_name)
+        self.publish_path_data(self.stored_plans[group_name], group_name)
         self.plan_generated[group_name] = True
 
     def create_plan_to_target(self, group_name, pt) :
@@ -275,9 +277,9 @@ class MoveItInterface :
         print "===== MoveIt! Group Name: %s" % group_name
         print "===== Generating Plan"
         self.groups[group_name].set_pose_target(pt)
-        plan = self.groups[group_name].plan()
+        self.stored_plans[group_name] = self.groups[group_name].plan()
         print "===== Plan Found"
-        self.publish_path_data(plan, group_name)
+        self.publish_path_data(self.stored_plans[group_name], group_name)
         self.plan_generated[group_name] = True
 
     def create_random_target(self, group_name) :
@@ -285,15 +287,15 @@ class MoveItInterface :
         print "===== MoveIt! Group Name: %s" % group_name
         print "===== Generating Random Joint Plan"
         self.groups[group_name].set_random_target()
-        plan = self.groups[group_name].plan()
+        self.stored_plans[group_name] = self.groups[group_name].plan()
         print "===== Random Joint Plan Found"
-        self.publish_path_data(plan, group_name)
+        self.publish_path_data(self.stored_plans[group_name], group_name)
         self.plan_generated[group_name] = True
 
     def execute_plan(self, group_name) :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
-            r = self.groups[group_name].go(False)
+            r = self.groups[group_name].execute(self.stored_plans[group_name])
             print "====== Plan Execution: %s" % r
             return r
         else :
