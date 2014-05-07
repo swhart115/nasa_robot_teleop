@@ -11,6 +11,7 @@ from nasa_robot_teleop.kdl_posemath import *
 class PoseUpdateThread(threading.Thread) :
     def __init__(self, name, root_frame, control_frame, tf_listener, offset_pose) :
         super(PoseUpdateThread,self).__init__()
+        self.mutex = threading.Lock()
         self.name = name
         self.pose_data = geometry_msgs.msg.PoseStamped()
         self.tf_listener = tf_listener
@@ -23,18 +24,23 @@ class PoseUpdateThread(threading.Thread) :
 
     def run(self) :
         while True :
+            self.mutex.acquire()
             try :
-                self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(2.0))
-                (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
-                if self.offset_pose != None :
-                    T = fromMsg(toPose(trans, rot))
-                    self.pose_data = toMsg(T*self.T_offset)
-                    #     print T
-                else :
-                    self.pose_data = toPose(trans, rot)
-                self.is_valid = True
-            except :
-                rospy.logdebug("PoseUpdateThread::run() -- could not update thread")
+                try :
+                    self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(2.0))
+                    (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
+                    if self.offset_pose != None :
+                        T = fromMsg(toPose(trans, rot))
+                        self.pose_data = toMsg(T*self.T_offset)
+                        #     print T
+                    else :
+                        self.pose_data = toPose(trans, rot)
+                    self.is_valid = True
+                except :
+                    rospy.logdebug("PoseUpdateThread::run() -- could not update thread")
+            finally :
+                self.mutex.release()
+
             rospy.sleep(0.1)
 
     def get_pose_data(self) :

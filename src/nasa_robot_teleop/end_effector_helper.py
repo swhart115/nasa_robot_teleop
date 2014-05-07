@@ -80,6 +80,7 @@ class EndEffectorHelper :
         self.control_mesh = control_mesh
 
     def start_offset_update_thread(self) :
+        print "EndEffectorHelper::start_offset_update_thread() -- staring offset update thread for end effector from root: ", self.root_frame
         for link in self.links :
             self.offset_pose_data[link] = PoseStamped()
             try :
@@ -106,8 +107,10 @@ class EndEffectorHelper :
 
                 marker = Marker()
 
-                if offset==None : marker.pose = pose
-                else : marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
+                if offset==None :
+                    marker.pose = pose
+                else :
+                    marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
 
                 marker.header.frame_id = root
                 marker.header.stamp = rospy.get_rostime()
