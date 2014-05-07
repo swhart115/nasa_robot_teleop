@@ -80,7 +80,7 @@ class EndEffectorHelper :
         self.control_mesh = control_mesh
 
     def start_offset_update_thread(self) :
-        print "EndEffectorHelper::start_offset_update_thread() -- staring offset update thread for end effector from root: ", self.root_frame
+        print "EndEffectorHelper::start_offset_update_thread() -- starting offset update thread for end effector from root: ", self.root_frame
         for link in self.links :
             self.offset_pose_data[link] = PoseStamped()
             try :

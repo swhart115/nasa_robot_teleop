@@ -5,6 +5,7 @@ import roslib
 
 import threading
 import geometry_msgs
+import PyKDL as kdl
 
 from nasa_robot_teleop.kdl_posemath import *
 
@@ -19,6 +20,7 @@ class PoseUpdateThread(threading.Thread) :
         self.root_frame = root_frame
         self.is_valid = False
         self.offset_pose = offset_pose
+        self.T_offset = kdl.Frame()
         if offset_pose != None :
             self.T_offset = fromMsg(self.offset_pose)
 
@@ -27,14 +29,10 @@ class PoseUpdateThread(threading.Thread) :
             self.mutex.acquire()
             try :
                 try :
-                    self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(2.0))
+                    self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(3.0))
                     (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
-                    if self.offset_pose != None :
-                        T = fromMsg(toPose(trans, rot))
-                        self.pose_data = toMsg(T*self.T_offset)
-                        #     print T
-                    else :
-                        self.pose_data = toPose(trans, rot)
+                    T = fromMsg(toPose(trans, rot))
+                    self.pose_data = toMsg(T*self.T_offset)
                     self.is_valid = True
                 except :
                     rospy.logdebug("PoseUpdateThread::run() -- could not update thread")

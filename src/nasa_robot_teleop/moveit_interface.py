@@ -2,6 +2,7 @@
 
 import sys
 import copy
+import math
 
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
@@ -331,7 +332,6 @@ class MoveItInterface :
         joint_start = self.robot.get_current_state().joint_state
         num_points = len(plan.joint_trajectory.points)
         if num_points == 0 : return markers
-
         idx = 0
 
         ee_offset = toPose((0,0,0), (0,0,0,1))
@@ -350,10 +350,10 @@ class MoveItInterface :
                     if last_link != ee_root_frame :
                         self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(2.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+                        rot = self.normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
-                offset_pose = toMsg(fromMsg(end_pose)*fromMsg(ee_offset))
-
+                offset_pose = toMsg(end_pose*fromMsg(ee_offset))
                 end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
                 for m in end_effector_markers.markers: markers.markers.append(m)
                 idx += len(end_effector_markers.markers)
@@ -372,10 +372,10 @@ class MoveItInterface :
                     if last_link != ee_root_frame :
                         self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(2.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+                        rot = self.normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
-                    offset_pose = toMsg(fromMsg(end_pose)*fromMsg(ee_offset))
-
+                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
                     end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
@@ -409,6 +409,7 @@ class MoveItInterface :
                 first_joint = False
                 self.tf_listener.waitForTransform(root_frame, parent_link.name, rospy.Time(0), rospy.Duration(2.0))
                 (trans, rot) = self.tf_listener.lookupTransform(root_frame, parent_link.name, rospy.Time(0))
+                rot = self.normalize_vector(rot)
                 T_acc = fromMsg(toPose(trans,rot))
 
             T_kin = fromMsg(self.joint_origin_to_pose(model_joint))
@@ -421,8 +422,6 @@ class MoveItInterface :
                 marker.header.frame_id = root_frame
                 marker.header.stamp = now
                 marker.ns = self.robot_name
-                # marker.mesh_use_embedded_materials = True
-                # marker.frame_locked = False
                 marker.text = joint
                 marker.id = idx
                 marker.scale.x = 1
@@ -438,8 +437,11 @@ class MoveItInterface :
                 marker.action = visualization_msgs.msg.Marker.ADD
                 markers.append(marker)
 
-        return markers, toMsg(T_acc), child_link.name
+        return markers, T_acc, child_link.name
 
+    def normalize_vector(self, v) :
+        m = math.sqrt(math.fsum([x*x for x in v]))
+        return [x/m for x in v]
 
     def get_x_rotation_frame(self, theta) :
         T = kdl.Frame()

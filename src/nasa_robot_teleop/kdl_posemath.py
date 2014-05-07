@@ -3,8 +3,14 @@ from tf import transformations
 import tf
 import rospy
 import numpy
+import math
 
 from PyKDL import *
+
+
+def normalize_vector(v) :
+  m = math.sqrt(math.fsum([x*x for x in v]))
+  return [x/m for x in v]
 
 def fromTf(tf):
     """
@@ -31,11 +37,11 @@ def fromTf(tf):
         >>> import tf_conversions.posemath as pm
         >>> p = pm.fromTf(t.lookupTransform('THISFRAME', 'CHILD', rospy.Time(0)))
         >>> print pm.toMsg(p * p)
-        position: 
+        position:
           x: 1337.0
           y: 0.0
           z: 0.0
-        orientation: 
+        orientation:
           x: 0.0
           y: 0.0
           z: 0.0
@@ -46,7 +52,7 @@ def fromTf(tf):
     position, quaternion = tf
     x, y, z = position
     Qx, Qy, Qz, Qw = quaternion
-    return Frame(Rotation.Quaternion(Qx, Qy, Qz, Qw), 
+    return Frame(Rotation.Quaternion(Qx, Qy, Qz, Qw),
                  Vector(x, y, z))
 
 def toTf(f):
@@ -71,7 +77,7 @@ def fromMsg(p):
     return Frame(Rotation.Quaternion(p.orientation.x,
                                      p.orientation.y,
                                      p.orientation.z,
-                                     p.orientation.w),  
+                                     p.orientation.w),
                  Vector(p.position.x, p.position.y, p.position.z))
 
 def toMsg(f):
@@ -83,10 +89,15 @@ def toMsg(f):
 
     """
     p = Pose()
-    p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w = f.M.GetQuaternion()
     p.position.x = f.p[0]
     p.position.y = f.p[1]
     p.position.z = f.p[2]
+    q = normalize_vector(f.M.GetQuaternion())
+    p.orientation.x = q[0]
+    p.orientation.y = q[1]
+    p.orientation.z = q[2]
+    p.orientation.w = q[3]
+    # p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w = f.M.GetQuaternion()
     return p
 
 
@@ -102,9 +113,9 @@ def fromMatrix(m):
     """
     return Frame(Rotation(m[0,0], m[0,1], m[0,2],
                           m[1,0], m[1,1], m[1,2],
-                          m[2,0], m[2,1], m[2,2]),  
+                          m[2,0], m[2,1], m[2,2]),
                  Vector(m[0,3], m[1, 3], m[2, 3]))
-    
+
 def toMatrix(f):
     """
     :param f: input pose
@@ -142,10 +153,10 @@ def fromCameraParams(cv, rvec, tvec):
     :param cv: OpenCV module
     :param rvec: A Rodrigues rotation vector - see :func:`Rodrigues2`
     :type rvec: 3x1 :class:`CvMat`
-    :param tvec: A translation vector 
+    :param tvec: A translation vector
     :type tvec: 3x1 :class:`CvMat`
     :return: New :class:`PyKDL.Frame` object
-    
+
     For use with :func:`FindExtrinsicCameraParams2`::
 
         import cv
@@ -158,8 +169,8 @@ def fromCameraParams(cv, rvec, tvec):
 
     """
     m = numpy.array([ [ 0, 0, 0, tvec[0,0] ],
-                      [ 0, 0, 0, tvec[1,0] ], 
-                      [ 0, 0, 0, tvec[2,0] ], 
+                      [ 0, 0, 0, tvec[1,0] ],
+                      [ 0, 0, 0, tvec[2,0] ],
                       [ 0, 0, 0, 1.0       ] ], dtype = numpy.float32)
     cv.Rodrigues2(rvec, m[:3,:3])
     return fromMatrix(m)
@@ -179,21 +190,21 @@ class PoseMath(object):
         >>> trans = PoseMath.fromEuler(1, 2, 3, 0, 0, 0)
         >>> rotate = PoseMath.fromEuler(0, 0, 0, pi / 2, 0, 0)
         >>> print trans * rotate
-        position: 
+        position:
           x: 1.0
           y: 2.0
           z: 3.0
-        orientation: 
+        orientation:
           x: 0.707106781187
           y: 0.0
           z: 0.0
           w: 0.707106781187
         >>> print rotate * trans
-        position: 
+        position:
           x: 1.0
           y: -3.0
           z: 2.0
-        orientation: 
+        orientation:
           x: 0.707106781187
           y: 0.0
           z: 0.0
@@ -206,11 +217,11 @@ class PoseMath(object):
         >>> import tf_conversions.posemath as pm
         >>> trans = PoseMath.fromEuler(1, 2, 3, 0, 0, 0)
         >>> print ~trans
-        position: 
+        position:
           x: -1.0
           y: -2.0
           z: -3.0
-        orientation: 
+        orientation:
           x: 0.0
           y: 0.0
           z: 0.0
@@ -237,11 +248,11 @@ class PoseMath(object):
             >>> import numpy
             >>> import tf_conversions.posemath as pm
             >>> print PoseMath.fromMatrix(numpy.identity(4))
-            position: 
+            position:
               x: 0.0
               y: 0.0
               z: 0.0
-            orientation: 
+            orientation:
               x: 0.0
               y: 0.0
               z: 0.0
@@ -279,11 +290,11 @@ class PoseMath(object):
             >>> import tf_conversions.posemath as pm
             >>> p = PoseMath.fromTf(t.lookupTransform('THISFRAME', 'CHILD', rospy.Time(0)))
             >>> print p * p
-            position: 
+            position:
               x: 1337.0
               y: 0.0
               z: 0.0
-            orientation: 
+            orientation:
               x: 0.0
               y: 0.0
               z: 0.0
@@ -297,17 +308,17 @@ class PoseMath(object):
     def fromEuler(x, y, z, Rx, Ry, Rz):
         """
         :param x: x translation
-        :type x: float 
+        :type x: float
         :param y: y translation
-        :type y: float 
+        :type y: float
         :param z: z translation
-        :type z: float 
+        :type z: float
         :param Rx: rotation around x-axis in radians
-        :type Rx: float 
+        :type Rx: float
         :param Ry: rotation around y-axis in radians
-        :type Ry: float 
+        :type Ry: float
         :param Rz: rotation around z-axis in radians
-        :type Rz: float 
+        :type Rz: float
         :return: New PoseMath object
 
         Return a PoseMath object initialized from translation (x, y, z) and Euler rotation (Rx, Ry, Rz).
@@ -317,11 +328,11 @@ class PoseMath(object):
             >>> import tf_conversions.posemath as pm
             >>> from math import pi
             >>> print PoseMath.fromEuler(1, 2, 3, 0, pi / 2, 0)
-            position: 
+            position:
               x: 1
               y: 2
               z: 3
-            orientation: 
+            orientation:
               x: 0.0
               y: 0.707106781187
               z: 0.0
@@ -338,10 +349,10 @@ class PoseMath(object):
         :param cv: OpenCV module
         :param rvec: A Rodrigues rotation vector - see :func:`Rodrigues2`
         :type rvec: 3x1 :class:`CvMat`
-        :param tvec: A translation vector 
+        :param tvec: A translation vector
         :type tvec: 3x1 :class:`CvMat`
         :return: New PoseMath object
-        
+
         For use with :func:`FindExtrinsicCameraParams2`::
 
             import cv
@@ -354,8 +365,8 @@ class PoseMath(object):
 
         """
         m = numpy.array([ [ 0, 0, 0, tvec[0,0] ],
-                          [ 0, 0, 0, tvec[1,0] ], 
-                          [ 0, 0, 0, tvec[2,0] ], 
+                          [ 0, 0, 0, tvec[1,0] ],
+                          [ 0, 0, 0, tvec[2,0] ],
                           [ 0, 0, 0, 1.0       ] ], dtype = numpy.float32)
         cv.Rodrigues2(rvec, m[:3,:3])
         return self.fromMatrix(m)
@@ -383,7 +394,7 @@ class PoseMath(object):
         """ Return a numpy 4x4 array for the pose. """
         translation = (self.msg.position.x, self.msg.position.y, self.msg.position.z)
         rotation = (self.msg.orientation.x, self.msg.orientation.y, self.msg.orientation.z, self.msg.orientation.w)
-        return numpy.dot(transformations.translation_matrix(translation), transformations.quaternion_matrix(rotation))        
+        return numpy.dot(transformations.translation_matrix(translation), transformations.quaternion_matrix(rotation))
 
     def asEuler(self):
         """ Return a tuple (x, y, z, Rx, Ry, Rz) for the pose. """
