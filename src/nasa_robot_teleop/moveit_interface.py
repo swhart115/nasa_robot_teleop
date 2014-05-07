@@ -43,6 +43,9 @@ class MoveItInterface :
         self.plan_generated = {}
         self.marker_store = visualization_msgs.msg.MarkerArray()
 
+        self.plan_color = (0.5,0.1,0.5,1.0)
+        self.path_increment = 1
+
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
         self.robot = moveit_commander.RobotCommander()
         self.scene = moveit_commander.PlanningSceneInterface()
@@ -335,10 +338,8 @@ class MoveItInterface :
             self.set_control_offset(group, toPose(trans, rot))
 
         if display_mode == "all_points" :
-            for point in plan.joint_trajectory.points[1:num_points-1:3] :
-                a = 1-((pt_id/float(num_points))*0.8)
-                a = 1
-                waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, idx, a)
+            for point in plan.joint_trajectory.points[1:num_points-1:self.path_increment] :
+                waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, idx, self.plan_color[3])
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
                 pt_id += 1
@@ -350,7 +351,7 @@ class MoveItInterface :
                         (trans, rot) = self.tf_listener.lookupTransform(self.groups[group].get_planning_frame(), self.get_base_frame(group), rospy.Time(0))
                         self.set_control_offset(group, toPose(trans, rot))
                     offset_pose = toMsg(fromMsg(self.control_offset[group])*fromMsg(end_pose))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=(0.5,0,0.5,a), root=self.groups[group].get_planning_frame(), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
@@ -358,7 +359,7 @@ class MoveItInterface :
 
             if num_points > 0 :
                 points = plan.joint_trajectory.points[num_points-1]
-                waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, points.positions, idx, 1)
+                waypoint_markers, end_pose = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, points.positions, idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
                 idx += len(waypoint_markers)
 
@@ -372,8 +373,7 @@ class MoveItInterface :
                         self.set_control_offset(group, toPose(trans, rot))
 
                     offset_pose = toMsg(fromMsg(self.control_offset[group])*fromMsg(end_pose))
-
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=(0.5,0,0.5,1), root=self.groups[group].get_planning_frame(), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
@@ -415,10 +415,10 @@ class MoveItInterface :
                 marker.scale.x = 1
                 marker.scale.y = 1
                 marker.scale.z = 1
-                marker.color.a = alpha
-                marker.color.r = 0.5
-                marker.color.g = 0
-                marker.color.b = 0.5
+                marker.color.r = self.plan_color[0]
+                marker.color.g = self.plan_color[1]
+                marker.color.b = self.plan_color[2]
+                marker.color.a = self.plan_color[3]
                 idx += 1
                 marker.mesh_resource = child_link.visual.geometry.filename
                 marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE

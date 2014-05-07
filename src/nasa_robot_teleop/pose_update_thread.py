@@ -29,7 +29,6 @@ class PoseUpdateThread(threading.Thread) :
                 if self.offset_pose != None :
                     T = fromMsg(toPose(trans, rot))
                     self.pose_data = toMsg(T*self.T_offset)
-                    # if self.control_frame == "r2/right_index_distal" :
                     #     print T
                 else :
                     self.pose_data = toPose(trans, rot)
