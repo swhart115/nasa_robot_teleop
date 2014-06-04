@@ -409,7 +409,7 @@ class Reflection(object):
 						element.set_from_xml(obj, child)
 						unset_scalars.remove(tag)
 					else:
-						on_error("Scalar element defined multiple times: {}".format(tag))
+						on_error("Scalar element defined multiple times: {}\n".format(tag))
 				info.children.remove(child)
 
 		for attribute in map(self.attribute_map.get, unset_attributes):
@@ -420,9 +420,9 @@ class Reflection(object):
 
 		if is_final:
 			for xml_var in info.attributes:
-				on_error('Unknown attribute: {}'.format(xml_var))
+				on_error('Unknown attribute: {}\n'.format(xml_var))
 			for node in info.children:
-				on_error('Unknown tag: {}'.format(node.tag))
+				on_error('Unknown tag: {}\n'.format(node.tag))
 
 	def add_to_xml(self, obj, node):
 		if self.parent:

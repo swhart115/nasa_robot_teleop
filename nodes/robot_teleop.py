@@ -286,25 +286,6 @@ class RobotTeleop(threading.Thread) :
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
 
-
-    # def axis_map(self, n) :
-    #     if n == "move_x": return 0
-    #     elif n == "move_z": return 1
-    #     elif n == "move_y": return 2
-    #     elif n == "rotate_x": return 3
-    #     elif n == "rotate_z": return 4
-    #     elif n == "rotate_y": return 5
-
-    # def get_axis(self, n, p, r) :
-    #     d = 0
-    #     if n == "move_x": d=p.position.x
-    #     elif n == "move_z": d=p.position.y
-    #     elif n == "move_y": d=p.position.z
-    #     elif n == "rotate_x": d=r[0]
-    #     elif n == "rotate_z": d=r[1]
-    #     elif n == "rotate_y": d=r[2]
-    #     return d
-
     def run(self) :
         c = 0
         while True :
