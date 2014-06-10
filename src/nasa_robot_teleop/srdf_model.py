@@ -146,6 +146,12 @@ class SRDFModel :
         else :
             print "Group ", group, " does not exist in MoveIt! interface"
 
+    def get_end_effector_groups(self) :
+        g = []
+        for e in self.end_effectors.keys() :
+            g.append(self.end_effectors[e].group)
+        return g
+
     def print_group_state(self, group, name) :
         if group in self.group_states :
             if name in self.group_states[group] :
