@@ -9,7 +9,7 @@ R2:
 
 Val:
 
-[https://bitbucket.org/swhart115/nasa_v1_simulator](https://bitbucket.org/swhart115/nasa_v1_simulator)
+[https://bitbucket.org/swhart115/nasa_v1_simulator](https://bitbucket.org/swhart115/nasa_v1_simulator) (**master** branch)
 
 
 To run the teleop nodes follow the following steps:
