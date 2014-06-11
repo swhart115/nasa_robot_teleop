@@ -24,19 +24,19 @@ $ roslaunch r2_moveit_config moveit_planning_execution.launch
 $ roslaunch nasa_robot_teleop r2.launch
 
 
+
 For R2 w/ Legs, run the following three launch files in different terminals:
 
+```
 $ roslaunch r2_gazebo r2_fullbody_gazebo.launch
-
 $ roslaunch r2_fullbody_moveit_config moveit_planning_execution.launch
-
 $ roslaunch nasa_robot_teleop r2_fullbody.launch
+```
 
 
 For Valkyrie, run the following three launch files in different terminals:
-
+```
 $ roslaunch v1_gazebo v1_gazebo.launch
-
 $ roslaunch v1_moveit_config moveit_planning_execution.launch
-
 $ roslaunch nasa_robot_teleop valkyrie.launch
+```
