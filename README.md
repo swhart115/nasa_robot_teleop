@@ -1,4 +1,4 @@
-This package can be used in conjunction with Robot's that have been configured to run with the MoveIt! toolbox.
+This package can be used in conjunction with Robot's that have been configured to run with the MoveIt! toolbox.  It is currently working for ROS-hydro.
 
 Two robots that have this capability are the NASA Robonaut2 and Valkyrie robots.  To check out these sims,
 
