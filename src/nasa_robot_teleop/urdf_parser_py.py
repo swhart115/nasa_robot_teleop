@@ -331,19 +331,21 @@ xmlr.reflect(Link, params = [
 
 
 class PR2Transmission(xmlr.Object):
-    def __init__(self, name = None, joint = None, actuator = None, type = None, mechanicalReduction = 1):
+    def __init__(self, name = None, joint = None, actuator = None, type = None, mechanicalReduction = 1, motorTorqueConstant = None):
         self.name = name
         self.type = type
         self.joint = joint
         self.actuator = actuator
-        self.mechanicalReduction = mechanicalReduction
+        self.mechanicalReduction = mechanicalReduction,
+        self.motorTorqueConstant = motorTorqueConstant
 
 xmlr.reflect(PR2Transmission, tag = 'pr2_transmission', params = [
     name_attribute,
     xmlr.Attribute('type', str),
     xmlr.Element('joint', 'element_name'),
     xmlr.Element('actuator', 'element_name'),
-    xmlr.Element('mechanicalReduction', float)
+    xmlr.Element('mechanicalReduction', float),
+    xmlr.Element('motorTorqueConstant', float)
     ])
 
 
@@ -361,16 +363,18 @@ xmlr.reflect(Actuator, tag = 'actuator', params = [
 
 class Transmission(xmlr.Object):
     """ New format: http://wiki.ros.org/urdf/XML/Transmission """
-    def __init__(self, name = None, joint = None, actuator = None):
+    def __init__(self, name = None, joint = None, actuator = None, motorTorqueConstant = None):
         self.name = name
         self.joint = joint
         self.actuator = actuator
+        self.motorTorqueConstant = motorTorqueConstant
 
 xmlr.reflect(Transmission, tag = 'new_transmission', params = [
         name_attribute,
         xmlr.Element('type', str),
         xmlr.Element('joint', 'element_name'),
-        xmlr.Element('actuator', Actuator)
+        xmlr.Element('actuator', Actuator),
+        xmlr.Element('motorTorqueConstant', float)
         ])
 
 xmlr.add_type('transmission', xmlr.DuckTypedFactory('transmission', [Transmission, PR2Transmission]))

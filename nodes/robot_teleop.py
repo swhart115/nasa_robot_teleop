@@ -106,7 +106,7 @@ class RobotTeleop(threading.Thread) :
 
         # set group to display only last point in path by default (can turn on full train from menu)
         for group in self.group_names :
-            self.moveit_interface.set_display_mode(group, "last_point")
+            self.moveit_interface.set_display_mode(group, "all_points")
 
         # initialize markers
         self.initialize_group_markers()

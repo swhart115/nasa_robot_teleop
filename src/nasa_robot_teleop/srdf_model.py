@@ -100,6 +100,8 @@ class SRDFModel :
                 self.end_effectors[ee].parent_link = elem.attrib["parent_link"]
                 if "parent_group" in elem.attrib:
                     self.end_effectors[ee].parent_group = elem.attrib["parent_group"]
+                else :
+                    self.group_end_effectors[ee].parent_group = None
 
                 ee = elem.attrib["group"]
                 self.group_end_effectors[ee] = EndEffector()
@@ -108,6 +110,8 @@ class SRDFModel :
                 self.group_end_effectors[ee].parent_link = elem.attrib["parent_link"]
                 if "parent_group" in elem.attrib:
                     self.group_end_effectors[ee].parent_group = elem.attrib["parent_group"]
+                else :
+                    self.group_end_effectors[ee].parent_group = None
 
             if elem.tag == "disable_collisions" :
                 l1 = elem.attrib["link1"]
@@ -151,6 +155,9 @@ class SRDFModel :
         for e in self.end_effectors.keys() :
             g.append(self.end_effectors[e].group)
         return g
+
+    def get_end_effector_parent_group(self, ee_group) :
+        return self.group_end_effectors[ee_group].parent_group
 
     def print_group_state(self, group, name) :
         if group in self.group_states :
