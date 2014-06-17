@@ -62,6 +62,7 @@ class MoveItInterface :
             self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory)
             self.plan_generated[g] = False
             self.stored_plans[g] = None
+            self.display_modes[g] = "last_point"
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False)
 
         self.tf_listener = tf.TransformListener()
@@ -81,7 +82,7 @@ class MoveItInterface :
             srdf_filename = str(RosPack().get_path(config_package) + "/config/" + self.robot_name + ".srdf")
             print "============ SRDF Filename: ", srdf_filename
             if self.srdf_model.parse_from_file(srdf_filename) :
-                self.srdf_model.print_model(False)
+                # self.srdf_model.print_model(False)
                 print "================================================"
             return True
         except :
@@ -298,6 +299,40 @@ class MoveItInterface :
         print "===== Random Joint Plan Found"
         self.publish_path_data(self.stored_plans[group_name], group_name)
         self.plan_generated[group_name] = True
+
+    def create_path_plan(self, group_name, frame_id, pt_list) :
+        print "== Robot Name: %s" % self.robot_name
+        print "===== MoveIt! Group Name: %s" % group_name
+        print "===== Generating Plan"
+
+        pt_list_transformed = []
+
+        print "------------------\nTransformed Point List:"
+        for p in pt_list :
+            pt = geometry_msgs.msg.PoseStamped()
+            pt.header.frame_id = frame_id
+            pt.pose = p
+            if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
+                self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
+                pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
+            pt_list_transformed.append(pt.pose)
+
+        print pt_list_transformed
+        print "------------------\n"
+
+        self.groups[group_name].set_start_state_to_current_state()
+        # r = self.groups[group_name].compute_cartesian_path(pt_list_transformed, .02, 100000)
+        # print "return: ",
+        # print r
+
+        self.groups[group_name].set_pose_targets(pt_list_transformed)
+        self.stored_plans[group_name] = self.groups[group_name].plan()
+
+        print "===== Plan Found"
+        print self.stored_plans[group_name]
+        self.publish_path_data(self.stored_plans[group_name], group_name)
+        self.plan_generated[group_name] = True
+
 
     def execute_plan(self, group_name) :
         if self.plan_generated[group_name] :
