@@ -337,8 +337,8 @@ class MoveItInterface :
     def execute_plan(self, group_name) :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
-            # r = self.groups[group_name].execute(self.stored_plans[group_name])
-            r = self.groups[group_name].go(True)
+            r = self.groups[group_name].execute(self.stored_plans[group_name])
+            # r = self.groups[group_name].go(True)
             print "====== Plan Execution: %s" % r
             return r
         else :
