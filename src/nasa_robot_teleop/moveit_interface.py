@@ -45,7 +45,7 @@ class MoveItInterface :
         self.marker_store = visualization_msgs.msg.MarkerArray()
         self.stored_plans = {}
 
-        self.plan_color = (0.1,0.1,0.75,1)
+        self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
@@ -321,10 +321,6 @@ class MoveItInterface :
         print "------------------\n"
 
         self.groups[group_name].set_start_state_to_current_state()
-        # r = self.groups[group_name].compute_cartesian_path(pt_list_transformed, .02, 100000)
-        # print "return: ",
-        # print r
-
         self.groups[group_name].set_pose_targets(pt_list_transformed)
         self.stored_plans[group_name] = self.groups[group_name].plan()
 
@@ -337,8 +333,8 @@ class MoveItInterface :
     def execute_plan(self, group_name) :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
-            r = self.groups[group_name].execute(self.stored_plans[group_name])
-            # r = self.groups[group_name].go(True)
+            # r = self.groups[group_name].execute(self.stored_plans[group_name])
+            r = self.groups[group_name].go(True)
             print "====== Plan Execution: %s" % r
             return r
         else :
