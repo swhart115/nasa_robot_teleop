@@ -5,6 +5,7 @@ Two robots that have this capability are the NASA Robonaut2 and Valkyrie robots.
 R2:
 
 [https://bitbucket.org/nasa_ros_pkg/nasa_r2_common](https://bitbucket.org/nasa_ros_pkg/nasa_r2_common) (**hydro** branch)
+
 [https://bitbucket.org/nasa_ros_pkg/nasa_r2_simulator](https://bitbucket.org/nasa_ros_pkg/nasa_r2_simulator) (**hydro** branch)
 
 Val:
