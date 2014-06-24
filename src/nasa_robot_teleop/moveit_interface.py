@@ -4,6 +4,7 @@ import os
 import sys
 import copy
 import math
+import random
 
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
@@ -36,6 +37,7 @@ class MoveItInterface :
         self.control_frames = {}
         self.control_meshes = {}
         self.control_offset = {}
+        self.group_id_offset = {}
         self.end_effector_map = {}
         self.trajectory_publishers = {}
         self.display_modes = {}
@@ -43,10 +45,10 @@ class MoveItInterface :
         self.trajectory_display_markers = {}
         self.end_effector_display = {}
         self.plan_generated = {}
-        self.marker_store = visualization_msgs.msg.MarkerArray()
+        self.marker_store = {}
         self.stored_plans = {}
 
-        self.plan_color = (0.5,0.1,0.75,1)
+        self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
@@ -101,6 +103,15 @@ class MoveItInterface :
             self.group_types[group_name] = group_type
             self.control_frames[group_name] = ""
             self.control_meshes[group_name] = ""
+            self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
+
+            id_found = False
+            while not id_found :
+                r =  int(random.random()*10000000)
+                if not r in self.group_id_offset.values() :
+                    self.group_id_offset[group_name] = r
+                    id_found = True
+                    print "generated offset ", r, " for group ", group_name
 
             # check to see if the group has an associated end effector, and add it if so
             if self.groups[group_name].has_end_effector_link() :
@@ -246,10 +257,10 @@ class MoveItInterface :
     def joint_state_callback(self, data):
         self.currentState = data
 
-    def clear_published_path(self) :
+    def clear_published_path(self,group) :
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
-        for m in self.marker_store.markers :
+        for m in self.marker_store[group].markers :
             marker = copy.deepcopy(m)
             marker.action = visualization_msgs.msg.Marker.DELETE
             markers.markers.append(marker)
@@ -257,7 +268,7 @@ class MoveItInterface :
 
     def publish_path_data(self, plan, group) :
         if plan != None :
-            self.clear_published_path()
+            self.clear_published_path(group)
             display_trajectory = moveit_msgs.msg.DisplayTrajectory()
             display_trajectory.trajectory_start = self.robot.get_current_state()
             display_trajectory.trajectory.append(plan)
@@ -343,7 +354,7 @@ class MoveItInterface :
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
             waypoints.append(copy.deepcopy(pt.pose))
 
-        (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.015, 0.0)
+        (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.02, 0.0)
         self.stored_plans[group_name] = plan
         # self.groups[group_name].set_pose_targets(waypoints)
         # self.stored_plans[group_name] = self.groups[group_name].plan()
@@ -423,7 +434,8 @@ class MoveItInterface :
         if display_mode == "all_points" :
 
             for point in plan.joint_trajectory.points[1:num_points-1:self.path_increment] :
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, point.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, plan.joint_trajectory.joint_names, point.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
+                idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
 
@@ -432,7 +444,7 @@ class MoveItInterface :
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
 
                     if last_link != ee_root_frame :
-                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(2.0))
+                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
                         rot = self.normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
@@ -446,15 +458,16 @@ class MoveItInterface :
 
             if num_points > 0 :
                 points = plan.joint_trajectory.points[num_points-1]
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(plan.joint_trajectory.joint_names, points.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,plan.joint_trajectory.joint_names, points.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
+                idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
 
                 if self.groups[group].has_end_effector_link() and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
                     if last_link != ee_root_frame :
-                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(2.0))
+                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
                         rot = self.normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
@@ -464,11 +477,15 @@ class MoveItInterface :
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
-        self.marker_store = markers
+        self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
+
+        print "--------------------"
+        print "markers for group: ", group
+        print self.marker_store[group]
         return markers
 
-    def create_marker_array_from_joint_array(self, names, joints, root_frame, idx, alpha) :
+    def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
         markers = []
         T_acc = kdl.Frame()
         T_kin = kdl.Frame()
@@ -491,7 +508,7 @@ class MoveItInterface :
 
             if first_joint :
                 first_joint = False
-                self.tf_listener.waitForTransform(root_frame, parent_link.name, rospy.Time(0), rospy.Duration(2.0))
+                self.tf_listener.waitForTransform(root_frame, parent_link.name, rospy.Time(0), rospy.Duration(5.0))
                 (trans, rot) = self.tf_listener.lookupTransform(root_frame, parent_link.name, rospy.Time(0))
                 rot = self.normalize_vector(rot)
                 T_acc = fromMsg(toPose(trans,rot))
@@ -507,7 +524,7 @@ class MoveItInterface :
                 marker.header.stamp = now
                 marker.ns = self.robot_name
                 marker.text = joint
-                marker.id = idx
+                marker.id = self.group_id_offset[group] + idx
                 marker.scale.x = 1
                 marker.scale.y = 1
                 marker.scale.z = 1
