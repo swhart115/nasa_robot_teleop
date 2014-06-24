@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+import os
 import sys
 import copy
 import math
@@ -305,7 +306,32 @@ class MoveItInterface :
         print "===== MoveIt! Group Name: %s" % group_name
         print "===== Generating Plan"
 
-        pt_list_transformed = []
+        # pt_list_transformed = []
+
+        # print "------------------\nTransformed Point List:"
+        # for p in pt_list :
+        #     pt = geometry_msgs.msg.PoseStamped()
+        #     pt.header.frame_id = frame_id
+        #     pt.pose = p
+        #     if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
+        #         self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
+        #         pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
+        #     pt_list_transformed.append(pt.pose)
+
+        # print pt_list_transformed
+        # print "------------------\n"
+
+        # self.groups[group_name].set_start_state_to_current_state()
+        # self.groups[group_name].set_pose_targets(pt_list_transformed)
+        # self.stored_plans[group_name] = self.groups[group_name].plan()
+
+        # print "===== Plan Found"
+        # print self.stored_plans[group_name]
+        # self.publish_path_data(self.stored_plans[group_name], group_name)
+        # self.plan_generated[group_name] = True
+
+        waypoints = []
+        # waypoints.append(self.groups[group_name].get_current_pose().pose)
 
         print "------------------\nTransformed Point List:"
         for p in pt_list :
@@ -315,26 +341,47 @@ class MoveItInterface :
             if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
                 self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
-            pt_list_transformed.append(pt.pose)
+            waypoints.append(copy.deepcopy(pt.pose))
 
-        print pt_list_transformed
-        print "------------------\n"
+        (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.015, 0.0)
+        self.stored_plans[group_name] = plan
+        # self.groups[group_name].set_pose_targets(waypoints)
+        # self.stored_plans[group_name] = self.groups[group_name].plan()
 
-        self.groups[group_name].set_start_state_to_current_state()
-        self.groups[group_name].set_pose_targets(pt_list_transformed)
-        self.stored_plans[group_name] = self.groups[group_name].plan()
-
-        print "===== Plan Found"
-        print self.stored_plans[group_name]
         self.publish_path_data(self.stored_plans[group_name], group_name)
         self.plan_generated[group_name] = True
 
+        # print "============ Waiting while RVIZ displays plan..."
+        # rospy.sleep(3)
+        # for wp in waypoints:
+        #     print wp
+        # print "------------------\n"
 
-    def execute_plan(self, group_name) :
+        # print self.stored_plans[group_name]
+        # print "------------------\n"
+
+    def execute_all_valid_plans(self, from_stored=False, wait=True) :
+        r = True
+        for g in self.robot.get_group_names() :
+            if self.plan_generated[g] :
+                print "====== Executing Plan for Group: %s" % g
+                if from_stored :
+                    r = r and self.groups[g].execute(self.stored_plans[g])
+                else :
+                    r = self.groups[g].go(wait)
+                print "====== Plan Execution: %s" % r
+            else :
+                r = False
+                print "====== No Plan for Group %s yet generated." % g
+        return r
+
+    def execute_plan(self, group_name, from_stored=False, wait=True) :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
-            # r = self.groups[group_name].execute(self.stored_plans[group_name])
-            r = self.groups[group_name].go(True)
+            if from_stored :
+                r = self.groups[group_name].execute(self.stored_plans[group_name])
+            else :
+                r = self.groups[group_name].go(wait)
             print "====== Plan Execution: %s" % r
             return r
         else :
