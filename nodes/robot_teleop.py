@@ -168,6 +168,7 @@ class RobotTeleop(threading.Thread) :
             if self.moveit_interface.get_group_type(group) == "endeffector" :
                 self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Move")], MenuHandler.CHECKED )
 
+            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
             # add menus to server
             self.marker_menus[group].apply( self.server, group )
             self.server.applyChanges()
