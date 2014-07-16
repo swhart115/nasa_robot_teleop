@@ -551,7 +551,7 @@ if __name__ == '__main__':
         pt.pose.orientation.y = q[1]
         pt.pose.orientation.z = q[2]
         pt.pose.orientation.w = q[3]
-        moveit_test.create_plan_to_target(pt, "left_arm")
+        moveit_test.create_plan_to_target("left_arm", pt)
 
         q = (kdl.Rotation.RPY(1.57,0,-1.57)).GetQuaternion()
         pt = geometry_msgs.msg.PoseStamped()
@@ -565,7 +565,7 @@ if __name__ == '__main__':
         pt.pose.orientation.y = q[1]
         pt.pose.orientation.z = q[2]
         pt.pose.orientation.w = q[3]
-        moveit_test.create_plan_to_target(pt, "right_arm")
+        moveit_test.create_plan_to_target("right_arm", pt)
 
         r1 = moveit_test.execute_plan("left_arm")
         r2 = moveit_test.execute_plan("right_arm")
