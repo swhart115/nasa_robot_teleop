@@ -152,7 +152,7 @@ class RobotTeleop(threading.Thread) :
 
             elif self.moveit_interface.get_group_type(group) == "endeffector" :
 
-                self.markers[group].header.frame_id = self.moveit_interface.srdf_model.group_end_effectors[group].parent_link
+                self.markers[group].header.frame_id = self.root_frame 
                 end_effector_markers = self.end_effector_link_data[group].get_current_position_marker_array(scale=1.02,color=(1,1,1,0.1))
                 for m in end_effector_markers.markers :
                     menu_control.markers.append( m )
