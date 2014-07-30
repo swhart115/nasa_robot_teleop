@@ -27,11 +27,9 @@ from nasa_robot_teleop.kdl_posemath import *
 from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
 
-class RobotTeleop(threading.Thread) :
+class RobotTeleop:
 
     def __init__(self, robot_name, config_package, manipulator_group_names, joint_group_names):
-        super(RobotTeleop,self).__init__()
-
         self.robot_name = robot_name
         self.manipulator_group_names = manipulator_group_names
         self.joint_group_names = joint_group_names
@@ -153,9 +151,9 @@ class RobotTeleop(threading.Thread) :
             elif self.moveit_interface.get_group_type(group) == "endeffector" :
 
                 self.markers[group].header.frame_id = self.moveit_interface.srdf_model.group_end_effectors[group].parent_link
-                end_effector_markers = self.end_effector_link_data[group].get_current_position_marker_array(scale=1.02,color=(1,1,1,0.1))
-                for m in end_effector_markers.markers :
-                    menu_control.markers.append( m )
+                end_effector_marker = self.end_effector_link_data[group].get_current_position_marker(self.markers[group].header.frame_id, scale=1.02, color=(1,1,1,0.1))
+                
+                menu_control.markers.append( end_effector_marker )
 
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)
@@ -287,29 +285,6 @@ class RobotTeleop(threading.Thread) :
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
 
-    def run(self) :
-        c = 0
-        while True :
-            c+=1
-            try :
-                for group in self.moveit_interface.groups.keys():
-                    # if c%2==0:
-                    # print "Reseting group marker: ", group
-                    # self.reset_group_marker(group)
-                    if self.moveit_interface.get_group_type(group) == "endeffector" :
-                        for control in self.markers[group].controls :
-                            control.markers = []
-                            if control.interaction_mode == InteractiveMarkerControl.BUTTON :
-                                end_effector_markers = self.end_effector_link_data[group].get_current_position_marker_array(scale=1.02,color=(1,1,1,0.1))
-                                for m in end_effector_markers.markers:
-                                    control.markers.append(m)
-                        self.server.insert(self.markers[group], self.process_feedback)
-
-                self.server.applyChanges()
-            except :
-                rospy.logdebug("RobotTeleop::run() -- could not update thread")
-            rospy.sleep(1.5)
-
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Robot Teleop')
     parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
@@ -321,12 +296,7 @@ if __name__=="__main__":
 
     rospy.init_node("RobotTeleop")
 
-    try:
-        robot = RobotTeleop(args.robot, args.config, args.manipulatorgroups, args.jointgroups)
-        robot.start()
-    except rospy.ROSInterruptException:
-        # TODO: should not pass
-        pass
+    robot = RobotTeleop(args.robot, args.config, args.manipulatorgroups, args.jointgroups)
 
     r = rospy.Rate(50.0)
     while not rospy.is_shutdown():
