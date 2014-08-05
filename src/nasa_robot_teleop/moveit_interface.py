@@ -17,6 +17,8 @@ import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 
+import controller_manager_msgs.srv
+
 import moveit_commander
 import moveit_msgs.msg
 
@@ -34,6 +36,7 @@ class MoveItInterface :
         self.robot_name = robot_name
         self.groups = {}
         self.group_types = {}
+        self.group_controllers = {}
         self.base_frames = {}
         self.control_frames = {}
         self.control_meshes = {}
@@ -110,7 +113,7 @@ class MoveItInterface :
 
             controller_name = self.lookup_controller_name(group_name)
             topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
-            print "COMMAND TOPIC: ", topic_name
+            # print "COMMAND TOPIC: ", topic_name
             self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
             id_found = False
             while not id_found :
@@ -118,7 +121,7 @@ class MoveItInterface :
                 if not r in self.group_id_offset.values() :
                     self.group_id_offset[group_name] = r
                     id_found = True
-                    print "generated offset ", r, " for group ", group_name
+                    # print "generated offset ", r, " for group ", group_name
 
             # check to see if the group has an associated end effector, and add it if so
             if self.groups[group_name].has_end_effector_link() :
@@ -634,17 +637,21 @@ class MoveItInterface :
         return p
 
     def lookup_controller_name(self, group_name) :
-        if group_name == "right_arm" :
-            return "r_arm_controller"
-        if group_name == "left_arm" :
-            return "l_arm_controller"
-        if group_name == "right_hand" :
-            return "r_hand_controller"
-        if group_name == "left_hand" :
-            return "l_hand_controller"
-        else :
-            return ""
 
+        if not group_name in self.group_controllers.keys() :
+
+            srv_name = "/" + self.robot_name + "/controller_manager/list_controllers"
+            list_controllers = rospy.ServiceProxy(srv_name, controller_manager_msgs.srv.ListControllers)
+            controllers = list_controllers()
+
+            joint_list = self.groups[group_name].get_active_joints()
+            self.group_controllers[group_name] = ""
+            for c in controllers.controller :
+                if joint_list[0] in c.resources :
+                    self.group_controllers[group_name] = c.name
+
+        print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
+        return self.group_controllers[group_name]
 
 if __name__ == '__main__':
 
@@ -696,4 +703,3 @@ if __name__ == '__main__':
     except rospy.ROSInterruptException:
         pass
 
-    
