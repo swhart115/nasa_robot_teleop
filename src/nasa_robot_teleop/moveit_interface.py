@@ -15,6 +15,7 @@ import tf
 import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
+import trajectory_msgs.msg
 
 import moveit_commander
 import moveit_msgs.msg
@@ -47,6 +48,8 @@ class MoveItInterface :
         self.plan_generated = {}
         self.marker_store = {}
         self.stored_plans = {}
+
+        self.command_topics = {}
 
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
@@ -94,7 +97,7 @@ class MoveItInterface :
 
 
     def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
-
+        print "ADD GROUP: ", group_name
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -105,6 +108,10 @@ class MoveItInterface :
             self.control_meshes[group_name] = ""
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
+            controller_name = self.lookup_controller_name(group_name)
+            topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
+            print "COMMAND TOPIC: ", topic_name
+            self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
             id_found = False
             while not id_found :
                 r =  int(random.random()*10000000)
@@ -153,6 +160,7 @@ class MoveItInterface :
             print "============================================================"
             print "============ Robot Name: %s" % self.robot_name
             print "============ Group: ", group_name
+            print self.groups.keys()
 
             if group_name in self.groups.keys() :
                 print "============ Type: ", self.group_types[group_name]
@@ -164,6 +172,7 @@ class MoveItInterface :
                 print "============ MoveIt! Goal Orientation Tolerance: ", self.groups[group_name].get_goal_orientation_tolerance()
                 print "============ Control Frame: ", self.get_control_frame(group_name)
                 print "============ Control Mesh: ", self.get_control_mesh(group_name)
+            print "============================================================\n"
 
     def print_basic_info(self) :
         print "============================================================"
@@ -390,7 +399,9 @@ class MoveItInterface :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
             if from_stored :
-                r = self.groups[group_name].execute(self.stored_plans[group_name])
+                print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
             else :
                 r = self.groups[group_name].go(wait)
             print "====== Plan Execution: %s" % r
@@ -482,7 +493,7 @@ class MoveItInterface :
 
         print "--------------------"
         print "markers for group: ", group
-        print self.marker_store[group]
+        # print self.marker_store[group]
         return markers
 
     def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
@@ -622,6 +633,19 @@ class MoveItInterface :
                 p.orientation.w = q[3]
         return p
 
+    def lookup_controller_name(self, group_name) :
+        if group_name == "right_arm" :
+            return "r_arm_controller"
+        if group_name == "left_arm" :
+            return "l_arm_controller"
+        if group_name == "right_hand" :
+            return "r_hand_controller"
+        if group_name == "left_hand" :
+            return "l_hand_controller"
+        else :
+            return ""
+
+
 if __name__ == '__main__':
 
     rospy.init_node('moveit_intefrace_test')
@@ -672,6 +696,4 @@ if __name__ == '__main__':
     except rospy.ROSInterruptException:
         pass
 
-
-
-
+    
