@@ -49,6 +49,7 @@ def makeMesh( msg, mesh_str, p, sf=1, alpha=1 ):
     marker.color.a = alpha
     marker.pose = p
     marker.mesh_resource = mesh_str
+    marker.mesh_use_embedded_materials = True
     return marker
 
 def makeBoxControl( msg ):

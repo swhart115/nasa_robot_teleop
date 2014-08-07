@@ -550,6 +550,7 @@ class MoveItInterface :
                 marker.mesh_resource = child_link.visual.geometry.filename
                 marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
                 marker.action = visualization_msgs.msg.Marker.ADD
+                marker.mesh_use_embedded_materials = True
                 markers.append(marker)
 
         return markers, T_acc, child_link.name

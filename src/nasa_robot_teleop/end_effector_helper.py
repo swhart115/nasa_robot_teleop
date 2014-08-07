@@ -127,6 +127,7 @@ class EndEffectorHelper :
                 marker.color.a = color[3]
                 marker.text = link
                 marker.id = idx
+                marker.mesh_use_embedded_materials = True
                 markers.markers.append(marker)
                 idx += 1
 
