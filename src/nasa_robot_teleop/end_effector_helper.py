@@ -94,6 +94,33 @@ class EndEffectorHelper :
 
     def get_root_frame(self) :
         return self.root_frame
+        
+    def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):
+        (mesh, pose) = self.get_link_data(link)
+
+        marker = Marker()
+
+        if offset==None :
+            marker.pose = pose
+        else :
+            marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
+
+        marker.header.frame_id = root
+        marker.header.stamp = rospy.get_rostime()
+        marker.ns = self.robot_name
+        marker.mesh_resource = mesh
+        marker.type = Marker.MESH_RESOURCE
+        marker.action = Marker.MODIFY
+        marker.scale.x = scale
+        marker.scale.y = scale
+        marker.scale.z = scale
+        marker.color.r = color[0]
+        marker.color.g = color[1]
+        marker.color.b = color[2]
+        marker.color.a = color[3]
+        marker.text = link
+        marker.id = idx
+        return marker
 
     def get_current_position_marker_array(self, offset=None, root="", scale=1, color=(0,1,0,1), idx=0) :
 
@@ -102,32 +129,7 @@ class EndEffectorHelper :
 
         for link in self.get_links() :
             if self.get_link_data(link) :
-
-                (mesh, pose) = self.get_link_data(link)
-
-                marker = Marker()
-
-                if offset==None :
-                    marker.pose = pose
-                else :
-                    marker.pose = toMsg(fromMsg(offset)*fromMsg(pose))
-
-                marker.header.frame_id = root
-                marker.header.stamp = rospy.get_rostime()
-                marker.ns = self.robot_name
-                marker.mesh_resource = mesh
-                marker.type = Marker.MESH_RESOURCE
-                marker.action = Marker.MODIFY
-                marker.scale.x = scale
-                marker.scale.y = scale
-                marker.scale.z = scale
-                marker.color.r = color[0]
-                marker.color.g = color[1]
-                marker.color.b = color[2]
-                marker.color.a = color[3]
-                marker.text = link
-                marker.id = idx
-                marker.mesh_use_embedded_materials = True
+                marker = self.get_current_position_marker(link, offset, root, scale, color, idx)
                 markers.markers.append(marker)
                 idx += 1
 
