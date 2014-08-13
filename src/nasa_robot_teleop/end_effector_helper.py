@@ -94,7 +94,7 @@ class EndEffectorHelper :
 
     def get_root_frame(self) :
         return self.root_frame
-        
+
     def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):
         (mesh, pose) = self.get_link_data(link)
 
@@ -120,6 +120,7 @@ class EndEffectorHelper :
         marker.color.a = color[3]
         marker.text = link
         marker.id = idx
+        marker.mesh_use_embedded_materials = True
         return marker
 
     def get_current_position_marker_array(self, offset=None, root="", scale=1, color=(0,1,0,1), idx=0) :
