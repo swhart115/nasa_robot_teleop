@@ -15,6 +15,9 @@ import tf
 import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
+import trajectory_msgs.msg
+
+import controller_manager_msgs.srv
 
 import moveit_commander
 import moveit_msgs.msg
@@ -33,6 +36,7 @@ class MoveItInterface :
         self.robot_name = robot_name
         self.groups = {}
         self.group_types = {}
+        self.group_controllers = {}
         self.base_frames = {}
         self.control_frames = {}
         self.control_meshes = {}
@@ -47,6 +51,8 @@ class MoveItInterface :
         self.plan_generated = {}
         self.marker_store = {}
         self.stored_plans = {}
+
+        self.command_topics = {}
 
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
@@ -94,7 +100,7 @@ class MoveItInterface :
 
 
     def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
-
+        print "ADD GROUP: ", group_name
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -105,13 +111,17 @@ class MoveItInterface :
             self.control_meshes[group_name] = ""
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
+            controller_name = self.lookup_controller_name(group_name)
+            topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
+            # print "COMMAND TOPIC: ", topic_name
+            self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
             id_found = False
             while not id_found :
                 r =  int(random.random()*10000000)
                 if not r in self.group_id_offset.values() :
                     self.group_id_offset[group_name] = r
                     id_found = True
-                    print "generated offset ", r, " for group ", group_name
+                    # print "generated offset ", r, " for group ", group_name
 
             # check to see if the group has an associated end effector, and add it if so
             if self.groups[group_name].has_end_effector_link() :
@@ -153,6 +163,7 @@ class MoveItInterface :
             print "============================================================"
             print "============ Robot Name: %s" % self.robot_name
             print "============ Group: ", group_name
+            print self.groups.keys()
 
             if group_name in self.groups.keys() :
                 print "============ Type: ", self.group_types[group_name]
@@ -164,6 +175,7 @@ class MoveItInterface :
                 print "============ MoveIt! Goal Orientation Tolerance: ", self.groups[group_name].get_goal_orientation_tolerance()
                 print "============ Control Frame: ", self.get_control_frame(group_name)
                 print "============ Control Mesh: ", self.get_control_mesh(group_name)
+            print "============================================================\n"
 
     def print_basic_info(self) :
         print "============================================================"
@@ -390,7 +402,9 @@ class MoveItInterface :
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
             if from_stored :
-                r = self.groups[group_name].execute(self.stored_plans[group_name])
+                print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
             else :
                 r = self.groups[group_name].go(wait)
             print "====== Plan Execution: %s" % r
@@ -482,7 +496,7 @@ class MoveItInterface :
 
         print "--------------------"
         print "markers for group: ", group
-        print self.marker_store[group]
+        # print self.marker_store[group]
         return markers
 
     def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
@@ -536,6 +550,7 @@ class MoveItInterface :
                 marker.mesh_resource = child_link.visual.geometry.filename
                 marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
                 marker.action = visualization_msgs.msg.Marker.ADD
+                marker.mesh_use_embedded_materials = True
                 markers.append(marker)
 
         return markers, T_acc, child_link.name
@@ -622,6 +637,23 @@ class MoveItInterface :
                 p.orientation.w = q[3]
         return p
 
+    def lookup_controller_name(self, group_name) :
+
+        if not group_name in self.group_controllers.keys() :
+
+            srv_name = "/" + self.robot_name + "/controller_manager/list_controllers"
+            list_controllers = rospy.ServiceProxy(srv_name, controller_manager_msgs.srv.ListControllers)
+            controllers = list_controllers()
+
+            joint_list = self.groups[group_name].get_active_joints()
+            self.group_controllers[group_name] = ""
+            for c in controllers.controller :
+                if joint_list[0] in c.resources :
+                    self.group_controllers[group_name] = c.name
+
+        print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
+        return self.group_controllers[group_name]
+
 if __name__ == '__main__':
 
     rospy.init_node('moveit_intefrace_test')
@@ -671,7 +703,4 @@ if __name__ == '__main__':
 
     except rospy.ROSInterruptException:
         pass
-
-
-
 

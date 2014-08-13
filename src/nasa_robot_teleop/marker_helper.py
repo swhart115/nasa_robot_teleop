@@ -37,7 +37,7 @@ def makeSphere( msg, scale ):
     marker.color.a = 1.0
     return marker
 
-def makeMesh( msg, mesh_str, p, sf=1, alpha=1 ):
+def makeMesh( msg, mesh_str, p, sf=1, alpha=1, mesh_use_embedded_materials=True ):
     marker = Marker()
     marker.type = Marker.MESH_RESOURCE
     marker.scale.x = sf
@@ -49,6 +49,7 @@ def makeMesh( msg, mesh_str, p, sf=1, alpha=1 ):
     marker.color.a = alpha
     marker.pose = p
     marker.mesh_resource = mesh_str
+    marker.mesh_use_embedded_materials = mesh_use_embedded_materials
     return marker
 
 def makeBoxControl( msg ):
