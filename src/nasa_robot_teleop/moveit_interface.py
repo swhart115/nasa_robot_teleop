@@ -654,6 +654,12 @@ class MoveItInterface :
         print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
         return self.group_controllers[group_name]
 
+
+    def tear_down(self) :
+        for k in self.end_effector_display.keys() :
+            self.end_effector_display[k].stop_offset_update_thread()
+
+
 if __name__ == '__main__':
 
     rospy.init_node('moveit_intefrace_test')

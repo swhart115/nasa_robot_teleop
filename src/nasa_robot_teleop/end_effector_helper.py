@@ -89,6 +89,14 @@ class EndEffectorHelper :
             except :
                 rospy.logerr("EndEffectorHelper::start_offset_update_thread() -- unable to start end effector link offset update thread")
 
+    def stop_offset_update_thread(self) :
+        print "EndEffectorHelper::stop_offset_update_thread() -- stopping offset update thread for end effector from root: ", self.root_frame
+        for link in self.links :
+            try :
+                self.offset_update_thread[link].stop()
+            except :
+                rospy.logerr("EndEffectorHelper::stop_offset_update_thread() -- unable to stop end effector link offset update thread")
+
     def get_link_offset(self, link) :
         return self.offset_pose_data[link]
 

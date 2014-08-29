@@ -24,8 +24,10 @@ class PoseUpdateThread(threading.Thread) :
         if offset_pose != None :
             self.T_offset = fromMsg(self.offset_pose)
 
+        self.running = True
+
     def run(self) :
-        while True :
+        while self.running :
             self.mutex.acquire()
             try :
                 try :
@@ -40,6 +42,10 @@ class PoseUpdateThread(threading.Thread) :
                 self.mutex.release()
 
             rospy.sleep(0.1)
+        print "Killing Pose Update Thread: ", self.name
+
+    def stop(self) :
+        self.running = False
 
     def get_pose_data(self) :
         self.is_valid = False
