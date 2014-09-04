@@ -27,6 +27,7 @@ import PyKDL as kdl
 from srdf_model import SRDFModel
 from kdl_posemath import *
 import urdf_parser_py as urdf
+from urdf_helper import *
 import end_effector_helper as end_effector
 
 class MoveItInterface :
@@ -142,7 +143,7 @@ class MoveItInterface :
                 ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
-                self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model())
+                self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
 
             return True
 
@@ -233,7 +234,7 @@ class MoveItInterface :
         link_name = self.control_frames[group_name]
         if link_name in self.urdf_model.link_map:
             link = self.urdf_model.link_map[link_name]
-            p = self.link_origin_to_pose(link)
+            p = link_origin_to_pose(link)
         return p
 
     def get_group_links(self, group) :
@@ -460,7 +461,7 @@ class MoveItInterface :
                     if last_link != ee_root_frame :
                         self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                        rot = self.normalize_vector(rot)
+                        rot = normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
@@ -483,7 +484,7 @@ class MoveItInterface :
                     if last_link != ee_root_frame :
                         self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                        rot = self.normalize_vector(rot)
+                        rot = normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
@@ -518,20 +519,20 @@ class MoveItInterface :
             # print "child link: ", child_link.name
 
             joint_val = joints[names.index(joint)]
-            T_joint = self.get_joint_rotation(model_joint.axis, joint_val)
+            T_joint = get_joint_rotation(model_joint.axis, joint_val)
 
             if first_joint :
                 first_joint = False
                 self.tf_listener.waitForTransform(root_frame, parent_link.name, rospy.Time(0), rospy.Duration(5.0))
                 (trans, rot) = self.tf_listener.lookupTransform(root_frame, parent_link.name, rospy.Time(0))
-                rot = self.normalize_vector(rot)
+                rot = normalize_vector(rot)
                 T_acc = fromMsg(toPose(trans,rot))
 
-            T_kin = fromMsg(self.joint_origin_to_pose(model_joint))
+            T_kin = fromMsg(joint_origin_to_pose(model_joint))
             T_acc = T_acc*T_kin*T_joint
 
-            if self.link_has_mesh(child_link) :
-                T_viz = fromMsg(self.link_origin_to_pose(child_link))
+            if link_has_mesh(child_link) :
+                T_viz = fromMsg(link_origin_to_pose(child_link))
                 T_link = T_acc*T_viz
                 marker.pose = toMsg(T_link)
                 marker.header.frame_id = root_frame
@@ -555,87 +556,87 @@ class MoveItInterface :
 
         return markers, T_acc, child_link.name
 
-    def normalize_vector(self, v) :
-        m = math.sqrt(math.fsum([x*x for x in v]))
-        return [x/m for x in v]
+    # def normalize_vector(self, v) :
+    #     m = math.sqrt(math.fsum([x*x for x in v]))
+    #     return [x/m for x in v]
 
-    def get_x_rotation_frame(self, theta) :
-        T = kdl.Frame()
-        T.M.DoRotX(theta)
-        return T
+    # def get_x_rotation_frame(self, theta) :
+    #     T = kdl.Frame()
+    #     T.M.DoRotX(theta)
+    #     return T
 
-    def get_y_rotation_frame(self, theta) :
-        T = kdl.Frame()
-        T.M.DoRotY(theta)
-        return T
+    # def get_y_rotation_frame(self, theta) :
+    #     T = kdl.Frame()
+    #     T.M.DoRotY(theta)
+    #     return T
 
-    def get_z_rotation_frame(self, theta) :
-        T = kdl.Frame()
-        T.M.DoRotZ(theta)
-        return T
+    # def get_z_rotation_frame(self, theta) :
+    #     T = kdl.Frame()
+    #     T.M.DoRotZ(theta)
+    #     return T
 
-    def get_joint_rotation(self, axis, joint_val) :
-        if axis[0] > 0 :
-            T_joint = self.get_x_rotation_frame(joint_val)
-        elif axis[0] < 0 :
-            T_joint = self.get_x_rotation_frame(-joint_val)
-        elif axis[1] > 0 :
-            T_joint = self.get_y_rotation_frame(joint_val)
-        elif axis[1] < 0 :
-            T_joint = self.get_y_rotation_frame(-joint_val)
-        elif axis[2] < 0 :
-            T_joint = self.get_z_rotation_frame(-joint_val)
-        else :
-            T_joint = self.get_z_rotation_frame(joint_val)
-        return T_joint
+    # def get_joint_rotation(self, axis, joint_val) :
+    #     if axis[0] > 0 :
+    #         T_joint = get_x_rotation_frame(joint_val)
+    #     elif axis[0] < 0 :
+    #         T_joint = get_x_rotation_frame(-joint_val)
+    #     elif axis[1] > 0 :
+    #         T_joint = get_y_rotation_frame(joint_val)
+    #     elif axis[1] < 0 :
+    #         T_joint = get_y_rotation_frame(-joint_val)
+    #     elif axis[2] < 0 :
+    #         T_joint = get_z_rotation_frame(-joint_val)
+    #     else :
+    #         T_joint = get_z_rotation_frame(joint_val)
+    #     return T_joint
 
-    def link_has_mesh(self, link) :
-        if link.visual :
-            if link.visual.geometry :
-                if isinstance(link.visual.geometry, urdf.Mesh) :
-                    if link.visual.geometry.filename :
-                        return True
-        else :
-            return False
+    # def link_has_mesh(self, link) :
+    #     if link.visual :
+    #         if link.visual.geometry :
+    #             if isinstance(link.visual.geometry, urdf.Mesh) :
+    #                 if link.visual.geometry.filename :
+    #                     return True
+    #     else :
+    #         return False
 
-    def link_has_origin(self, link) :
-        if link.visual :
-            if link.visual.origin :
-                return True
-        else :
-            return False
+    # def link_has_origin(self, link) :
+    #     if link.visual :
+    #         if link.visual.origin :
+    #             return True
+    #     else :
+    #         return False
 
-    def link_origin_to_pose(self, link) :
-        p = geometry_msgs.msg.Pose()
-        p.orientation.w = 1
-        if self.link_has_origin(link) :
-            if link.visual.origin.xyz :
-                p.position.x = link.visual.origin.xyz[0]
-                p.position.y = link.visual.origin.xyz[1]
-                p.position.z = link.visual.origin.xyz[2]
-            if link.visual.origin.rpy :
-                q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
-                p.orientation.x = q[0]
-                p.orientation.y = q[1]
-                p.orientation.z = q[2]
-                p.orientation.w = q[3]
-        return p
+    # def link_origin_to_pose(self, link) :
+    #     p = geometry_msgs.msg.Pose()
+    #     p.orientation.w = 1
+    #     if link_has_origin(link) :
+    #         if link.visual.origin.xyz :
+    #             p.position.x = link.visual.origin.xyz[0]
+    #             p.position.y = link.visual.origin.xyz[1]
+    #             p.position.z = link.visual.origin.xyz[2]
+    #         if link.visual.origin.rpy :
+    #             q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
+    #             p.orientation.x = q[0]
+    #             p.orientation.y = q[1]
+    #             p.orientation.z = q[2]
+    #             p.orientation.w = q[3]
+    #     return p
 
-    def joint_origin_to_pose(self, joint) :
-        p = geometry_msgs.msg.Pose()
-        p.orientation.w = 1
-        if joint.origin :
-            if joint.origin.xyz :
-                p.position.x = joint.origin.xyz[0]
-                p.position.y = joint.origin.xyz[1]
-                p.position.z = joint.origin.xyz[2]
-            if joint.origin.rpy :
-                q = (kdl.Rotation.RPY(joint.origin.rpy[0],joint.origin.rpy[1],joint.origin.rpy[2])).GetQuaternion()
-                p.orientation.x = q[0]
-                p.orientation.y = q[1]
-                p.orientation.z = q[2]
-                p.orientation.w = q[3]
-        return p
+    # def joint_origin_to_pose(self, joint) :
+    #     p = geometry_msgs.msg.Pose()
+    #     p.orientation.w = 1
+    #     if joint.origin :
+    #         if joint.origin.xyz :
+    #             p.position.x = joint.origin.xyz[0]
+    #             p.position.y = joint.origin.xyz[1]
+    #             p.position.z = joint.origin.xyz[2]
+    #         if joint.origin.rpy :
+    #             q = (kdl.Rotation.RPY(joint.origin.rpy[0],joint.origin.rpy[1],joint.origin.rpy[2])).GetQuaternion()
+    #             p.orientation.x = q[0]
+    #             p.orientation.y = q[1]
+    #             p.orientation.z = q[2]
+    #             p.orientation.w = q[3]
+    #     return p
 
     def lookup_controller_name(self, group_name) :
 
