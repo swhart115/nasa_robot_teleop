@@ -63,7 +63,7 @@ def link_has_origin(link) :
 def link_origin_to_pose(link) :
     p = geometry_msgs.msg.Pose()
     p.orientation.w = 1
-    if self.link_has_origin(link) :
+    if link_has_origin(link) :
         if link.visual.origin.xyz :
             p.position.x = link.visual.origin.xyz[0]
             p.position.y = link.visual.origin.xyz[1]
