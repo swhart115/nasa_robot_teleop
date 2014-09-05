@@ -100,7 +100,7 @@ class RobotTeleop:
             self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.moveit_interface.get_control_frame(n), self.tf_listener)
             # ee_links = self.moveit_interface.get_group_links(n)
             # ee_links.append(self.moveit_interface.get_control_frame(n))
-            self.end_effector_link_data[n].populate_data(self.moveit_interface.get_group_links(n), self.moveit_interface.get_urdf_model())
+            self.end_effector_link_data[n].populate_data(self.moveit_interface.get_group_links(n), self.moveit_interface.get_urdf_model(), self.moveit_interface.get_srdf_model())
 
         # set group to display only last point in path by default (can turn on full train from menu)
         for group in self.group_names :
