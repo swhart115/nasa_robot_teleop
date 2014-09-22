@@ -137,11 +137,11 @@ class EndEffectorHelper :
         print "EndEffectorHelper::start_offset_update_thread() -- starting offset update thread for end effector from root: ", self.root_frame
         for link in self.links :
             self.offset_pose_data[link] = PoseStamped()
-            try :
-                self.offset_update_thread[link] = PoseUpdateThread(link, self.root_frame, link, self.tf_listener, self.link_origins[link])
-                self.offset_update_thread[link].start()
-            except :
-                rospy.logerr("EndEffectorHelper::start_offset_update_thread() -- unable to start end effector link offset update thread")
+            # try :
+            self.offset_update_thread[link] = PoseUpdateThread(link, self.root_frame, link, self.tf_listener, self.link_origins[link])
+            self.offset_update_thread[link].start()
+            # except :
+            #     rospy.logerr("EndEffectorHelper::start_offset_update_thread() -- unable to start end effector link offset update thread")
 
     def stop_offset_update_thread(self) :
         print "EndEffectorHelper::stop_offset_update_thread() -- stopping offset update thread for end effector from root: ", self.root_frame

@@ -28,18 +28,18 @@ class PoseUpdateThread(threading.Thread) :
 
     def run(self) :
         while self.running :
-            self.mutex.acquire()
-            try :
-                try :
-                    self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(3.0))
-                    (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
-                    T = fromMsg(toPose(trans, rot))
-                    self.pose_data = toMsg(T*self.T_offset)
-                    self.is_valid = True
-                except :
-                    rospy.logdebug("PoseUpdateThread::run() -- could not update thread")
-            finally :
-                self.mutex.release()
+            # self.mutex.acquire()
+            # try :
+            #     try :
+            self.tf_listener.waitForTransform(self.control_frame,self.root_frame, rospy.Time(0), rospy.Duration(3.0))
+            (trans, rot) = self.tf_listener.lookupTransform(self.root_frame, self.control_frame, rospy.Time(0))
+            T = fromMsg(toPose(trans, rot))
+            self.pose_data = toMsg(T*self.T_offset)
+            self.is_valid = True
+            #     except :
+            #         rospy.logdebug("PoseUpdateThread::run() -- could not update thread")
+            # finally :
+            #     self.mutex.release()
 
             rospy.sleep(0.1)
         print "Killing Pose Update Thread: ", self.name
