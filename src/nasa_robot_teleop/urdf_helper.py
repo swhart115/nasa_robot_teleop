@@ -1,8 +1,11 @@
 
 import math
+import rospy
+
 import PyKDL as kdl
 
 import geometry_msgs.msg
+import visualization_msgs.msg
 
 # from nasa_robot_teleop.moveit_interface import *
 # from nasa_robot_teleop.kdl_posemath import *
@@ -101,3 +104,44 @@ def get_link_joint(link, urdf) :
     for j in urdf.joint_map :
         if urdf.joint_map[j].child == link :
             return j
+
+def get_mesh_marker_for_link(link_name, urdf) :
+    
+    try :
+        marker = visualization_msgs.msg.Marker()
+        p = geometry_msgs.msg.Pose()
+
+        link = urdf.link_map[link_name]
+
+        marker.header.frame_id = link_name
+        marker.header.stamp = rospy.get_rostime()
+        marker.ns = link_name
+
+        marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+        marker.mesh_resource = link.visual.geometry.filename
+        marker.mesh_use_embedded_materials = True
+
+        s = [1.0, 1.0, 1.0]
+        if not link.visual.geometry.scale == None :
+            s = link.visual.geometry.scale
+
+        q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
+        p.position.x = link.visual.origin.xyz[0]
+        p.position.y = link.visual.origin.xyz[1]
+        p.position.z = link.visual.origin.xyz[2]
+        p.orientation.x = q[0]
+        p.orientation.y = q[1]
+        p.orientation.z = q[2]
+        p.orientation.w = q[3]
+        marker.pose = p
+
+        marker.action = visualization_msgs.msg.Marker.ADD
+        marker.scale.x = s[0]
+        marker.scale.y = s[1]
+        marker.scale.z = s[2]
+        marker.text = link_name
+
+    except :
+        marker = None
+
+    return marker        

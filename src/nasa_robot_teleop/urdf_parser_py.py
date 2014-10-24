@@ -238,8 +238,8 @@ class JointLimit(xmlr.Object):
 
 xmlr.reflect(JointLimit, params = [
     xmlr.Attribute('effort', float),
-    xmlr.Attribute('lower', float),
-    xmlr.Attribute('upper', float),
+    # xmlr.Attribute('lower', float),
+    # xmlr.Attribute('upper', float),
     xmlr.Attribute('velocity', float)
     ])
 
@@ -306,10 +306,10 @@ xmlr.reflect(Joint, params = [
     xmlr.Element('parent', 'element_link'),
     xmlr.Element('child', 'element_link'),
     xmlr.Element('limit', JointLimit, False),
-    xmlr.Element('dynamics', JointDynamics, False),
-    xmlr.Element('safety_controller', SafetyController, False),
-    xmlr.Element('calibration', JointCalibration, False),
-    xmlr.Element('mimic', JointMimic, False)
+    xmlr.Element('dynamics', JointDynamics, False)
+    #xmlr.Element('safety_controller', SafetyController, False),
+    # xmlr.Element('calibration', JointCalibration, False),
+    # xmlr.Element('mimic', JointMimic, False)
     ])
 
 
@@ -423,6 +423,9 @@ class Robot(xmlr.Object):
             chain.append(tip)
         link = tip
         while link != root:
+            if not link in self.parent_map : 
+                chain = []
+                break
             (joint, parent) = self.parent_map[link]
             if joints:
                 if fixed or self.joint_map[joint].joint_type != 'fixed':
@@ -442,6 +445,45 @@ class Robot(xmlr.Object):
         assert root is not None, "No roots detected, invalid URDF."
         return root
 
+    def get_all_tips(self) :
+        tips = []
+        for link in self.link_map.keys():
+            found_as_parent = False
+            for joint in self.joint_map:
+                if self.joint_map[joint].parent == link : 
+                    found_as_parent = True
+                    break
+            if not found_as_parent : tips.append(link)
+        return tips
+
+    def get_link_joint(self,link) :
+        for j in self.joint_map :
+            if self.joint_map[j].child == link :
+                return j
+
+    def get_all_child_links(self, root_frame) :
+
+        root_link = self.link_map[root_frame]
+
+        j = self.get_link_joint(root_link)
+
+        tips = self.get_all_tips()
+        links = []
+        for tip in tips :
+            # print "  checking tip: ", tip
+            chain = self.get_chain(root=root_link.name, tip=tip, joints=False, links=True)
+            # print "  found chain: ", chain, "\n"
+            for c in chain :
+                if c != links: links.append(c)
+
+        # print "all links: "
+        r = list(set(links))
+        # print "-----\n"
+        # print "final set: ", c
+        # print "-----"
+        return r
+
+
     @classmethod
     def from_parameter_server(cls, key = 'robot_description'):
         """
@@ -452,7 +494,10 @@ class Robot(xmlr.Object):
         """
         # Could move this into xml_reflection
         import rospy
-        return cls.from_xml_string(rospy.get_param(key))
+        try :
+            return cls.from_xml_string(rospy.get_param(key))
+        except :
+            return cls.from_xml_string(rospy.get_param(key))
 
 xmlr.reflect(Robot, tag = 'robot', params = [
 #   name_attribute,
@@ -460,7 +505,7 @@ xmlr.reflect(Robot, tag = 'robot', params = [
     xmlr.AggregateElement('link', Link),
     xmlr.AggregateElement('joint', Joint),
     xmlr.AggregateElement('gazebo', xmlr.RawType()),
-    xmlr.AggregateElement('transmission', 'transmission'),
+    # xmlr.AggregateElement('transmission', 'transmission'),
     xmlr.AggregateElement('material', Material)
     ])
 

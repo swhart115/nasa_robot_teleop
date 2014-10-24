@@ -115,6 +115,8 @@ class RobotTeleop:
         self.group_menu_handles = {}
         self.marker_menus = {}
 
+        urdf = self.moveit_interface.get_urdf_model()
+
         for group in self.moveit_interface.groups.keys() :
 
             self.auto_execute[group] = False
@@ -139,21 +141,68 @@ class RobotTeleop:
             elif  self.moveit_interface.get_group_type(group) == "joint" :
 
                 self.markers[group].header.frame_id = self.moveit_interface.get_control_frame(group)
-                mesh = self.moveit_interface.get_control_mesh(group)
-                pose = self.moveit_interface.get_control_mesh_pose_offset(group)
-                marker = makeMesh( self.markers[group] , mesh, pose, sf=1.02, alpha=0.1 )
-                menu_control.markers.append( marker )
+                control_frame = self.moveit_interface.get_control_frame(group)
+                jg_links = urdf.get_all_child_links(control_frame)
+            
+                idx = 0
+                # print "FOUND JG-LINKS FOR GROUP[", group,"]: ", jg_links
+                for jg_link in jg_links :
+                    try :
+                        marker = get_mesh_marker_for_link(jg_link, urdf)
+
+                        if marker != None :
+                            marker.color.r = 1
+                            marker.color.g = 1
+                            marker.color.b = 1
+                            marker.color.a = 0.1
+                            marker.scale.x = marker.scale.x*1.03
+                            marker.scale.y = marker.scale.y*1.03
+                            marker.scale.z = marker.scale.z*1.03
+                            marker.id = idx
+                            menu_control.markers.append(marker)
+                            idx += 1
+                            # print "ADDING MESH FOR LINK: ", jg_link
+                            # print marker
+                    except :
+                        pass
+
+
+                # original 
+                # mesh = self.moveit_interface.get_control_mesh(group)
+                # pose = self.moveit_interface.get_control_mesh_pose_offset(group)
+                # scale = self.moveit_interface.get_control_mesh_scale(group)
+                # marker = makeMesh( self.markers[group], mesh, pose, [s*1.02 for s in scale], alpha=0.1 )
+                # menu_control.markers.append( marker )
 
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)
                 self.server.insert(self.markers[group], self.process_feedback)
 
             elif self.moveit_interface.get_group_type(group) == "endeffector" :
-
+                control_frame = self.moveit_interface.get_control_frame(group)
+                ee_links = urdf.get_all_child_links(control_frame)
                 self.markers[group].header.frame_id = self.moveit_interface.srdf_model.group_end_effectors[group].parent_link
-                end_effector_marker = self.end_effector_link_data[group].get_current_position_marker(self.markers[group].header.frame_id, scale=1.02, color=(1,1,1,0.1))
                 
-                menu_control.markers.append( end_effector_marker )
+                # original 
+                # end_effector_marker = self.end_effector_link_data[group].get_current_position_marker(self.markers[group].header.frame_id, scale=1.02, color=(1,1,1,0.1))
+                # menu_control.markers.append( end_effector_marker )
+
+                idx = 0
+                for ee_link in ee_links :
+                    try :
+                        end_effector_marker = get_mesh_marker_for_link(ee_link, urdf)
+
+                        if end_effector_marker != None :
+                            end_effector_marker.color.r = 1
+                            end_effector_marker.color.g = 1
+                            end_effector_marker.color.b = 1
+                            end_effector_marker.color.a = 0.1
+                            end_effector_marker.id = idx
+                            menu_control.markers.append(end_effector_marker)
+                            idx += 1
+                            # print "ADDING MESH FOR LINK: ", ee_link
+                    except :
+                        pass
 
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)

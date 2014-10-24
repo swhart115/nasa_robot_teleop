@@ -52,10 +52,10 @@ class MoveItInterface :
         self.plan_generated = {}
         self.marker_store = {}
         self.stored_plans = {}
-
+        self.config_package = config_package
         self.command_topics = {}
 
-        self.plan_color = (0.5,0.1,0.75,.5)
+        self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
 
         print "============ Setting up MoveIt! for robot: \'", self.robot_name, "\'"
@@ -84,6 +84,7 @@ class MoveItInterface :
         self.urdf_model = urdf.Robot.from_parameter_server()
         if self.urdf_model == None : return False
 
+        self.urdf_model.get_all_tips()
         print "============ Creating Robot Model from SRDF...."
         self.srdf_model = SRDFModel(self.robot_name)
 
@@ -113,8 +114,9 @@ class MoveItInterface :
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
             controller_name = self.lookup_controller_name(group_name)
-            topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
-            # print "COMMAND TOPIC: ", topic_name
+            topic_name = "/" + controller_name + "/command"
+            # topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
+            print "COMMAND TOPIC: ", topic_name
             self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
             id_found = False
             while not id_found :
@@ -123,7 +125,6 @@ class MoveItInterface :
                     self.group_id_offset[group_name] = r
                     id_found = True
                     # print "generated offset ", r, " for group ", group_name
-
             # check to see if the group has an associated end effector, and add it if so
             if self.groups[group_name].has_end_effector_link() :
                 self.control_frames[group_name] = self.groups[group_name].get_end_effector_link()
@@ -164,7 +165,7 @@ class MoveItInterface :
             print "============================================================"
             print "============ Robot Name: %s" % self.robot_name
             print "============ Group: ", group_name
-            print self.groups.keys()
+            # print self.groups.keys()
 
             if group_name in self.groups.keys() :
                 print "============ Type: ", self.group_types[group_name]
@@ -236,6 +237,16 @@ class MoveItInterface :
             link = self.urdf_model.link_map[link_name]
             p = link_origin_to_pose(link)
         return p
+
+    def get_control_mesh_scale(self, group_name) :
+        s = [1]*3
+        link_name = self.control_frames[group_name]
+        if link_name in self.urdf_model.link_map:
+            link = self.urdf_model.link_map[link_name]
+            s = link.visual.geometry.scale
+           
+        if s == None: s = [1]*3
+        return s
 
     def get_group_links(self, group) :
         return self.srdf_model.get_group_links(group)
@@ -500,6 +511,21 @@ class MoveItInterface :
         # print self.marker_store[group]
         return markers
 
+    def get_joint_chain(self, first_link, last_link) :
+        joints = []
+
+        link = last_link
+
+        while link != first_link :
+            for j in self.urdf_model.joint_map.keys() :
+                if self.urdf_model.joint_map[j].child == link : 
+                    joints.append(self.urdf_model.joint_map[j].name)
+                    link = self.urdf_model.joint_map[j].parent
+                    break
+
+        joints.reverse()
+        return joints
+
     def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
         markers = []
         T_acc = kdl.Frame()
@@ -507,19 +533,38 @@ class MoveItInterface :
         now = rospy.get_rostime()
 
         first_joint = True
-        for joint in names :
+
+        first_joint_name = names[0]
+        last_joint_name = names[len(names)-1]
+        joint = first_joint_name
+     
+        parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[first_joint_name].parent]
+        # last_link = self.urdf_model.link_map[self.urdf_model.joint_map[last_joint_name].parent]
+        last_link = self.urdf_model.link_map[self.get_control_frame(group)]
+        # print "-------"
+        # print "root link: ", parent_link.name
+        # print "last link: ", last_link.name
+        # 
+        full_names = self.get_joint_chain(parent_link.name, last_link.name)
+
+        # print "names:         ", names
+        # print "revised names: ", full_names
+        # print "-------"
+
+        for joint in full_names :
 
             marker = visualization_msgs.msg.Marker()
+            
             parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].parent]
             child_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].child]
             model_joint = self.urdf_model.joint_map[joint]
 
-            # print "joint: ", model_joint.name
-            # print "parent link: ", parent_link.name
-            # print "child link: ", child_link.name
-
-            joint_val = joints[names.index(joint)]
-            T_joint = get_joint_rotation(model_joint.axis, joint_val)
+            try :
+                joint_val = joints[names.index(joint)]
+                T_joint = get_joint_rotation(model_joint.axis, joint_val)
+            except :
+                joint_val = 0.0
+                T_joint = kdl.Frame()
 
             if first_joint :
                 first_joint = False
@@ -532,6 +577,7 @@ class MoveItInterface :
             T_acc = T_acc*T_kin*T_joint
 
             if link_has_mesh(child_link) :
+                # print "  has mesh: ", child_link.visual.geometry.filename
                 T_viz = fromMsg(link_origin_to_pose(child_link))
                 T_link = T_acc*T_viz
                 marker.pose = toMsg(T_link)
@@ -540,9 +586,14 @@ class MoveItInterface :
                 marker.ns = self.robot_name
                 marker.text = joint
                 marker.id = self.group_id_offset[group] + idx
-                marker.scale.x = 1
-                marker.scale.y = 1
-                marker.scale.z = 1
+                try :
+                    marker.scale.x = child_link.visual.geometry.scale[0]
+                    marker.scale.y = child_link.visual.geometry.scale[1]
+                    marker.scale.z = child_link.visual.geometry.scale[2]
+                except :
+                    marker.scale.x = 1
+                    marker.scale.y = 1
+                    marker.scale.z = 1
                 marker.color.r = self.plan_color[0]
                 marker.color.g = self.plan_color[1]
                 marker.color.b = self.plan_color[2]
@@ -556,104 +607,41 @@ class MoveItInterface :
 
         return markers, T_acc, child_link.name
 
-    # def normalize_vector(self, v) :
-    #     m = math.sqrt(math.fsum([x*x for x in v]))
-    #     return [x/m for x in v]
-
-    # def get_x_rotation_frame(self, theta) :
-    #     T = kdl.Frame()
-    #     T.M.DoRotX(theta)
-    #     return T
-
-    # def get_y_rotation_frame(self, theta) :
-    #     T = kdl.Frame()
-    #     T.M.DoRotY(theta)
-    #     return T
-
-    # def get_z_rotation_frame(self, theta) :
-    #     T = kdl.Frame()
-    #     T.M.DoRotZ(theta)
-    #     return T
-
-    # def get_joint_rotation(self, axis, joint_val) :
-    #     if axis[0] > 0 :
-    #         T_joint = get_x_rotation_frame(joint_val)
-    #     elif axis[0] < 0 :
-    #         T_joint = get_x_rotation_frame(-joint_val)
-    #     elif axis[1] > 0 :
-    #         T_joint = get_y_rotation_frame(joint_val)
-    #     elif axis[1] < 0 :
-    #         T_joint = get_y_rotation_frame(-joint_val)
-    #     elif axis[2] < 0 :
-    #         T_joint = get_z_rotation_frame(-joint_val)
-    #     else :
-    #         T_joint = get_z_rotation_frame(joint_val)
-    #     return T_joint
-
-    # def link_has_mesh(self, link) :
-    #     if link.visual :
-    #         if link.visual.geometry :
-    #             if isinstance(link.visual.geometry, urdf.Mesh) :
-    #                 if link.visual.geometry.filename :
-    #                     return True
-    #     else :
-    #         return False
-
-    # def link_has_origin(self, link) :
-    #     if link.visual :
-    #         if link.visual.origin :
-    #             return True
-    #     else :
-    #         return False
-
-    # def link_origin_to_pose(self, link) :
-    #     p = geometry_msgs.msg.Pose()
-    #     p.orientation.w = 1
-    #     if link_has_origin(link) :
-    #         if link.visual.origin.xyz :
-    #             p.position.x = link.visual.origin.xyz[0]
-    #             p.position.y = link.visual.origin.xyz[1]
-    #             p.position.z = link.visual.origin.xyz[2]
-    #         if link.visual.origin.rpy :
-    #             q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
-    #             p.orientation.x = q[0]
-    #             p.orientation.y = q[1]
-    #             p.orientation.z = q[2]
-    #             p.orientation.w = q[3]
-    #     return p
-
-    # def joint_origin_to_pose(self, joint) :
-    #     p = geometry_msgs.msg.Pose()
-    #     p.orientation.w = 1
-    #     if joint.origin :
-    #         if joint.origin.xyz :
-    #             p.position.x = joint.origin.xyz[0]
-    #             p.position.y = joint.origin.xyz[1]
-    #             p.position.z = joint.origin.xyz[2]
-    #         if joint.origin.rpy :
-    #             q = (kdl.Rotation.RPY(joint.origin.rpy[0],joint.origin.rpy[1],joint.origin.rpy[2])).GetQuaternion()
-    #             p.orientation.x = q[0]
-    #             p.orientation.y = q[1]
-    #             p.orientation.z = q[2]
-    #             p.orientation.w = q[3]
-    #     return p
 
     def lookup_controller_name(self, group_name) :
 
+        print "lookup_controller_name() for ", group_name
         if not group_name in self.group_controllers.keys() :
-
-            srv_name = "/" + self.robot_name + "/controller_manager/list_controllers"
-            list_controllers = rospy.ServiceProxy(srv_name, controller_manager_msgs.srv.ListControllers)
-            controllers = list_controllers()
+            import yaml
+            try:
+                controllers_file = str(RosPack().get_path(self.config_package) + "/config/controllers.yaml") 
+                controller_config = yaml.load(file(controllers_file, 'r'))
+            except :
+                print "Error loading controllers.yaml"
 
             joint_list = self.groups[group_name].get_active_joints()
             self.group_controllers[group_name] = ""
-            for c in controllers.controller :
-                if joint_list[0] in c.resources :
-                    self.group_controllers[group_name] = c.name
+            for c in controller_config['controller_list'] :
+                if joint_list[0] in c['joints'] :
+                    self.group_controllers[group_name] = c['name']
 
         print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
         return self.group_controllers[group_name]
+
+
+        #     # srv_name = "/pr2_controller_manager/list_controllers"
+        #     srv_name = "/" + self.robot_name + "/controller_manager/list_controllers"1
+        #     list_controllers = rospy.ServiceProxy(srv_name, controller_manager_msgs.srv.ListControllers)
+        #     controllers = list_controllers()
+        #     print "controllers:", controllers
+        #     joint_list = self.groups[group_name].get_active_joints()
+        #     self.group_controllers[group_name] = ""
+        #     for c in controllers.controller :
+        #         if joint_list[0] in c.resources :
+        #             self.group_controllers[group_name] = c.name
+
+        # print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
+        # return self.group_controllers[group_name]
 
 
     def tear_down(self) :

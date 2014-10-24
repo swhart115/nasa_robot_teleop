@@ -103,18 +103,21 @@ class EndEffectorHelper :
             if model_link :
                 if model_link.visual  :
                     if model_link.visual.geometry  :
-                        if model_link.visual.geometry.filename  :
-                            mesh = model_link.visual.geometry.filename
-                            p = geometry_msgs.msg.Pose()
-                            q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
-                            p.position.x = model_link.visual.origin.xyz[0]
-                            p.position.y = model_link.visual.origin.xyz[1]
-                            p.position.z = model_link.visual.origin.xyz[2]
-                            p.orientation.x = q[0]
-                            p.orientation.y = q[1]
-                            p.orientation.z = q[2]
-                            p.orientation.w = q[3]
-                            self.add_link(link, mesh, p)
+                        try :
+                            if model_link.visual.geometry.filename  :
+                                mesh = model_link.visual.geometry.filename
+                        except :
+                            mesh = None 
+                        p = geometry_msgs.msg.Pose()
+                        q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
+                        p.position.x = model_link.visual.origin.xyz[0]
+                        p.position.y = model_link.visual.origin.xyz[1]
+                        p.position.z = model_link.visual.origin.xyz[2]
+                        p.orientation.x = q[0]
+                        p.orientation.y = q[1]
+                        p.orientation.z = q[2]
+                        p.orientation.w = q[3]
+                        self.add_link(link, mesh, p)
 
         self.start_offset_update_thread()
 
@@ -125,8 +128,8 @@ class EndEffectorHelper :
         return self.links
 
     def get_link_data(self, link) :
-        if not self.has_link(link) : return False
-        if not self.offset_update_thread[link].get_pose_data() : return False
+        if not self.has_link(link) : return (False, geometry_msgs.msg.Pose())
+        if not self.offset_update_thread[link].get_pose_data() : return (False, self.offset_update_thread[link].get_pose_data())
         return (self.link_meshes[link], self.offset_update_thread[link].get_pose_data())
 
     def set_control_frame(self, control_pose, control_mesh) :
@@ -158,10 +161,11 @@ class EndEffectorHelper :
         return self.root_frame
 
     def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):
-        (mesh, pose) = self.get_link_data(link)
 
+        (mesh, pose) = self.get_link_data(link)
         marker = Marker()
 
+        s = [scale, scale, scale]
         if offset==None :
             marker.pose = pose
         else :
@@ -170,12 +174,19 @@ class EndEffectorHelper :
         marker.header.frame_id = root
         marker.header.stamp = rospy.get_rostime()
         marker.ns = self.robot_name
-        marker.mesh_resource = mesh
-        marker.type = Marker.MESH_RESOURCE
+        if mesh :
+            marker.mesh_resource = mesh
+            marker.type = Marker.MESH_RESOURCE
+            # need to set scale....
+        else :
+            scale = 0.001
+            marker.type = Marker.SPHERE
+            print "setting SPHERE for link: ", link
+            return None
         marker.action = Marker.MODIFY
-        marker.scale.x = scale
-        marker.scale.y = scale
-        marker.scale.z = scale
+        marker.scale.x = s[0]
+        marker.scale.y = s[1]
+        marker.scale.z = s[2]
         marker.color.r = color[0]
         marker.color.g = color[1]
         marker.color.b = color[2]
@@ -239,7 +250,8 @@ class EndEffectorHelper :
         for link in self.get_links() :
             if self.get_link_data(link) :
                 marker = self.get_current_position_marker(link, offset, root, scale, color, idx)
-                markers.markers.append(marker)
+                if not marker == None :
+                    markers.markers.append(marker)
                 idx += 1
 
         self.current_marker_array = markers
@@ -324,3 +336,4 @@ class EndEffectorHelper :
 
         return markers
 
+    
