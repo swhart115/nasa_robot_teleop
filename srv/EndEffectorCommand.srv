@@ -1,0 +1,5 @@
+trajectory_msgs/JointTrajectory goal_trajectory
+string name
+string pose_name
+---
+bool result
