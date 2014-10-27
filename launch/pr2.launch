@@ -4,5 +4,6 @@
     <arg name="config"             default="pr2_moveit_config" />
     <arg name="manipulator_groups" default="left_arm right_arm" />
     <arg name="joint_groups"       default="head" />
-    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
+    <arg name="gripper_service"    default="/pr2_gripper_bridge/end_effector_command" />
+    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config) -g $(arg gripper_service)" output="screen" />
 </launch>

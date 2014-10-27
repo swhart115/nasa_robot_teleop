@@ -19,6 +19,8 @@ import trajectory_msgs.msg
 
 import controller_manager_msgs.srv
 
+from nasa_robot_teleop.srv import *
+
 import moveit_commander
 import moveit_msgs.msg
 
@@ -54,6 +56,7 @@ class MoveItInterface :
         self.stored_plans = {}
         self.config_package = config_package
         self.command_topics = {}
+        self.gripper_service = None
 
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
@@ -77,6 +80,15 @@ class MoveItInterface :
 
         self.tf_listener = tf.TransformListener()
 
+
+    def set_gripper_service(self, srv) :
+        print "MoveItInterface() -- set_gripper_service(" , srv, ")"
+        rospy.wait_for_service(srv)
+        print "found gripper_service"
+        self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
+       
+    def clear_gripper_service(self) :
+        self.gripper_service = None    
 
     def create_models(self, config_package) :
 
@@ -351,7 +363,7 @@ class MoveItInterface :
         #     if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
         #         self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
         #         pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
-        #     pt_list_transformed.append(pt.pose)
+        #     pt_list_transformed.append(pt.pose)grpper_ser
 
         # print pt_list_transformed
         # print "------------------\n"
@@ -411,19 +423,37 @@ class MoveItInterface :
         return r
 
     def execute_plan(self, group_name, from_stored=False, wait=True) :
+        r = False
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
             if from_stored :
-                print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
-                self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
-                r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
+                if self.group_types[group_name] != "endeffector" or not self.gripper_service:
+                    print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                    self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                    r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
+                else :
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
             else :
-                r = self.groups[group_name].go(wait)
+                if self.group_types[group_name] == "endeffector" and self.gripper_service:
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                else :
+                    r = self.groups[group_name].go(wait)
             print "====== Plan Execution: %s" % r
             return r
         else :
             print "====== No Plan for Group %s yet generated." % group_name
+            return r
+
+    def publish_to_gripper_service(self, group, traj) :
+        try:
+            print "Calling Gripper Service"
+            resp = self.gripper_service(traj, group, "pr2_pose")
+            return resp.result
+        except rospy.ServiceException, e:
+            print "Service call failed: %s"%e
             return False
+
+
 
     def add_collision_object(self, p, s, n) :
         p.header.frame_id = self.robot.get_planning_frame()

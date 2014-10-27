@@ -48,6 +48,8 @@ class RobotTeleop:
         self.auto_execute = {}
         self.end_effector_link_data = {}
 
+        self.gripper_service = None
+
         # interactive marker server
         self.server = InteractiveMarkerServer(str(self.robot_name + "_teleop"))
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
@@ -221,6 +223,14 @@ class RobotTeleop:
             self.server.applyChanges()
 
 
+    def set_gripper_service(self, srv) :
+        self.gripper_service = srv
+        self.moveit_interface.set_gripper_service(srv)
+
+    def clear_gripper_service(self) :
+        self.gripper_service = None
+        self.moveit_interface.clear_gripper_service()
+
     def setup_stored_pose_menu(self, group) :
         for m,c in self.menu_options :
             if m == "Stored Poses" :
@@ -338,14 +348,19 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Robot Teleop')
     parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
     parser.add_argument('-c, --config', dest='config', help='e.g. r2_fullbody_moveit_config')
-    parser.add_argument('-m, --manipulatorgroups', nargs="*", dest='manipulatorgroups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
-    parser.add_argument('-j, --jointgroups', nargs="*", dest='jointgroups', help='space limited string e.g. "head waist"')
+    parser.add_argument('-m, --manipulator_groups', nargs="*", dest='manipulator_groups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
+    parser.add_argument('-j, --joint_groups', nargs="*", dest='joint_groups', help='space limited string e.g. "head waist"')
+    parser.add_argument('-g, --gripper_service', nargs="*", dest='gripper_service', help='string e.g. "/pr2_gripper_bridge/end_effector_command"')
     parser.add_argument('positional', nargs='*')
     args = parser.parse_args()
 
     rospy.init_node("RobotTeleop")
 
-    robot = RobotTeleop(args.robot, args.config, args.manipulatorgroups, args.jointgroups)
+    robot = RobotTeleop(args.robot, args.config, args.manipulator_groups, args.joint_groups)
+
+    if args.gripper_service :
+        print "Setting Gripper Service: ", args.gripper_service
+        robot.set_gripper_service(args.gripper_service[0])
 
     r = rospy.Rate(50.0)
     while not rospy.is_shutdown():
