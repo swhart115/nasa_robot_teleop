@@ -55,7 +55,7 @@ class EndEffectorHelper :
 
         # compute current position marker array
         if pose == "current" :
-            markers = self.get_current_position_marker_array(root=self.root_name)
+            markers = self.get_current_position_marker_array(root="")
             return markers
 
         # look up stored pose or compute it if it doesnt exist
