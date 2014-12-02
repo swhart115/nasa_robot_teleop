@@ -57,6 +57,7 @@ class SRDFModel :
         for elem in root.getchildren() :
             if elem.tag == "group" :
                 group_name = elem.attrib["name"]
+                print "SRDFModel::parse_srdf() -- found group: ", group_name
                 self.groups.append(group_name)
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []

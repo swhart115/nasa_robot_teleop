@@ -66,7 +66,7 @@ class MoveItInterface :
         self.scene = moveit_commander.PlanningSceneInterface()
         self.obstacle_markers = visualization_msgs.msg.MarkerArray()
         if not self.create_models(config_package) :
-            print "MoveItInterface::init() -- failed creating RDF models"
+            rospy.logerr("MoveItInterface::init() -- failed creating RDF models")
             return
 
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
@@ -82,9 +82,8 @@ class MoveItInterface :
 
 
     def set_gripper_service(self, srv) :
-        print "MoveItInterface() -- set_gripper_service(" , srv, ")"
+        rospy.loginfo("MoveItInterface::set_gripper_service() -- set_gripper_service(" + srv + ")")
         rospy.wait_for_service(srv)
-        print "found gripper_service"
         self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
        
     def clear_gripper_service(self) :
@@ -114,7 +113,7 @@ class MoveItInterface :
 
 
     def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
-        print "ADD GROUP: ", group_name
+        # print "ADD GROUP: ", group_name
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -128,7 +127,7 @@ class MoveItInterface :
             controller_name = self.lookup_controller_name(group_name)
             topic_name = "/" + controller_name + "/command"
             # topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
-            print "COMMAND TOPIC: ", topic_name
+            # print "COMMAND TOPIC: ", topic_name
             self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
             id_found = False
             while not id_found :
@@ -281,7 +280,7 @@ class MoveItInterface :
         else : return ""
 
     def set_base_frame(self, group, base_frame) :
-        print "--- setting new base frame to ", base_frame
+        # print "--- setting new base frame to ", base_frame
         self.base_frames[group] = base_frame
 
     def set_control_offset(self, group, offset) :
@@ -380,7 +379,7 @@ class MoveItInterface :
         waypoints = []
         # waypoints.append(self.groups[group_name].get_current_pose().pose)
 
-        print "------------------\nTransformed Point List:"
+        # print "------------------\nTransformed Point List:"
         for p in pt_list :
             pt = geometry_msgs.msg.PoseStamped()
             pt.header.frame_id = frame_id
@@ -536,9 +535,9 @@ class MoveItInterface :
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
-        print "--------------------"
-        print "markers for group: ", group
-        # print self.marker_store[group]
+        # print "--------------------"
+        # print "markers for group: ", group
+        # # print self.marker_store[group]
         return markers
 
     def get_joint_chain(self, first_link, last_link) :
@@ -640,14 +639,14 @@ class MoveItInterface :
 
     def lookup_controller_name(self, group_name) :
 
-        print "lookup_controller_name() for ", group_name
+        # print "lookup_controller_name() for ", group_name
         if not group_name in self.group_controllers.keys() :
             import yaml
             try:
                 controllers_file = str(RosPack().get_path(self.config_package) + "/config/controllers.yaml") 
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
-                print "Error loading controllers.yaml"
+                rospy.logerr("MoveItInterface::lookup_controller_name() -- Error loading controllers.yaml")
 
             joint_list = self.groups[group_name].get_active_joints()
             self.group_controllers[group_name] = ""
@@ -655,7 +654,7 @@ class MoveItInterface :
                 if joint_list[0] in c['joints'] :
                     self.group_controllers[group_name] = c['name']
 
-        print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
+        rospy.loginfo(str("MoveItInterface::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
 
 
