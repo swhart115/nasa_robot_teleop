@@ -57,6 +57,7 @@ class MoveItInterface :
         self.config_package = config_package
         self.command_topics = {}
         self.gripper_service = None
+        self.actionlib = False
 
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
@@ -80,6 +81,8 @@ class MoveItInterface :
 
         self.tf_listener = tf.TransformListener()
 
+    def use_actionlib(self, v) :
+        self.actionlib = v
 
     def set_gripper_service(self, srv) :
         rospy.loginfo("MoveItInterface::set_gripper_service() -- set_gripper_service(" + srv + ")")
@@ -427,16 +430,26 @@ class MoveItInterface :
             print "====== Executing Plan for Group: %s" % group_name
             if from_stored :
                 if self.group_types[group_name] != "endeffector" or not self.gripper_service:
-                    print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
-                    self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
-                    r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
+                    if self.actionlib :
+                        print "MOVEIT GO!"
+                        r = self.groups[group_name].go(wait)
+                    else :
+                        print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                        self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                        r = True
                 else :
                     r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
             else :
                 if self.group_types[group_name] == "endeffector" and self.gripper_service:
                     r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
                 else :
-                    r = self.groups[group_name].go(wait)
+                    if self.actionlib :
+                        print "MOVEIT GO!"
+                        r = self.groups[group_name].go(wait)
+                    else :
+                        print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                        self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                    r = True
             print "====== Plan Execution: %s" % r
             return r
         else :
