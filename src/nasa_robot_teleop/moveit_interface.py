@@ -126,10 +126,10 @@ class MoveItInterface :
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
             controller_name = self.lookup_controller_name(group_name)
-            topic_name = "/" + controller_name + "/command"
+            topic_name = "/" + controller_name + "/command_bridge"
             # topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
             print "COMMAND TOPIC: ", topic_name
-            self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectory)
+            self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectoryBridge)
             id_found = False
             while not id_found :
                 r =  int(random.random()*10000000)
@@ -429,13 +429,16 @@ class MoveItInterface :
             if from_stored :
                 if self.group_types[group_name] != "endeffector" or not self.gripper_service:
                     print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
-                    self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+                    self.command_topics[group_name].publish(self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+		    #self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
                     r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
                 else :
-                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+                    #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
             else :
                 if self.group_types[group_name] == "endeffector" and self.gripper_service:
-                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+                    #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
                 else :
                     r = self.groups[group_name].go(wait)
             print "====== Plan Execution: %s" % r
