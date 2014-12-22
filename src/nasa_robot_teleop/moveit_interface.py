@@ -16,6 +16,7 @@ import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
+import pr2_joint_trajectory_bridge.msg
 
 import controller_manager_msgs.srv
 
@@ -57,6 +58,8 @@ class MoveItInterface :
         self.config_package = config_package
         self.command_topics = {}
         self.gripper_service = None
+        self.actionlib = False
+        self.bridge_topic_map = {}
 
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
@@ -66,7 +69,7 @@ class MoveItInterface :
         self.scene = moveit_commander.PlanningSceneInterface()
         self.obstacle_markers = visualization_msgs.msg.MarkerArray()
         if not self.create_models(config_package) :
-            print "MoveItInterface::init() -- failed creating RDF models"
+            rospy.logerr("MoveItInterface::init() -- failed creating RDF models")
             return
 
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
@@ -80,11 +83,12 @@ class MoveItInterface :
 
         self.tf_listener = tf.TransformListener()
 
+    def use_actionlib(self, v) :
+        self.actionlib = v
 
     def set_gripper_service(self, srv) :
-        print "MoveItInterface() -- set_gripper_service(" , srv, ")"
+        rospy.loginfo("MoveItInterface::set_gripper_service() -- set_gripper_service(" + srv + ")")
         rospy.wait_for_service(srv)
-        print "found gripper_service"
         self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
        
     def clear_gripper_service(self) :
@@ -114,7 +118,7 @@ class MoveItInterface :
 
 
     def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
-        print "ADD GROUP: ", group_name
+        # print "ADD GROUP: ", group_name
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -126,17 +130,26 @@ class MoveItInterface :
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
             controller_name = self.lookup_controller_name(group_name)
-            topic_name = "/" + controller_name + "/command_bridge"
-            # topic_name = "/" + self.robot_name + "/" + controller_name + "/command"
-            print "COMMAND TOPIC: ", topic_name
-            self.command_topics[group_name] = rospy.Publisher(topic_name, trajectory_msgs.msg.JointTrajectoryBridge)
+            msg_type = trajectory_msgs.msg.JointTrajectory
+
+            bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
+            if bridge_topic_name != "" :
+                controller_name = bridge_topic_name
+                msg_type = pr2_joint_trajectory_bridge.msg.JointTrajectoryBridge
+                self.bridge_topic_map[group_name] = bridge_topic_name
+
+            topic_name = "/" + controller_name + "/command"
+            rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
+            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type)
+
             id_found = False
+            # generate a random group_id
             while not id_found :
                 r =  int(random.random()*10000000)
                 if not r in self.group_id_offset.values() :
                     self.group_id_offset[group_name] = r
                     id_found = True
-                    # print "generated offset ", r, " for group ", group_name
+
             # check to see if the group has an associated end effector, and add it if so
             if self.groups[group_name].has_end_effector_link() :
                 self.control_frames[group_name] = self.groups[group_name].get_end_effector_link()
@@ -281,7 +294,7 @@ class MoveItInterface :
         else : return ""
 
     def set_base_frame(self, group, base_frame) :
-        print "--- setting new base frame to ", base_frame
+        # print "--- setting new base frame to ", base_frame
         self.base_frames[group] = base_frame
 
     def set_control_offset(self, group, offset) :
@@ -353,34 +366,10 @@ class MoveItInterface :
         print "===== MoveIt! Group Name: %s" % group_name
         print "===== Generating Plan"
 
-        # pt_list_transformed = []
-
-        # print "------------------\nTransformed Point List:"
-        # for p in pt_list :
-        #     pt = geometry_msgs.msg.PoseStamped()
-        #     pt.header.frame_id = frame_id
-        #     pt.pose = p
-        #     if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
-        #         self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
-        #         pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
-        #     pt_list_transformed.append(pt.pose)grpper_ser
-
-        # print pt_list_transformed
-        # print "------------------\n"
-
-        # self.groups[group_name].set_start_state_to_current_state()
-        # self.groups[group_name].set_pose_targets(pt_list_transformed)
-        # self.stored_plans[group_name] = self.groups[group_name].plan()
-
-        # print "===== Plan Found"
-        # print self.stored_plans[group_name]
-        # self.publish_path_data(self.stored_plans[group_name], group_name)
-        # self.plan_generated[group_name] = True
-
         waypoints = []
         # waypoints.append(self.groups[group_name].get_current_pose().pose)
 
-        print "------------------\nTransformed Point List:"
+        # print "------------------\nTransformed Point List:"
         for p in pt_list :
             pt = geometry_msgs.msg.PoseStamped()
             pt.header.frame_id = frame_id
@@ -390,8 +379,16 @@ class MoveItInterface :
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
             waypoints.append(copy.deepcopy(pt.pose))
 
-        (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.02, 0.0)
-        self.stored_plans[group_name] = plan
+        if len(waypoints) > 1 :
+            (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0.01) # thsi jump parameter often makes it fail---more investigation needed here. 
+            self.stored_plans[group_name] = plan
+        else :
+            pt = geometry_msgs.msg.PoseStamped()
+            pt.header.frame_id = self.groups[group_name].get_planning_frame()
+            pt.header.stamp = rospy.get_rostime()
+            pt.pose = waypoints[0]
+            self.create_plan_to_target(group_name,pt)
+
         # self.groups[group_name].set_pose_targets(waypoints)
         # self.stored_plans[group_name] = self.groups[group_name].plan()
 
@@ -422,25 +419,64 @@ class MoveItInterface :
                 print "====== No Plan for Group %s yet generated." % g
         return r
 
+    # def execute_plan(self, group_name, from_stored=False, wait=True) :
+    #     r = False
+    #     if self.plan_generated[group_name] :
+    #         print "====== Executing Plan for Group: %s" % group_name
+    #         if from_stored :
+    #             if self.group_types[group_name] != "endeffector" or not self.gripper_service:
+    #                 print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+    #                 self.command_topics[group_name].publish(self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+		  #   #self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
+    #                 r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
+    #             else :
+    #                 r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+    #                 #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+    #         else :
+    #             if self.group_types[group_name] == "endeffector" and self.gripper_service:
+    #                 r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
+    #                 #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+    #             else :
+    #                 r = self.groups[group_name].go(wait)
+    #         print "====== Plan Execution: %s" % r
+    #         return r
+    #     else :
+    #         print "====== No Plan for Group %s yet generated." % group_name
+    #         return r
+
     def execute_plan(self, group_name, from_stored=False, wait=True) :
         r = False
         if self.plan_generated[group_name] :
             print "====== Executing Plan for Group: %s" % group_name
             if from_stored :
                 if self.group_types[group_name] != "endeffector" or not self.gripper_service:
-                    print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
-                    self.command_topics[group_name].publish(self.stored_plans[group_name].pr2_joint_trajectory_bridge)
-		    #self.command_topics[group_name].publish(self.stored_plans[group_name].joint_trajectory)
-                    r = True# r = self.groups[group_name].execute(self.stored_plans[group_name])
+                    if self.actionlib :
+                        print "MOVEIT GO!"
+                        r = self.groups[group_name].go(wait)
+                    else :
+                        print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+
+                        jt = self.stored_plans[group_name].joint_trajectory
+                        if group_name in self.bridge_topic_map : jt = self.translate_to_bridge_msg(jt)
+                        self.command_topics[group_name].publish(jt)
+
+                        r = True
                 else :
-                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
-                    #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
             else :
                 if self.group_types[group_name] == "endeffector" and self.gripper_service:
-                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].pr2_joint_trajectory_bridge)
-                    #r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                    r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
                 else :
-                    r = self.groups[group_name].go(wait)
+                    if self.actionlib :
+                        print "MOVEIT GO!"
+                        r = self.groups[group_name].go(wait)
+                    else :
+                        print "PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: ", group_name
+                        jt = self.stored_plans[group_name].joint_trajectory
+                        if group_name in self.bridge_topic_map : jt = self.translate_to_bridge_msg(jt)
+                        self.command_topics[group_name].publish(jt)
+
+                    r = True
             print "====== Plan Execution: %s" % r
             return r
         else :
@@ -456,7 +492,22 @@ class MoveItInterface :
             print "Service call failed: %s"%e
             return False
 
+    def translate_to_bridge_msg(self, jt) :
+        jt_bridge = pr2_joint_trajectory_bridge.msg.JointTrajectoryBridge()
 
+        jt_bridge.header = jt.header
+        jt_bridge.joint_names = jt.joint_names
+        jt_bridge.points = []
+        for p in jt.points :
+            point = pr2_joint_trajectory_bridge.msg.JointTrajectoryPointBridge()
+            point.positions = p.positions
+            point.velocities = p.velocities
+            point.accelerations = p.accelerations
+            point.time_from_start = p.time_from_start
+            jt_bridge.points.append(point)
+
+        print jt_bridge
+        return jt_bridge
 
     def add_collision_object(self, p, s, n) :
         p.header.frame_id = self.robot.get_planning_frame()
@@ -539,9 +590,9 @@ class MoveItInterface :
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
-        print "--------------------"
-        print "markers for group: ", group
-        # print self.marker_store[group]
+        # print "--------------------"
+        # print "markers for group: ", group
+        # # print self.marker_store[group]
         return markers
 
     def get_joint_chain(self, first_link, last_link) :
@@ -643,14 +694,14 @@ class MoveItInterface :
 
     def lookup_controller_name(self, group_name) :
 
-        print "lookup_controller_name() for ", group_name
+        # print "lookup_controller_name() for ", group_name
         if not group_name in self.group_controllers.keys() :
             import yaml
             try:
                 controllers_file = str(RosPack().get_path(self.config_package) + "/config/controllers.yaml") 
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
-                print "Error loading controllers.yaml"
+                rospy.logerr("MoveItInterface::lookup_controller_name() -- Error loading controllers.yaml")
 
             joint_list = self.groups[group_name].get_active_joints()
             self.group_controllers[group_name] = ""
@@ -658,24 +709,13 @@ class MoveItInterface :
                 if joint_list[0] in c['joints'] :
                     self.group_controllers[group_name] = c['name']
 
-        print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
+        rospy.loginfo(str("MoveItInterface::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
 
 
-        #     # srv_name = "/pr2_controller_manager/list_controllers"
-        #     srv_name = "/" + self.robot_name + "/controller_manager/list_controllers"1
-        #     list_controllers = rospy.ServiceProxy(srv_name, controller_manager_msgs.srv.ListControllers)
-        #     controllers = list_controllers()
-        #     print "controllers:", controllers
-        #     joint_list = self.groups[group_name].get_active_joints()
-        #     self.group_controllers[group_name] = ""
-        #     for c in controllers.controller :
-        #         if joint_list[0] in c.resources :
-        #             self.group_controllers[group_name] = c.name
-
-        # print "Found Controller ", self.group_controllers[group_name] , " for group ", group_name
-        # return self.group_controllers[group_name]
-
+    def lookup_bridge_topic_name(self, controller_name) :
+        bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
+        return bridge_topic_name
 
     def tear_down(self) :
         for k in self.end_effector_display.keys() :

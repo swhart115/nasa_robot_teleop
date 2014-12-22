@@ -223,6 +223,9 @@ class RobotTeleop:
             self.server.applyChanges()
 
 
+    def use_actionlib(self, v) :
+        self.moveit_interface.use_actionlib(v)
+        
     def set_gripper_service(self, srv) :
         self.gripper_service = srv
         self.moveit_interface.set_gripper_service(srv)
@@ -351,12 +354,15 @@ if __name__=="__main__":
     parser.add_argument('-m, --manipulator_groups', nargs="*", dest='manipulator_groups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
     parser.add_argument('-j, --joint_groups', nargs="*", dest='joint_groups', help='space limited string e.g. "head waist"')
     parser.add_argument('-g, --gripper_service', nargs="*", dest='gripper_service', help='string e.g. "/pr2_gripper_bridge/end_effector_command"')
+    # parser.add_argument('-a, --use_actionlib', nargs="*", dest='use_actionlib', help='bool e.g. [True | False]"', default=False, type=bool)
     parser.add_argument('positional', nargs='*')
     args = parser.parse_args()
 
     rospy.init_node("RobotTeleop")
 
     robot = RobotTeleop(args.robot, args.config, args.manipulator_groups, args.joint_groups)
+
+    robot.use_actionlib(False)
 
     if args.gripper_service :
         print "Setting Gripper Service: ", args.gripper_service

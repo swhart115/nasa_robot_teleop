@@ -6,4 +6,9 @@
     <arg name="joint_groups"       default="head" />
     <arg name="gripper_service"    default="/pr2_gripper_bridge/end_effector_command" />
     <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config) -g $(arg gripper_service)" output="screen" />
+
+    <param name="r_arm_controller/bridge_topic" value="r_arm_controller_bridge"/>
+    <param name="l_arm_controller/bridge_topic" value="l_arm_controller_bridge"/>
+    <param name="head_controller/bridge_topic" value="head_controller_bridge"/>
+
 </launch>

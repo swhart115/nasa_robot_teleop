@@ -418,11 +418,11 @@ class Reflection(object):
 		for element in map(self.element_map.get, unset_scalars):
 			element.set_default()
 
-		if is_final:
-			for xml_var in info.attributes:
-				on_error('Unknown attribute: {}\n'.format(xml_var))
-			for node in info.children:
-				on_error('Unknown tag: {}\n'.format(node.tag))
+		# if is_final:
+		# 	for xml_var in info.attributes:
+		# 		on_error('Unknown attribute: {}\n'.format(xml_var))
+		# 	for node in info.children:
+		# 		on_error('Unknown tag: {}\n'.format(node.tag))
 
 	def add_to_xml(self, obj, node):
 		if self.parent:

@@ -36,6 +36,14 @@
   <!--   <buildtool_depend>catkin</buildtool_depend> -->
   <!-- Use run_depend for packages you need at runtime: -->
   <!--   <run_depend>message_runtime</run_depend> -->
+
+  <run_depend>moveit_commander</run_depend> 
+  <run_depend>visualization_msgs</run_depend> 
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>trajectory_msgs</run_depend>
+  <run_depend>pr2_joint_trajectory_bridge</run_depend>
+
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
