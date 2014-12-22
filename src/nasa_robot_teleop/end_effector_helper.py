@@ -65,7 +65,6 @@ class EndEffectorHelper :
                 poses.sort()
                 N = len(poses)
                 color = (0,poses.index(pose)/(N-1,0,1))
-                print "color for pose: ", pose, ": ", color
                 if not pose in poses :
                     rospy.logerr("EndEffectorHelper::get_markers_for_pose() -- no pose available!!")
                 else :
@@ -96,7 +95,7 @@ class EndEffectorHelper :
 
         for link in links :
             if not link in self.urdf.link_map :
-                print "EndEffectorHelper::populate_data() -- link: ", link, " not found in URDF model"
+                rospy.logwarn(str("EndEffectorHelper::populate_data() -- link: " + link + " not found in URDF model"))
                 return
 
             model_link = self.urdf.link_map[link]
@@ -137,7 +136,7 @@ class EndEffectorHelper :
         self.control_mesh = control_mesh
 
     def start_offset_update_thread(self) :
-        print "EndEffectorHelper::start_offset_update_thread() -- starting offset update thread for end effector from root: ", self.root_frame
+        rospy.logdebug(str("EndEffectorHelper::start_offset_update_thread() -- starting offset update thread for end effector from root: " + self.root_frame))
         for link in self.links :
             self.offset_pose_data[link] = PoseStamped()
             # try :
@@ -147,7 +146,7 @@ class EndEffectorHelper :
             #     rospy.logerr("EndEffectorHelper::start_offset_update_thread() -- unable to start end effector link offset update thread")
 
     def stop_offset_update_thread(self) :
-        print "EndEffectorHelper::stop_offset_update_thread() -- stopping offset update thread for end effector from root: ", self.root_frame
+        rospy.logdebug(str("EndEffectorHelper::stop_offset_update_thread() -- stopping offset update thread for end effector from root: " + self.root_frame))
         for link in self.links :
             try :
                 self.offset_update_thread[link].stop()
@@ -181,7 +180,6 @@ class EndEffectorHelper :
         else :
             scale = 0.001
             marker.type = Marker.SPHERE
-            print "setting SPHERE for link: ", link
             return None
         marker.action = Marker.MODIFY
         marker.scale.x = s[0]
@@ -201,7 +199,7 @@ class EndEffectorHelper :
         marker = Marker()
 
         if not link in self.urdf.link_map :
-            print "EndEffectorHelper::create_marker_for_link() -- link: ", link, " not found in URDF model"
+            rospy.logwarn(str("EndEffectorHelper::create_marker_for_link() -- link: " + link + " not found in URDF model"))
             return marker
 
         model_link = self.urdf.link_map[link]
@@ -259,8 +257,6 @@ class EndEffectorHelper :
 
     def get_marker_array_from_joint_position(self, jpos, offset=None, root="", scale=1, color=(0,1,1,1), idx=0) :
 
-        # print "EndEffectorHelper::get_marker_array_from_joint_position()"
-
         markers = MarkerArray()
         if root=="": root = self.root_frame
 
@@ -281,42 +277,25 @@ class EndEffectorHelper :
         if not root in link_list :
             link_list.append(root)
             link_joints[root] = get_link_joint(root, self.urdf)
-        # print link_list
 
         def get_transform_to_link(root_frame, link, joint, T_link) :
-
-            # print "Getting transform of link: ", link, " with joint: ", joint
-            # print "root_frame:", root_frame
-            # already is in list
             if link in T_link.keys() :
-                # print "Already found Transform for link: ", link
                 return T_link[link]
-
-            # check first link
-            # if link == root_frame :
-            #     print "At base Transform: ", root_frame
-            #     return kdl.Frame()
-
             if not self.urdf.joint_map[joint].type == "fixed":
                 if not joint in jpos.name :
-                    # print "\n------\nFound joint ", joint, " for link: ", link, " but it is not in the jpos list, looking up frame and exiting.."
                     self.tf_listener.waitForTransform(root_frame, link, rospy.Time(0), rospy.Duration(5.0))
                     (trans, rot) = self.tf_listener.lookupTransform(root_frame, link, rospy.Time(0))
                     rot = normalize_vector(rot)
                     T = fromMsg(toPose(trans,rot)).Inverse()
-                    # print T
                     return kdl.Frame()
 
             # call recursive function to parent, then add link transform, then add joint transform
             parent = get_parent_link(link, self.urdf)
             parent_joint = get_link_joint(parent, self.urdf)
-            #rint "\tNeed to go to parent link: ", parent, " with joint: ", parent_joint
             T = get_transform_to_link(root_frame, parent, parent_joint, T_link)
 
             model_joint = self.urdf.joint_map[joint]
             T_kin = fromMsg(joint_origin_to_pose(model_joint))
-            # print "Link: ", link, " -- computing tf for joint: ", joint, "between ", self.urdf.joint_map[joint].parent , "<-->", self.urdf.joint_map[joint].child
-            # # print T_kin
 
             if joint in T_joint.keys() :
                 T_link[link] = T*T_kin*T_joint[joint]
@@ -327,9 +306,6 @@ class EndEffectorHelper :
         idx = 0
         for link in link_list :
             T_link[link] = get_transform_to_link(root, link, link_joints[link], T_link)
-            # print "\n---------\n----------Found Transform to link: ", link
-            # print T_link[link]
-
             if link_has_mesh(self.urdf.link_map[link]) :
                 markers.markers.append(self.create_marker_for_link(link, T_link[link], scale=scale, color=color, idx=idx))
                 idx += 1

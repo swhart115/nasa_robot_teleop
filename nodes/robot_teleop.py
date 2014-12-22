@@ -365,7 +365,7 @@ if __name__=="__main__":
     robot.use_actionlib(False)
 
     if args.gripper_service :
-        print "Setting Gripper Service: ", args.gripper_service
+        rospy.loginfo(str("Setting Gripper Service: " + args.gripper_service[0]))
         robot.set_gripper_service(args.gripper_service[0])
 
     r = rospy.Rate(50.0)
