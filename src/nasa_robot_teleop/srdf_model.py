@@ -3,6 +3,7 @@
 from lxml import etree
 import io
 
+import rospy
 import sensor_msgs.msg
 
 class SRDFModel :
@@ -34,11 +35,11 @@ class SRDFModel :
 
     def parse_from_file(self, filename) :
         try:
-            print "SRDFModel::parse_from_file() -- opening SRDF file: ", filename
+            rospy.logdebug(str("SRDFModel::parse_from_file() -- opening SRDF file: " + filename))
             self.srdf_file = open(filename)
-            print "SRDFModel::parse_from_file() -- opened..."
+            rospy.logdebug("SRDFModel::parse_from_file() -- opened...")
         except IOError :
-            print "SRDFModel::parse_from_file() -- unable to load SRDF file..."
+            rospy.logerr("SRDFModel::parse_from_file() -- unable to load SRDF file...")
             self.srdf_file.close()
             return False
         self.srdf = self.srdf_file.read()
@@ -47,12 +48,12 @@ class SRDFModel :
     def parse_srdf(self, srdf) :
         root = etree.fromstring(srdf)
         if (root.tag == "robot") and (root.attrib['name'] != self.robot_name) :
-            print "SRDFModel::parse_srdf() -- robot name mismatch"
-            print "  looking for: " + self.robot_name
-            print "  found      : " + root.attrib['name']
+            rospy.logerr("SRDFModel::parse_srdf() -- robot name mismatch")
+            rospy.logerr(str("  looking for: " + self.robot_name))
+            rospy.logerr(str("  found      : " + root.attrib['name']))
             return False
         else :
-            print "SRDFModel::parse_srdf() found robot: " + self.robot_name
+            rospy.loginfo(str("SRDFModel::parse_srdf() found robot: " + self.robot_name))
 
         for elem in root.getchildren() :
             if elem.tag == "group" :
@@ -129,7 +130,7 @@ class SRDFModel :
         if group in self.tip_links and self.tip_links[group] != None :
             return self.tip_links[group]
         else :
-            print "No Tip Link for Group ", group
+            rospy.logerr(str("No Tip Link for Group " + group))
             return ""
 
     def get_groups(self) :
@@ -139,7 +140,7 @@ class SRDFModel :
         if group in self.group_states :
             return self.group_states[group].keys()
         else :
-            print "Group ", group, " does not exist in MoveIt! interface"
+            rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
             return []
 
     def get_group_state(self, group, name) :
@@ -147,9 +148,9 @@ class SRDFModel :
             if name in self.group_states[group] :
                 return self.group_states[group][name]
             else :
-                print "GroupState ", name, " does not exist in MoveIt! interface for group: ", group
+                rospy.logerr(str("GroupState " + name + " does not exist in MoveIt! interface for group: " + group))
         else :
-            print "Group ", group, " does not exist in MoveIt! interface"
+            print rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
 
     def get_end_effector_groups(self) :
         g = []
@@ -165,9 +166,9 @@ class SRDFModel :
             if name in self.group_states[group] :
                 self.group_states[group][name].print_group_state()
             else :
-                print "GroupState ", name, " does not exist in MoveIt! interface for group: ", group
+                rospy.logerr(str("GroupState " + name + " does not exist in MoveIt! interface for group: " + group))
         else :
-            print "Group ", group, " does not exist in MoveIt! interface"
+            rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
 
     def print_group_states(self, group) :
         for gs in self.get_group_state_list(group) :
