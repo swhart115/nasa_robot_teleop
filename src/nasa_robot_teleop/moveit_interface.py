@@ -16,6 +16,8 @@ import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
+import control_msgs.msg
+import actionlib_msgs.msg
 
 import controller_manager_msgs.srv
 
@@ -72,13 +74,13 @@ class MoveItInterface :
             return
 
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
-        self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray)
+        self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray,queue_size=10)
         for g in self.robot.get_group_names() :
-            self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory)
+            self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory, queue_size=10)
             self.plan_generated[g] = False
             self.stored_plans[g] = None
             self.display_modes[g] = "last_point"
-        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False)
+        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
         self.tf_listener = tf.TransformListener()
 
@@ -116,7 +118,7 @@ class MoveItInterface :
 
 
     def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
-        rospy.logdebug(str("ADD GROUP: " + group_name))
+        rospy.loginfo(str("ADD GROUP: " + group_name))
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -128,7 +130,8 @@ class MoveItInterface :
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
 
             controller_name = self.lookup_controller_name(group_name)
-            msg_type = trajectory_msgs.msg.JointTrajectory
+            # msg_type = trajectory_msgs.msg.JointTrajectory
+            msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
 
             bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
             if bridge_topic_name != "" :
@@ -137,9 +140,11 @@ class MoveItInterface :
                 msg_type = JointTrajectoryBridge
                 self.bridge_topic_map[group_name] = bridge_topic_name
 
-            topic_name = "/" + controller_name + "/command"
+            # topic_name = "/" + controller_name + "/command"
+            topic_name = "/" + controller_name + "/goal"
+
             rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
-            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type)
+            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
 
             # generate a random group_id
             id_found = False
@@ -153,7 +158,11 @@ class MoveItInterface :
             if self.groups[group_name].has_end_effector_link() :
                 self.control_frames[group_name] = self.groups[group_name].get_end_effector_link()
                 ee_link = self.urdf_model.link_map[self.groups[group_name].get_end_effector_link()]
-                self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                try :
+                    # self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                    self.control_meshes[group_name] = self.get_child_mesh(ee_link)
+                except :
+                    rospy.logwarn("no mesh found")
                 for ee in self.srdf_model.end_effectors.keys() :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
@@ -166,10 +175,15 @@ class MoveItInterface :
             elif self.group_types[group_name] == "endeffector" :
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
                 ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
-                self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                try :
+                    self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                except :
+                    self.control_meshes[group_name] = ""
+                    rospy.logwarn("no mesh found")
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
                 self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-
+                # self.get_srdf_model().print_group(group_name)
+                
             return True
 
         except :
@@ -183,6 +197,18 @@ class MoveItInterface :
         if ee in self.srdf_model.end_effectors :
             return self.srdf_model.end_effectors[ee].group
         return ""
+
+    def get_child_mesh(self, ee_link) :
+        mesh_name = ""
+        try :
+            mesh_name = ee_link.visual.geometry.filename
+            return mesh_name
+        except :
+            try :
+                return self.get_child_mesh(self.urdf_model.link_map[ee_link.name].child)
+            except :
+                return ""
+            
 
     def print_group_info(self, group_name) :
         if self.has_group(group_name) :
@@ -333,9 +359,16 @@ class MoveItInterface :
         rospy.loginfo(str("===== Generating Joint Plan "))
         self.groups[group_name].set_joint_value_target(js)
         self.stored_plans[group_name] = self.groups[group_name].plan()
-        rospy.loginfo(str("===== Joint Plan Found"))
-        self.publish_path_data(self.stored_plans[group_name], group_name)
-        self.plan_generated[group_name] = True
+        N = len(self.stored_plans[group_name].joint_trajectory.points)
+        if N > 0 :
+            rospy.loginfo(str("===== Joint Plan Found, size: " + str(N)))
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+            self.plan_generated[group_name] = True
+        else :
+            rospy.logwarn(str("===== No Joint Plan Found"))
+            self.plan_generated[group_name] = False
+            print "goal was: "
+            print js
 
     def create_plan_to_target(self, group_name, pt) :
         if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
@@ -344,11 +377,20 @@ class MoveItInterface :
         rospy.loginfo(str("== Robot Name: " + self.robot_name))
         rospy.loginfo(str("===== MoveIt! Group Name: " + group_name))
         rospy.loginfo(str("===== Generating Plan"))
+        pt.header.stamp = rospy.Time.now()
         self.groups[group_name].set_pose_target(pt)
+        pt.header.seq = int(random.random()*10000000)
         self.stored_plans[group_name] = self.groups[group_name].plan()
-        rospy.loginfo(str("===== Plan Found"))
-        self.publish_path_data(self.stored_plans[group_name], group_name)
-        self.plan_generated[group_name] = True
+        N = len(self.stored_plans[group_name].joint_trajectory.points)
+        if N > 0 :
+            rospy.loginfo(str("===== Plan Found, size: " + str(N)))
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+            self.plan_generated[group_name] = True
+        else :
+            rospy.logwarn(str("===== No Plan Found"))
+            self.plan_generated[group_name] = False
+        print "Goal: "
+        print pt
 
     def create_random_target(self, group_name) :
         rospy.loginfo(str("== Robot Name: " + self.robot_name))
@@ -356,9 +398,14 @@ class MoveItInterface :
         rospy.loginfo(str("===== Generating Random Joint Plan"))
         self.groups[group_name].set_random_target()
         self.stored_plans[group_name] = self.groups[group_name].plan()
-        rospy.loginfo(str("===== Random Joint Plan Found"))
-        self.publish_path_data(self.stored_plans[group_name], group_name)
-        self.plan_generated[group_name] = True
+
+        if N > 0 :
+            rospy.loginfo(str("===== Random Plan Found, size: " + str(N)))
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+            self.plan_generated[group_name] = True
+        else :
+            rospy.logwarn(str("===== No JRandom oint Plan Found"))
+            self.plan_generated[group_name] = False
 
     def create_path_plan(self, group_name, frame_id, pt_list) :
         rospy.loginfo(str("== Robot Name: " + self.robot_name))
@@ -373,6 +420,8 @@ class MoveItInterface :
             pt = geometry_msgs.msg.PoseStamped()
             pt.header.frame_id = frame_id
             pt.pose = p
+            print "+++++++++++++PLANNING FRAME: ", pt.header.frame_id
+            print p
             if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
                 self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
@@ -411,6 +460,8 @@ class MoveItInterface :
         if self.plan_generated[group_name] :
             rospy.loginfo(str("====== Executing Plan for Group: " + group_name))
             if from_stored :
+                rospy.loginfo("Publishing stored path plan...")
+                            
                 if self.group_types[group_name] != "endeffector" or not self.gripper_service:
                     if self.actionlib :
                         rospy.logdebug("MOVEIT GO!")
@@ -418,12 +469,18 @@ class MoveItInterface :
                     else :
                         rospy.logdebug(str("PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: " + group_name))
                         jt = self.stored_plans[group_name].joint_trajectory
-                        if group_name in self.bridge_topic_map : jt = self.translate_to_bridge_msg(jt)
+                        if group_name in self.bridge_topic_map : 
+                            jt = self.translate_to_bridge_msg(jt)
+                        else :
+                            rospy.loginfo("Publishing to actionlib topic")
+                            jt = self.translate_to_actionlib_goal(jt, group_name)
+
                         self.command_topics[group_name].publish(jt)
                         r = True
                 else :
                     r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
             else :
+                rospy.loginfo("Generating new path plan...")
                 if self.group_types[group_name] == "endeffector" and self.gripper_service:
                     r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
                 else :
@@ -433,7 +490,11 @@ class MoveItInterface :
                     else :
                         rospy.logdebug(str("PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: " + group_name))
                         jt = self.stored_plans[group_name].joint_trajectory
-                        if group_name in self.bridge_topic_map : jt = self.translate_to_bridge_msg(jt)
+                        if group_name in self.bridge_topic_map : 
+                            jt = self.translate_to_bridge_msg(jt)
+                        else :
+                            rospy.loginfo("Publishing to actionlib topic")
+                            jt = self.translate_to_actionlib_goal(jt, group_name)
                         self.command_topics[group_name].publish(jt)
 
                     r = True
@@ -466,6 +527,22 @@ class MoveItInterface :
             point.time_from_start = p.time_from_start
             jt_old.points.append(point)
         return jt_old
+
+    def translate_to_actionlib_goal(self, jt, group_name, duration=2.0) :
+        from control_msgs.msg import FollowJointTrajectoryActionGoal
+        from actionlib_msgs.msg import GoalID
+
+        t = rospy.Time.now()
+        ag = FollowJointTrajectoryActionGoal()
+        ag.header.stamp = t
+        ag.goal_id.stamp = t
+        ag.goal_id.id = str("action_goal[" + group_name + "]_" + str(int(random.random()*10000000)))
+        ag.goal.trajectory = jt
+        ag.goal.goal_time_tolerance = rospy.Duration(duration)
+        # ag.goal.goal_tolerance
+        # ag.goal.path_tolerance
+        
+        return ag
 
     def add_collision_object(self, p, s, n) :
         p.header.frame_id = self.robot.get_planning_frame()
@@ -510,14 +587,14 @@ class MoveItInterface :
                 if self.groups[group].has_end_effector_link() and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-
                     if last_link != ee_root_frame :
                         self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
                         rot = normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
-
+                        
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                    # print "offset_pose: ", offset_pose
                     end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
@@ -653,15 +730,17 @@ class MoveItInterface :
             import yaml
             try:
                 controllers_file = str(RosPack().get_path(self.config_package) + "/config/controllers.yaml") 
+                rospy.logdebug("Controller yaml: " + controllers_file)
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
                 rospy.logerr("MoveItInterface::lookup_controller_name() -- Error loading controllers.yaml")
 
             joint_list = self.groups[group_name].get_active_joints()
             self.group_controllers[group_name] = ""
+
             for c in controller_config['controller_list'] :
                 if joint_list[0] in c['joints'] :
-                    self.group_controllers[group_name] = c['name']
+                    self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
 
         rospy.loginfo(str("MoveItInterface::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]

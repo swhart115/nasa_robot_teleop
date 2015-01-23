@@ -74,8 +74,10 @@ class SRDFModel :
                             self.tip_links[elem.attrib["name"]] = group_elem.attrib["tip_link"]
                     if group_elem.tag == "link" :
                         self.group_links[group_name].append(group_elem.attrib["name"])
+                        # self.group_joints[group_name].append(# get parent joint)
                     if group_elem.tag == "joint" :
                         self.group_joints[group_name].append(group_elem.attrib["name"])
+                        # self.group_links[group_name].append(# get child link )
 
             if elem.tag == "group_state" :
 

@@ -48,12 +48,14 @@ def get_joint_rotation(axis, joint_val) :
     return T_joint
 
 def link_has_mesh(link) :
-    if link.visual :
-        if link.visual.geometry :
-            if isinstance(link.visual.geometry, Mesh) :
-                if link.visual.geometry.filename :
-                    return True
-    else :
+    try :
+        if link.visual :
+            if link.visual.geometry :
+                if isinstance(link.visual.geometry, Mesh) :
+                    if link.visual.geometry.filename :
+                        return True
+        return False
+    except :
         return False
 
 def link_has_origin(link) :
@@ -122,13 +124,19 @@ def get_mesh_marker_for_link(link_name, urdf) :
         marker.mesh_use_embedded_materials = True
 
         s = [1.0, 1.0, 1.0]
+        q = [0.0, 0.0, 0.0, 1.0]
+        
         if not link.visual.geometry.scale == None :
             s = link.visual.geometry.scale
-
-        q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
-        p.position.x = link.visual.origin.xyz[0]
-        p.position.y = link.visual.origin.xyz[1]
-        p.position.z = link.visual.origin.xyz[2]
+        
+        if not link.visual.origin.rpy == None:
+            q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
+    
+        if not link.visual.origin.xyz == None:
+            p.position.x = link.visual.origin.xyz[0]
+            p.position.y = link.visual.origin.xyz[1]
+            p.position.z = link.visual.origin.xyz[2]
+        
         p.orientation.x = q[0]
         p.orientation.y = q[1]
         p.orientation.z = q[2]
