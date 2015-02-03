@@ -419,23 +419,37 @@ class MoveItInterface :
         waypoints = []
         # waypoints.append(self.groups[group_name].get_current_pose().pose)
 
-        # print "------------------\nTransformed Point List:"
+        print "------------------\nTransformed Point List:"
         for p in pt_list :
             pt = geometry_msgs.msg.PoseStamped()
-            pt.header.frame_id = frame_id
             pt.pose = p
-            # print "+++++++++++++PLANNING FRAME: ", pt.header.frame_id
+            print "+++++++++++++INPUT FRAME: ", frame_id
+            print "+++++++++++++PLANNING FRAME: ", self.groups[group_name].get_planning_frame() # pt.header.frame_id
+            pt.header.frame_id = frame_id
             # print p
             if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
                 self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
+            pt.header.frame_id = self.groups[group_name].get_planning_frame()
+
             waypoints.append(copy.deepcopy(pt.pose))
-
+            print pt.pose
+        
         if len(waypoints) > 1 :
-            (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0.01) # this jump parameter often makes it fail---more investigation needed here. 
-            self.stored_plans[group_name] = plan
+            plan = moveit_msgs.msg.RobotTrajectory()
+            print "actually planning cartesian path"
+            fraction = 0
+            try :
+                (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0) # this jump parameter often makes it fail---more investigation needed here. 
+                print "plan: ", plan
+                print "fraction: ", fraction
+            except :
+                rospy.logerror("===== Generating Cartesian Path Plan Failed")
 
-            if len(plan) > 0 :
+            self.stored_plans[group_name] = plan
+            print "resulting plan of size: ", len(plan.joint_trajectory.points)
+
+            if len(plan.joint_trajectory.points) > 0 and fraction > 0 :
                 self.plan_generated[group_name] = True
                 self.stored_plans[group_name] = plan
             else :
@@ -452,6 +466,81 @@ class MoveItInterface :
             self.publish_path_data(self.stored_plans[group_name], group_name)
         
         return self.plan_generated[group_name]
+
+
+    # def determine_execution_success(self, joint_trajectory, joint_tolerance=0.01, goal_tolerance=0.05, timeout=5) :
+        
+    #     r = False
+
+    #     now_time = rospy.Time.now()
+    #     stop_time = now_time + rospy.Duration(timeout)
+    #     # listen to /joint_states
+        
+    #     while now_time < stop_time :
+    #         print "comparing joint positions"
+           
+    #         if isinstance(joint_trajectory, trajectory_msgs.msg.JointTrajectory) :
+    #             jnt_current = self.stripout_group_joint_state(self.currentState,joint_trajectory.joint_names)
+    #             jnt_goal = sensor_msgs.msg.JointState()
+    #             idx = len(joint_trajectory.points)-1
+    #             jnt_goal.name = joint_trajectory.joint_names
+    #             jnt_goal.position = joint_trajectory.points[idx].positions
+    #         else :
+    #             rospy.logerr("MoveItInterface::determine_execution_success() -- input JointTrajectory invalid type")
+    #             return False
+
+    #         print jnt_current
+    #         print jnt_goal
+
+    #         r = self.compare_joint_positions(jnt_current, jnt_goal, thresh=joint_tolerance)
+            
+    #         if r : break
+
+    #         now_time = rospy.Time.now()
+    #         rospy.sleep(0.5)
+
+    #     # compute end-effector position
+    #     # compare last end_effector positon in (joint) trajectory to determine if at goal
+    #     # compare last joint positon in (joint) trajectory to determine if at goal
+    #     # wait for timeout
+
+    #     rospy.loginfo(str("MoveItInterface::determine_execution_success() finished with return value: " + str(r)))
+
+    #     return r
+
+    # def stripout_group_joint_state(self, js, names) :
+    #     js_stripped = sensor_msgs.msg.JointState()
+    #     js_stripped.header = js.header
+    #     for name in names :
+    #         idx = js.name.index(name)
+    #         js_stripped.name.append(name)
+    #         js_stripped.position.append(js.position[idx])
+    #     return js_stripped
+
+
+    # def compare_joint_positions(self, j1, j2, thresh) :
+
+    #     print "hello"
+    #     diff = 0
+    #     for name in j1.name :
+    #         idx1 = j1.name.index(name)
+    #         jnt1 = j1.position[idx1]
+
+    #         if not name in j2.name :
+    #             rospy.logerror(str("MoveItInterface::compare_joint_positions() -- can't find " + name + " in second joint state"))
+    #             return False 
+
+    #         idx2 = j2.name.index(name)
+    #         jnt2 = j2.position[idx1]
+
+    #         diff += ((jnt1-jnt2)**2)
+
+    #     if diff < thresh :
+    #         rospy.loginfo(str("joint difference: " + str(diff)))
+    #         return True
+    #     else :
+    #         rospy.loginfo(str("joint difference: " + str(diff)))
+    #         return False
 
     def execute_all_valid_plans(self, from_stored=False, wait=True) :
         r = True
@@ -481,14 +570,15 @@ class MoveItInterface :
                         r = self.groups[group_name].go(wait)
                     else :
                         rospy.logdebug(str("PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: " + group_name))
-                        jt = self.stored_plans[group_name].joint_trajectory
+                        jt_orig = self.stored_plans[group_name].joint_trajectory
                         if group_name in self.bridge_topic_map : 
-                            jt = self.translate_to_bridge_msg(jt)
+                            jt = self.translate_to_bridge_msg(jt_orig)
                         else :
                             rospy.loginfo("Publishing to actionlib topic")
-                            jt = self.translate_to_actionlib_goal(jt, group_name)
+                            jt = self.translate_to_actionlib_goal(jt_orig, group_name)
 
                         self.command_topics[group_name].publish(jt)
+                        # r = self.determine_execution_success(jt_orig, joint_tolerance=0.01, goal_tolerance=0.05, timeout=7)
                         r = True
                 else :
                     r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
@@ -502,13 +592,15 @@ class MoveItInterface :
                         r = self.groups[group_name].go(wait)
                     else :
                         rospy.logdebug(str("PUBLISH DIRECTLY TO COMMAND TOPIC FOR GROUP: " + group_name))
-                        jt = self.stored_plans[group_name].joint_trajectory
+                        jt_orig = self.stored_plans[group_name].joint_trajectory
                         if group_name in self.bridge_topic_map : 
-                            jt = self.translate_to_bridge_msg(jt)
+                            jt = self.translate_to_bridge_msg(jt_orig)
                         else :
                             rospy.loginfo("Publishing to actionlib topic")
-                            jt = self.translate_to_actionlib_goal(jt, group_name)
+                            jt = self.translate_to_actionlib_goal(jt_orig, group_name)
                         self.command_topics[group_name].publish(jt)
+
+                        # r = self.determine_execution_success(jt_orig, joint_tolerance=0.01, goal_tolerance=0.05, timeout=7)
 
                     r = True
             rospy.loginfo(str("====== Plan Execution: " + str(r)))
@@ -552,8 +644,6 @@ class MoveItInterface :
         ag.goal_id.id = str("action_goal[" + group_name + "]_" + str(int(random.random()*10000000)))
         ag.goal.trajectory = jt
         ag.goal.goal_time_tolerance = rospy.Duration(duration)
-        # ag.goal.goal_tolerance
-        # ag.goal.path_tolerance
         
         return ag
 
@@ -639,6 +729,7 @@ class MoveItInterface :
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
         return markers
+
 
     def get_joint_chain(self, first_link, last_link) :
         joints = []
