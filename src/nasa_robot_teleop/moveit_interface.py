@@ -369,6 +369,7 @@ class MoveItInterface :
             self.plan_generated[group_name] = False
             print "goal was: "
             print js
+        return self.plan_generated[group_name]
 
     def create_plan_to_target(self, group_name, pt) :
         if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
@@ -389,8 +390,9 @@ class MoveItInterface :
         else :
             rospy.logwarn(str("===== No Plan Found"))
             self.plan_generated[group_name] = False
-        print "Goal: "
-        print pt
+            print "Attempted goal: "
+            print pt
+        return self.plan_generated[group_name]
 
     def create_random_target(self, group_name) :
         rospy.loginfo(str("== Robot Name: " + self.robot_name))
@@ -404,13 +406,15 @@ class MoveItInterface :
             self.publish_path_data(self.stored_plans[group_name], group_name)
             self.plan_generated[group_name] = True
         else :
-            rospy.logwarn(str("===== No JRandom oint Plan Found"))
+            rospy.logwarn(str("===== No Random Joint Plan Found"))
             self.plan_generated[group_name] = False
+
+        return self.plan_generated[group_name]
 
     def create_path_plan(self, group_name, frame_id, pt_list) :
         rospy.loginfo(str("== Robot Name: " + self.robot_name))
         rospy.loginfo(str("===== MoveIt! Group Name: " + group_name))
-        rospy.loginfo(str("===== Generating Plan"))
+        rospy.loginfo(str("===== Generating Path Plan"))
 
         waypoints = []
         # waypoints.append(self.groups[group_name].get_current_pose().pose)
@@ -420,25 +424,34 @@ class MoveItInterface :
             pt = geometry_msgs.msg.PoseStamped()
             pt.header.frame_id = frame_id
             pt.pose = p
-            print "+++++++++++++PLANNING FRAME: ", pt.header.frame_id
-            print p
+            # print "+++++++++++++PLANNING FRAME: ", pt.header.frame_id
+            # print p
             if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
                 self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
             waypoints.append(copy.deepcopy(pt.pose))
 
         if len(waypoints) > 1 :
-            (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0.01) # thsi jump parameter often makes it fail---more investigation needed here. 
+            (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0.01) # this jump parameter often makes it fail---more investigation needed here. 
             self.stored_plans[group_name] = plan
+
+            if len(plan) > 0 :
+                self.plan_generated[group_name] = True
+                self.stored_plans[group_name] = plan
+            else :
+                self.plan_generated[group_name] = False
+                
         else :
             pt = geometry_msgs.msg.PoseStamped()
             pt.header.frame_id = self.groups[group_name].get_planning_frame()
             pt.header.stamp = rospy.get_rostime()
             pt.pose = waypoints[0]
-            self.create_plan_to_target(group_name,pt)
+            self.plan_generated[group_name] = self.create_plan_to_target(group_name,pt)
 
-        self.publish_path_data(self.stored_plans[group_name], group_name)
-        self.plan_generated[group_name] = True
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+        
+        return self.plan_generated[group_name]
 
     def execute_all_valid_plans(self, from_stored=False, wait=True) :
         r = True
