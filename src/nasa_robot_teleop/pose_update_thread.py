@@ -23,7 +23,6 @@ class PoseUpdateThread(threading.Thread) :
         self.T_offset = kdl.Frame()
         if offset_pose != None :
             self.T_offset = fromMsg(self.offset_pose)
-
         self.running = True
 
     def run(self) :
@@ -34,7 +33,7 @@ class PoseUpdateThread(threading.Thread) :
             self.pose_data = toMsg(T*self.T_offset)
             self.is_valid = True
             rospy.sleep(0.1)
-        rospy.loginfo(str("Killing Pose Update Thread: " + self.name))
+        rospy.logdebug(str("Killing Pose Update Thread: " + self.name))
 
     def stop(self) :
         self.running = False

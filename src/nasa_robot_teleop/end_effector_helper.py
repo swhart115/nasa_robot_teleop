@@ -21,6 +21,7 @@ class EndEffectorHelper :
 
         self.link_meshes = {}
         self.link_origins = {}
+        self.link_scales = {}
         self.offset_pose_data = {}
         self.offset_update_thread = {}
         self.links = []
@@ -38,9 +39,10 @@ class EndEffectorHelper :
 
         self.pose_marker_arrays = {}
 
-    def add_link(self, link, mesh, origin) :
+    def add_link(self, link, mesh, origin, scale=[1.0,1.0,1.0]) :
         self.link_meshes[link] = mesh
         self.link_origins[link] = origin
+        self.link_scales[link] = scale
         self.links.append(link)
 
     def set_urdf(self, urdf) :
@@ -75,15 +77,17 @@ class EndEffectorHelper :
                 rospy.logerr("EndEffectorHelper::get_markers_for_pose() -- no SRDF set!!")
         else :
             markers = self.pose_marker_arrays[pose]
-
+        
         return markers
 
 
     def populate_data(self, links, urdf, srdf) :
 
+        rospy.loginfo("EndEffectorHelper::populate_data()")
         if self.srdf == None : self.set_srdf(srdf)
         if self.urdf == None : self.set_urdf(urdf)
 
+        scale = [1.0,1.0,1.0]
         if not self.srdf == None :
             poses = self.srdf.get_group_state_list(self.name)
             N = len(poses)
@@ -92,33 +96,53 @@ class EndEffectorHelper :
                 color = (0,c,0.67+c/3.0,1)
                 jpos = self.srdf.get_group_state(self.name, p).to_joint_state_msg()
                 self.pose_marker_arrays[p] = self.get_marker_array_from_joint_position(jpos=jpos, root=self.root_frame, color=color)
-
+                
         for link in links :
             if not link in self.urdf.link_map :
                 rospy.logwarn(str("EndEffectorHelper::populate_data() -- link: " + link + " not found in URDF model"))
                 return
 
-            model_link = self.urdf.link_map[link]
-            if model_link :
-                if model_link.visual  :
-                    if model_link.visual.geometry  :
-                        try :
-                            if model_link.visual.geometry.filename  :
-                                mesh = model_link.visual.geometry.filename
-                        except :
-                            mesh = None 
-                        p = geometry_msgs.msg.Pose()
-                        q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
-                        p.position.x = model_link.visual.origin.xyz[0]
-                        p.position.y = model_link.visual.origin.xyz[1]
-                        p.position.z = model_link.visual.origin.xyz[2]
-                        p.orientation.x = q[0]
-                        p.orientation.y = q[1]
-                        p.orientation.z = q[2]
-                        p.orientation.w = q[3]
-                        self.add_link(link, mesh, p)
+            try :
+                print " getting end-effector link: ", link
+                model_link = self.urdf.link_map[link]
+                if model_link :
+                    if model_link.visual  :
+                        if model_link.visual.geometry  :
+                            try :
+                                if model_link.visual.geometry.filename  :
+                                    mesh = model_link.visual.geometry.filename
+                            except :
+                                rospy.logdebug("EndEffectorHelper::populate_data() -- Failed to get mesh filename")
+
+                            try :
+                                if model_link.visual.geometry.scale  :
+                                    scale = model_link.visual.geometry.scale
+                            except :
+                                rospy.logdebug("EndEffectorHelper::populate_data() -- Failed to get mesh scale")
+                                mesh = None
+                            p = geometry_msgs.msg.Pose()
+                            p.orientation.w = 1.0
+                            if model_link.visual.origin:
+                                if model_link.visual.origin.rpy:
+                                    q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()    
+                                    p.orientation.x = q[0]
+                                    p.orientation.y = q[1]
+                                    p.orientation.z = q[2]
+                                    p.orientation.w = q[3]
+                                else :
+                                    p.orientation.w = 1.0
+
+                                if model_link.visual.origin.xyz:
+                                    p.position.x = model_link.visual.origin.xyz[0]
+                                    p.position.y = model_link.visual.origin.xyz[1]
+                                    p.position.z = model_link.visual.origin.xyz[2]
+                                
+                            self.add_link(link, mesh, p, scale)
+            except: 
+                rospy.logwarn(str("EndEffectorHelper::populate_link() -- couldnt add link: " + link))
 
         self.start_offset_update_thread()
+        rospy.loginfo("EndEffectorHelper::populate_data() -- done")
 
     def has_link(self, link) :
         return link in self.links
@@ -127,9 +151,9 @@ class EndEffectorHelper :
         return self.links
 
     def get_link_data(self, link) :
-        if not self.has_link(link) : return (False, geometry_msgs.msg.Pose())
-        if not self.offset_update_thread[link].get_pose_data() : return (False, self.offset_update_thread[link].get_pose_data())
-        return (self.link_meshes[link], self.offset_update_thread[link].get_pose_data())
+        if not self.has_link(link) : return (False, geometry_msgs.msg.Pose(), [1,1,1])
+        if not self.offset_update_thread[link].get_pose_data() : return (False, self.offset_update_thread[link].get_pose_data(),[1,1,1])
+        return (self.link_meshes[link], self.offset_update_thread[link].get_pose_data(),self.link_scales[link])
 
     def set_control_frame(self, control_pose, control_mesh) :
         self.control_pose = control_pose
@@ -161,7 +185,7 @@ class EndEffectorHelper :
 
     def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):
 
-        (mesh, pose) = self.get_link_data(link)
+        (mesh, pose, mesh_scale) = self.get_link_data(link)
         marker = Marker()
 
         s = [scale, scale, scale]
@@ -182,9 +206,9 @@ class EndEffectorHelper :
             marker.type = Marker.SPHERE
             return None
         marker.action = Marker.MODIFY
-        marker.scale.x = s[0]
-        marker.scale.y = s[1]
-        marker.scale.z = s[2]
+        marker.scale.x = s[0]*mesh_scale[0]
+        marker.scale.y = s[1]*mesh_scale[1]
+        marker.scale.z = s[2]*mesh_scale[2]
         marker.color.r = color[0]
         marker.color.g = color[1]
         marker.color.b = color[2]
@@ -197,45 +221,54 @@ class EndEffectorHelper :
 
     def create_marker_for_link(self, link, T, scale=1, color=(0,1,0,1), idx=0) :
         marker = Marker()
-
         if not link in self.urdf.link_map :
             rospy.logwarn(str("EndEffectorHelper::create_marker_for_link() -- link: " + link + " not found in URDF model"))
             return marker
 
-        model_link = self.urdf.link_map[link]
-        if model_link :
-            if model_link.visual  :
-                if model_link.visual.geometry  :
-                    if model_link.visual.geometry.filename  :
-                        mesh = model_link.visual.geometry.filename
-                        p = geometry_msgs.msg.Pose()
-                        q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
-                        p.position.x = model_link.visual.origin.xyz[0]
-                        p.position.y = model_link.visual.origin.xyz[1]
-                        p.position.z = model_link.visual.origin.xyz[2]
-                        p.orientation.x = q[0]
-                        p.orientation.y = q[1]
-                        p.orientation.z = q[2]
-                        p.orientation.w = q[3]
+        try :
+            model_link = self.urdf.link_map[link]
+            if model_link :
+                if model_link.visual  :
+                    if model_link.visual.geometry  :
+                        if model_link.visual.geometry.filename  :
+                            mesh = model_link.visual.geometry.filename
+                            p = geometry_msgs.msg.Pose()
+                            p.orientation.w = 1.0
 
-                        marker.pose = toMsg(T*fromMsg(p))
+                            if model_link.visual.origin:
+                                if model_link.visual.origin.xyz:
+                                    p.position.x = model_link.visual.origin.xyz[0]
+                                    p.position.y = model_link.visual.origin.xyz[1]
+                                    p.position.z = model_link.visual.origin.xyz[2]
+                                if model_link.visual.origin.rpy:
+                                    q = (kdl.Rotation.RPY(model_link.visual.origin.rpy[0],model_link.visual.origin.rpy[1],model_link.visual.origin.rpy[2])).GetQuaternion()
+                                    p.orientation.x = q[0]
+                                    p.orientation.y = q[1]
+                                    p.orientation.z = q[2]
+                                    p.orientation.w = q[3]
 
-                        marker.header.frame_id = self.root_frame
-                        marker.ns = self.robot_name
-                        marker.mesh_resource = mesh
-                        marker.type = Marker.MESH_RESOURCE
-                        marker.action = Marker.MODIFY
-                        marker.scale.x = scale
-                        marker.scale.y = scale
-                        marker.scale.z = scale
-                        marker.color.r = color[0]
-                        marker.color.g = color[1]
-                        marker.color.b = color[2]
-                        marker.color.a = color[3]
-                        marker.text = link
-                        marker.id = idx
-                        marker.mesh_use_embedded_materials = True
+                            mesh_scale = [1.0,1.0,1.0]
+                            if model_link.visual.geometry.scale : 
+                                mesh_scale = model_link.visual.geometry.scale
+                            marker.pose = toMsg(T*fromMsg(p))
 
+                            marker.header.frame_id = self.root_frame
+                            marker.ns = self.robot_name
+                            marker.mesh_resource = mesh
+                            marker.type = Marker.MESH_RESOURCE
+                            marker.action = Marker.MODIFY
+                            marker.scale.x = scale*mesh_scale[0]
+                            marker.scale.y = scale*mesh_scale[1]
+                            marker.scale.z = scale*mesh_scale[2]
+                            marker.color.r = color[0]
+                            marker.color.g = color[1]
+                            marker.color.b = color[2]
+                            marker.color.a = color[3]
+                            marker.text = link
+                            marker.id = idx
+                            marker.mesh_use_embedded_materials = True
+        except :
+            rospy.logdebug("problem creating marker for link")
         return marker
 
 
@@ -259,7 +292,7 @@ class EndEffectorHelper :
 
         markers = MarkerArray()
         if root=="": root = self.root_frame
-
+        print "get_marker_array_from_joint_position() -- root: ", root
         link_list = []
         link_joints = {}
         T_joint = {}
@@ -276,7 +309,31 @@ class EndEffectorHelper :
 
         if not root in link_list :
             link_list.append(root)
-            link_joints[root] = get_link_joint(root, self.urdf)
+            link_joints[root] = get_link_joint(root, self.urdf) # this might need to return a chain
+
+        root_parents = []
+
+
+        parent = get_parent_link(root, self.urdf)
+        while parent != None :
+            root_parents.append(parent)
+            parent = get_parent_link(parent, self.urdf)
+             
+        root_parents.append(root)
+        # got through and make sure we have all the links for the group.  
+        # this will catch any fixed joint links, that would be skipped otherwise
+        for link in link_list:  
+            if link in root_parents: continue
+            # print "looking up fixed links for ", link
+            parent = get_parent_link(link, self.urdf)
+            while (not parent in link_list) and (not parent in root_parents) :
+                if parent == None: break
+                link_list.append(parent)
+                # print " adding ", parent
+                link_joints[parent] = get_link_joint(parent, self.urdf)
+                parent = get_parent_link(parent, self.urdf)
+            # print "...done looking up fixed links for ", link
+
 
         def get_transform_to_link(root_frame, link, joint, T_link) :
             if link in T_link.keys() :
@@ -310,6 +367,7 @@ class EndEffectorHelper :
                 markers.markers.append(self.create_marker_for_link(link, T_link[link], scale=scale, color=color, idx=idx))
                 idx += 1
 
+        print "get_marker_array_from_joint_position() -- done"
         return markers
 
     
