@@ -60,8 +60,8 @@ class MoveItInterface :
         self.actionlib = False
         self.bridge_topic_map = {}
 
-        self.plan_color = (0.5,0.1,0.75,1)
-        self.path_increment = 2
+        self.plan_color = (0.5,0.1,0.75,0.2)
+        self.path_increment = 3
 
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\'"))
         self.robot = moveit_commander.RobotCommander()
