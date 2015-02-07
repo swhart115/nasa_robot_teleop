@@ -374,6 +374,10 @@ class MoveItInterface :
         # check to make sure the plan has a non-0 amount of waypoints
         self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
 
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
         return self.plan_generated[group_name]
 
     # computes a MoveIt! JointTrajectory to a single Cartesian goal. 
@@ -396,7 +400,11 @@ class MoveItInterface :
         
         # check to make sure the plan has a non-0 amount of waypoints
         self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
-        
+
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
         return self.plan_generated[group_name]
 
     # computes a MoveIt! JointTrajectory to a random Joint goal in the workspace. 
@@ -413,6 +421,10 @@ class MoveItInterface :
         # check to make sure the plan has a non-0 amount of waypoints
         self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
         
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
         return self.plan_generated[group_name]
 
 
@@ -483,7 +495,7 @@ class MoveItInterface :
         # if the plan was found publish it to be displayed in RViz as a MarkerArray
         if self.plan_generated[group_name] :
             self.publish_path_data(self.stored_plans[group_name], group_name)
-        
+
         return self.plan_generated[group_name]
 
 
