@@ -117,7 +117,7 @@ class MoveItInterface :
             return False
 
     # problaby can clean this up, it's messy FIXME
-    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
+    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
         rospy.loginfo(str("ADD GROUP: " + group_name))
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
@@ -167,7 +167,7 @@ class MoveItInterface :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
                         self.add_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=0.05, position_tolerance=0.02, orientation_tolerance=0.05)
+                            joint_tolerance=0.05, position_tolerance=0.005, orientation_tolerance=0.02)
             elif self.srdf_model.has_tip_link(group_name) :
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
@@ -218,7 +218,7 @@ class MoveItInterface :
                 rospy.loginfo(str("============ Type: " + self.group_types[group_name]))
                 rospy.loginfo(str("============ MoveIt! Planning Frame: " + self.groups[group_name].get_planning_frame()))
                 rospy.loginfo(str("============ MoveIt! Pose Ref Frame: " + self.groups[group_name].get_pose_reference_frame()))
-                # rospy.loginfo(str("============ MoveIt! Goal Tolerance: " + self.groups[group_name].get_goal_tolerance()))
+                #rospy.loginfo(str("============ MoveIt! Goal Tolerance: " + self.groups[group_name].get_goal_tolerance()))
                 # rospy.loginfo(str("============ MoveIt! Goal Joint Tolerance: " + self.groups[group_name].get_goal_joint_tolerance()))
                 # rospy.loginfo(str("============ MoveIt! Goal Position Tolerance: " + self.groups[group_name].get_goal_position_tolerance()))
                 # rospy.loginfo(str("============ MoveIt! Goal Orientation Tolerance: " + self.groups[group_name].get_goal_orientation_tolerance()))
@@ -371,6 +371,8 @@ class MoveItInterface :
         self.groups[group_name].set_joint_value_target(js)
         self.stored_plans[group_name] = self.groups[group_name].plan()
 
+        N = len(self.stored_plans[group_name].joint_trajectory.points)
+        rospy.logwarn(str("generated path of " + str(N) + " points"))
         # check to make sure the plan has a non-0 amount of waypoints
         self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
 
@@ -462,7 +464,7 @@ class MoveItInterface :
                    
         # if there is more then one waypoint, use the MoveIt! interface to create a Cartesian trajectory through each.
         # this necessary as this is the only way to compute trajectories for multiple points.  FIXME
-        if len(waypoints) > 1 :
+        if len(waypoints) > 0 :
 
             plan = moveit_msgs.msg.RobotTrajectory()
             fraction = 0
@@ -490,6 +492,9 @@ class MoveItInterface :
             pt.header.frame_id = self.groups[group_name].get_planning_frame()
             pt.header.stamp = rospy.get_rostime()
             pt.pose = waypoints[0]
+
+            rospy.logwarn("MoveItInterface::create_path_plan() -- planning pose to: ")
+            print pt.pose
             self.plan_generated[group_name] = self.create_plan_to_target(group_name,pt)
 
         # if the plan was found publish it to be displayed in RViz as a MarkerArray
@@ -514,7 +519,13 @@ class MoveItInterface :
                     r = self.groups[group_name].go(wait)
                 else :
                     rospy.logdebug("MoveItInterface::execute_plan() -- publishing to topic")
+
                     jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name].joint_trajectory)
+                    
+                    print jt.goal
+                    N = len(jt.goal.trajectory.points)
+                    rospy.logwarn(str("executing path of " + str(N) + " points"))
+
                     self.command_topics[group_name].publish(jt)
                     r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
             else :
@@ -612,7 +623,7 @@ class MoveItInterface :
 
         if display_mode == "all_points" :
 
-            for point in plan.joint_trajectory.points[1:num_points-1:self.path_increment] :
+            for point in plan.joint_trajectory.points[1:num_points:self.path_increment] :
                 waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, plan.joint_trajectory.joint_names, point.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
