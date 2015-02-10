@@ -117,7 +117,7 @@ class MoveItInterface :
             return False
 
 
-    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.02, orientation_tolerance=.05) :
+    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.005, position_tolerance=.001, orientation_tolerance=.05) :
         rospy.loginfo(str("ADD GROUP: " + group_name))
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
@@ -167,7 +167,7 @@ class MoveItInterface :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
                         self.add_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=0.05, position_tolerance=0.02, orientation_tolerance=0.05)
+                            joint_tolerance=0.005, position_tolerance=0.001, orientation_tolerance=0.05)
             elif self.srdf_model.has_tip_link(group_name) :
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
@@ -431,6 +431,8 @@ class MoveItInterface :
                 self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
                 pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
             pt.header.frame_id = self.groups[group_name].get_planning_frame()
+            rospy.loginfo(str("MoveItInterface::create_path_plan() -- pt is " + str(pt)))
+
             waypoints.append(copy.deepcopy(pt.pose))
         
         if len(waypoints) > 1 :
@@ -569,7 +571,8 @@ class MoveItInterface :
 
         if display_mode == "all_points" :
 
-            for point in plan.joint_trajectory.points[1:num_points-1:self.path_increment] :
+            for point in plan.joint_trajectory.points[1:num_points:self.path_increment] :
+                #rospy.loginfo(str("MoveItInterface::joint_trajectory_to_marker_array() -- point is " + str(point)))
                 waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, plan.joint_trajectory.joint_names, point.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
@@ -592,7 +595,7 @@ class MoveItInterface :
         elif display_mode == "last_point" :
 
             if num_points > 0 :
-                points = plan.joint_trajectory.points[num_points-1]
+                points = plan.joint_trajectory.points[num_points]
                 waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,plan.joint_trajectory.joint_names, points.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
                 idx += self.group_id_offset[group]
