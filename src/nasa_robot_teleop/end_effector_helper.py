@@ -83,7 +83,7 @@ class EndEffectorHelper :
 
     def populate_data(self, links, urdf, srdf) :
 
-        rospy.loginfo("EndEffectorHelper::populate_data()")
+        rospy.logdebug("EndEffectorHelper::populate_data()")
         if self.srdf == None : self.set_srdf(srdf)
         if self.urdf == None : self.set_urdf(urdf)
 
@@ -103,7 +103,7 @@ class EndEffectorHelper :
                 return
 
             try :
-                print " getting end-effector link: ", link
+                # print " getting end-effector link: ", link
                 model_link = self.urdf.link_map[link]
                 if model_link :
                     if model_link.visual  :
@@ -142,7 +142,7 @@ class EndEffectorHelper :
                 rospy.logwarn(str("EndEffectorHelper::populate_link() -- couldnt add link: " + link))
 
         self.start_offset_update_thread()
-        rospy.loginfo("EndEffectorHelper::populate_data() -- done")
+        rospy.logdebug("EndEffectorHelper::populate_data() -- done")
 
     def has_link(self, link) :
         return link in self.links
@@ -292,7 +292,7 @@ class EndEffectorHelper :
 
         markers = MarkerArray()
         if root=="": root = self.root_frame
-        print "get_marker_array_from_joint_position() -- root: ", root
+        # print "get_marker_array_from_joint_position() -- root: ", root
         link_list = []
         link_joints = {}
         T_joint = {}
@@ -367,7 +367,7 @@ class EndEffectorHelper :
                 markers.markers.append(self.create_marker_for_link(link, T_link[link], scale=scale, color=color, idx=idx))
                 idx += 1
 
-        print "get_marker_array_from_joint_position() -- done"
+        # print "get_marker_array_from_joint_position() -- done"
         return markers
 
     

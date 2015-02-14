@@ -522,7 +522,6 @@ class MoveItInterface :
 
                     jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name].joint_trajectory)
                     
-                    print jt.goal
                     N = len(jt.goal.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
 
@@ -582,7 +581,7 @@ class MoveItInterface :
     def publish_to_gripper_service(self, group, traj) :
         try:
             rospy.loginfo("MoveItInterface::publish_to_gripper_service() -- calling gripper service")
-            resp = self.gripper_service(traj, group, "pr2_pose") # did i hardcode this? FIXME!!
+            resp = self.gripper_service(traj, group, "end_effector_pose") # did i hardcode this? FIXME!! should be something like "Left Hand Close"
             return resp.result
         except rospy.ServiceException, e:
             rospy.logerr("MoveItInterface::publish_to_gripper_service() -- gripper service call failed")
