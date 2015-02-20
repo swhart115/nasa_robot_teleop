@@ -62,7 +62,7 @@ class MoveItInterface :
         self.bridge_topic_map = {}
         self.actionlib = False
 
-        self.plan_color = (0.5,0.1,0.75,1)
+        self.plan_color = (0.5,0.1,0.75,0.3)
         self.path_increment = 2
 
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\'"))
@@ -117,7 +117,7 @@ class MoveItInterface :
             return False
 
     # problaby can clean this up, it's messy FIXME
-    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
+    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.005, position_tolerance=.005, orientation_tolerance=.02) :
         rospy.loginfo(str("ADD GROUP: " + group_name))
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
@@ -167,7 +167,7 @@ class MoveItInterface :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
                         self.add_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=0.05, position_tolerance=0.005, orientation_tolerance=0.02)
+                            joint_tolerance=0.005, position_tolerance=0.005, orientation_tolerance=0.02)
             elif self.srdf_model.has_tip_link(group_name) :
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
@@ -218,10 +218,10 @@ class MoveItInterface :
                 rospy.loginfo(str("============ Type: " + self.group_types[group_name]))
                 rospy.loginfo(str("============ MoveIt! Planning Frame: " + self.groups[group_name].get_planning_frame()))
                 rospy.loginfo(str("============ MoveIt! Pose Ref Frame: " + self.groups[group_name].get_pose_reference_frame()))
-                #rospy.loginfo(str("============ MoveIt! Goal Tolerance: " + self.groups[group_name].get_goal_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Joint Tolerance: " + self.groups[group_name].get_goal_joint_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Position Tolerance: " + self.groups[group_name].get_goal_position_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Orientation Tolerance: " + self.groups[group_name].get_goal_orientation_tolerance()))
+                rospy.loginfo("============ MoveIt! Goal Tolerance: " + str(self.groups[group_name].get_goal_tolerance()))
+                rospy.loginfo("============ MoveIt! Goal Joint Tolerance: " + str(self.groups[group_name].get_goal_joint_tolerance()))
+                rospy.loginfo("============ MoveIt! Goal Position Tolerance: " + str(self.groups[group_name].get_goal_position_tolerance()))
+                rospy.loginfo("============ MoveIt! Goal Orientation Tolerance: " + str(self.groups[group_name].get_goal_orientation_tolerance()))
                 rospy.loginfo(str("============ Control Frame: " + self.get_control_frame(group_name)))
                 rospy.loginfo(str("============ Control Mesh: " + self.get_control_mesh(group_name)))
             rospy.loginfo("============================================================")
@@ -388,7 +388,7 @@ class MoveItInterface :
         rospy.loginfo(str("MoveItInterface::create_plan_to_target() == Robot Name: " + self.robot_name))
         rospy.loginfo(str("MoveItInterface::create_plan_to_target() ===== MoveIt! Group Name: " + group_name))
         rospy.loginfo(str("MoveItInterface::create_plan_to_target() ===== Generating Plan"))
-        
+
         # transform the goal to the robot/group planning frame 
         if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
             self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
@@ -464,7 +464,7 @@ class MoveItInterface :
                    
         # if there is more then one waypoint, use the MoveIt! interface to create a Cartesian trajectory through each.
         # this necessary as this is the only way to compute trajectories for multiple points.  FIXME
-        if len(waypoints) > 0 :
+        if len(waypoints) > 1 :
 
             plan = moveit_msgs.msg.RobotTrajectory()
             fraction = 0
@@ -645,7 +645,7 @@ class MoveItInterface :
         elif display_mode == "last_point" :
 
             if num_points > 0 :
-                points = plan.joint_trajectory.points[num_points-1]
+                points = plan.joint_trajectory.points[num_points]
                 waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,plan.joint_trajectory.joint_names, points.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
                 idx += self.group_id_offset[group]
