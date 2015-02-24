@@ -21,7 +21,9 @@ from visualization_msgs.msg import Marker
 
 import PyKDL as kdl
 
-from nasa_robot_teleop.moveit_interface import *
+from nasa_robot_teleop.path_planner import *
+from nasa_robot_teleop.moveit_path_planner import *
+
 from nasa_robot_teleop.marker_helper import *
 from nasa_robot_teleop.kdl_posemath import *
 from nasa_robot_teleop.pose_update_thread import *
@@ -58,25 +60,26 @@ class RobotTeleop:
         if config_package=="" :
             config_package =  str(self.robot_name + "_moveit_config")
 
-        self.moveit_interface = MoveItInterface(self.robot_name,config_package)
-        self.root_frame = self.moveit_interface.get_planning_frame()
+        # self.path_planner = MoveItInterface(self.robot_name,config_package)
+        self.path_planner = MoveItPathPlanner(self.robot_name, config_package)
+        self.root_frame = self.path_planner.get_robot_planning_frame()
 
         # add user specified groups
         for n in self.manipulator_group_names :
-            self.moveit_interface.add_group(n, group_type="manipulator")
+            self.path_planner.add_planning_group(n, group_type="manipulator")
         for n in self.joint_group_names :
-            self.moveit_interface.add_group(n, group_type="joint")
+            self.path_planner.add_planning_group(n, group_type="joint")
 
         # append group list with auto-found end effectors
-        for n in self.moveit_interface.get_end_effector_names() :
+        for n in self.path_planner.get_end_effector_names() :
             self.group_names.append(n)
 
         # set the control frames for all types of groups
         for n in self.group_names :
-            self.control_frames[n] = self.moveit_interface.get_control_frame(n)
+            self.control_frames[n] = self.path_planner.get_control_frame(n)
 
         # what do we have?
-        self.moveit_interface.print_basic_info()
+        self.path_planner.print_basic_info()
 
         # set up menu info
         self.menu_options = []
@@ -90,23 +93,23 @@ class RobotTeleop:
         # get stored poses from model
         for group in self.group_names :
             self.stored_poses[group] = {}
-            for state_name in self.moveit_interface.get_stored_state_list(group) :
-                self.stored_poses[group][state_name] = self.moveit_interface.get_stored_group_state(group, state_name)
+            for state_name in self.path_planner.get_stored_state_list(group) :
+                self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
 
         # start update threads for manipulators
         for n in self.manipulator_group_names :
             self.start_pose_update_thread(n)
 
         # Create EndEffectorHelper objects to help with EE displays
-        for n in self.moveit_interface.get_end_effector_names() :
-            self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.moveit_interface.get_control_frame(n), self.tf_listener)
-            # ee_links = self.moveit_interface.get_group_links(n)
-            # ee_links.append(self.moveit_interface.get_control_frame(n))
-            self.end_effector_link_data[n].populate_data(self.moveit_interface.get_group_links(n), self.moveit_interface.get_urdf_model(), self.moveit_interface.get_srdf_model())
+        for n in self.path_planner.get_end_effector_names() :
+            self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
+            # ee_links = self.path_planner.get_group_links(n)
+            # ee_links.append(self.path_planner.get_control_frame(n))
+            self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.path_planner.get_urdf_model(), self.path_planner.get_srdf_model())
 
         # set group to display only last point in path by default (can turn on full train from menu)
         for group in self.group_names :
-            self.moveit_interface.set_display_mode(group, "all_points")
+            self.path_planner.set_display_mode(group, "all_points")
 
         # initialize markers
         self.initialize_group_markers()
@@ -117,9 +120,9 @@ class RobotTeleop:
         self.group_menu_handles = {}
         self.marker_menus = {}
 
-        urdf = self.moveit_interface.get_urdf_model()
+        urdf = self.path_planner.get_urdf_model()
 
-        for group in self.moveit_interface.groups.keys() :
+        for group in self.path_planner.get_group_names() :
 
             self.auto_execute[group] = False
             self.markers[group] = InteractiveMarker()
@@ -129,7 +132,7 @@ class RobotTeleop:
             menu_control = InteractiveMarkerControl()
             menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
 
-            if self.moveit_interface.get_group_type(group) == "manipulator" :
+            if self.path_planner.get_group_type(group) == "manipulator" :
 
                 self.markers[group].controls = make6DOFControls()
                 self.markers[group].header.frame_id = self.root_frame
@@ -140,10 +143,12 @@ class RobotTeleop:
                 self.server.insert(self.markers[group], self.process_feedback)
                 self.reset_group_marker(group)
 
-            elif  self.moveit_interface.get_group_type(group) == "joint" :
+            elif  self.path_planner.get_group_type(group) == "joint" :
 
-                self.markers[group].header.frame_id = self.moveit_interface.get_control_frame(group)
-                control_frame = self.moveit_interface.get_control_frame(group)
+                print "GROUP: ", group
+                self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
+                control_frame = self.path_planner.get_control_frame(group)
+                print "CF: ", control_frame
                 jg_links = urdf.get_all_child_links(control_frame)
             
                 idx = 0
@@ -170,9 +175,9 @@ class RobotTeleop:
 
 
                 # original 
-                # mesh = self.moveit_interface.get_control_mesh(group)
-                # pose = self.moveit_interface.get_control_mesh_pose_offset(group)
-                # scale = self.moveit_interface.get_control_mesh_scale(group)
+                # mesh = self.path_planner.get_control_mesh(group)
+                # pose = self.path_planner.get_control_mesh_pose_offset(group)
+                # scale = self.path_planner.get_control_mesh_scale(group)
                 # marker = makeMesh( self.markers[group], mesh, pose, [s*1.02 for s in scale], alpha=0.1 )
                 # menu_control.markers.append( marker )
 
@@ -180,10 +185,10 @@ class RobotTeleop:
                 self.markers[group].controls.append(menu_control)
                 self.server.insert(self.markers[group], self.process_feedback)
 
-            elif self.moveit_interface.get_group_type(group) == "endeffector" :
-                control_frame = self.moveit_interface.get_control_frame(group)
+            elif self.path_planner.get_group_type(group) == "endeffector" :
+                control_frame = self.path_planner.get_control_frame(group)
                 ee_links = urdf.get_all_child_links(control_frame)
-                self.markers[group].header.frame_id = self.moveit_interface.srdf_model.group_end_effectors[group].parent_link
+                self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
                 
                 # original 
                 # end_effector_marker = self.end_effector_link_data[group].get_current_position_marker(self.markers[group].header.frame_id, scale=1.02, color=(1,1,1,0.1))
@@ -214,7 +219,7 @@ class RobotTeleop:
             # Set up stored pose sub menu
             self.setup_stored_pose_menu(group)
 
-            if self.moveit_interface.get_group_type(group) == "endeffector" :
+            if self.path_planner.get_group_type(group) == "endeffector" :
                 self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Move")], MenuHandler.CHECKED )
 
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
@@ -224,21 +229,21 @@ class RobotTeleop:
 
 
     def use_actionlib(self, v) :
-        self.moveit_interface.use_actionlib(v)
+        self.path_planner.use_actionlib(v)
         
     def set_gripper_service(self, srv) :
         self.gripper_service = srv
-        self.moveit_interface.set_gripper_service(srv)
+        self.path_planner.set_gripper_service(srv)
 
     def clear_gripper_service(self) :
         self.gripper_service = None
-        self.moveit_interface.clear_gripper_service()
+        self.path_planner.clear_gripper_service()
 
     def setup_stored_pose_menu(self, group) :
         for m,c in self.menu_options :
             if m == "Stored Poses" :
                 sub_menu_handle = self.marker_menus[group].insert(m)
-                for p in self.moveit_interface.get_stored_state_list(group) :
+                for p in self.path_planner.get_stored_state_list(group) :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
             else :
                 self.group_menu_handles[(group,m)] = self.marker_menus[group].insert( m, callback=self.process_feedback )
@@ -271,16 +276,16 @@ class RobotTeleop:
         self.joint_data = data
 
     def stored_pose_callback(self, feedback) :
-        for p in self.moveit_interface.get_stored_state_list(feedback.marker_name) :
+        for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
             if self.group_menu_handles[(feedback.marker_name,"Stored Poses",p)] == feedback.menu_entry_id :
                 if self.auto_execute[feedback.marker_name] :
-                    self.moveit_interface.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                    r = self.moveit_interface.execute_plan(feedback.marker_name)
+                    self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
+                    r = self.path_planner.execute_plan(feedback.marker_name)
                     if not r : rospy.logerr(str("RobotTeleop::process_feedback(pose) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
-                    self.moveit_interface.groups[feedback.marker_name].clear_pose_targets()
-                    self.moveit_interface.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                if self.moveit_interface.get_group_type(feedback.marker_name) == "manipulator" :
+                    self.path_planner.clear_goal_targets(feedback.marker_name)
+                    self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
+                if self.path_planner.get_group_type(feedback.marker_name) == "manipulator" :
                     rospy.sleep(3)
                     self.reset_group_marker(feedback.marker_name)
 
@@ -296,13 +301,13 @@ class RobotTeleop:
                 pt.header = feedback.header
                 pt.pose = feedback.pose
                 if self.auto_execute[feedback.marker_name] :
-                    self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
-                    r = self.moveit_interface.execute_plan(feedback.marker_name)
+                    self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                    r = self.path_planner.execute_plan(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
-                    self.moveit_interface.groups[feedback.marker_name].clear_pose_targets()
-                    self.moveit_interface.create_plan_to_target(feedback.marker_name, pt)
+                    self.path_planner.clear_goal_targets(feedback.marker_name)
+                    self.path_planner.create_plan_to_target(feedback.marker_name, pt)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
@@ -321,12 +326,12 @@ class RobotTeleop:
                     state = self.marker_menus[feedback.marker_name].getCheckState( handle )
                     if state == MenuHandler.CHECKED:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        self.moveit_interface.set_display_mode(feedback.marker_name, "last_point")
+                        self.path_planner.set_display_mode(feedback.marker_name, "last_point")
                     else :
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                        self.moveit_interface.set_display_mode(feedback.marker_name, "all_points")
+                        self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                    r = self.moveit_interface.execute_plan(feedback.marker_name)
+                    r = self.path_planner.execute_plan(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
 

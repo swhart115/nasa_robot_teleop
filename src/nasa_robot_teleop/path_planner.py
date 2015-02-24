@@ -1,9 +1,8 @@
 #! /usr/bin/env python
 
-import os
-import sys
+import rospy
+
 import copy
-import math
 import random
 
 import rospy
@@ -11,6 +10,7 @@ import roslib; roslib.load_manifest('nasa_robot_teleop')
 from rospkg import RosPack
 
 import tf
+import PyKDL as kdl
 
 import geometry_msgs.msg
 import visualization_msgs.msg
@@ -19,14 +19,9 @@ import trajectory_msgs.msg
 import control_msgs.msg
 import actionlib_msgs.msg
 
-import controller_manager_msgs.srv
+# import controller_manager_msgs.srv
 
 from nasa_robot_teleop.srv import *
-
-import moveit_commander
-import moveit_msgs.msg
-
-import PyKDL as kdl
 
 from srdf_model import SRDFModel
 from kdl_posemath import *
@@ -34,12 +29,14 @@ import urdf_parser_py as urdf
 from urdf_helper import *
 import end_effector_helper as end_effector
 
-class MoveItInterface :
+
+class PathPlanner(object):
 
     def __init__(self, robot_name, config_package):
+        self.robot_name = robot_name
+        self.config_package = config_package
 
         self.robot_name = robot_name
-        self.groups = {}
         self.group_types = {}
         self.group_controllers = {}
         self.base_frames = {}
@@ -48,7 +45,6 @@ class MoveItInterface :
         self.control_offset = {}
         self.group_id_offset = {}
         self.end_effector_map = {}
-        self.trajectory_publishers = {}
         self.display_modes = {}
         self.trajectory_poses = {}
         self.trajectory_display_markers = {}
@@ -65,30 +61,33 @@ class MoveItInterface :
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
 
-        rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\'"))
-        self.robot = moveit_commander.RobotCommander()
-        self.scene = moveit_commander.PlanningSceneInterface()
-        self.obstacle_markers = visualization_msgs.msg.MarkerArray()
+        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
+        self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
+        self.tf_listener = tf.TransformListener()
+  
         if not self.create_models(config_package) :
-            rospy.logerr("MoveItInterface::init() -- failed creating RDF models")
+            rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
-
-        rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
-        self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray,queue_size=10)
-        for g in self.robot.get_group_names() :
-            self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory, queue_size=10)
+     
+        # for g in self.robot.get_group_names() :
+        for g in self.get_group_names() :
+            # self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory, queue_size=10)
             self.plan_generated[g] = False
             self.stored_plans[g] = None
             self.display_modes[g] = "last_point"
-        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
+        
 
-        self.tf_listener = tf.TransformListener()
+    def get_group_names(self) :
+        return self.group_types.keys()
+
+    def has_group(self, group_name) :
+        return group_name in self.get_group_names()
 
     def use_actionlib(self, v) :
         self.actionlib = v
 
     def set_gripper_service(self, srv) :
-        rospy.loginfo("MoveItInterface::set_gripper_service() -- set_gripper_service(" + srv + ")")
+        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ")")
         rospy.wait_for_service(srv)
         self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
        
@@ -97,42 +96,35 @@ class MoveItInterface :
 
     def create_models(self, config_package) :
 
-        rospy.loginfo("MoveItInterface::create_models() -- Creating Robot Model from URDF....")
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
         self.urdf_model = urdf.Robot.from_parameter_server()
         if self.urdf_model == None : return False
 
         self.urdf_model.get_all_tips()
-        rospy.loginfo("MoveItInterface::create_models() -- Creating Robot Model from SRDF....")
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
         self.srdf_model = SRDFModel(self.robot_name)
 
         try :
-            rospy.loginfo(str("MoveItInterface::create_models() -- MoveIt! config package: " + config_package))
+            rospy.loginfo(str("PathPlanner::create_models() -- PathPlanner config package: " + config_package))
             srdf_filename = str(RosPack().get_path(config_package) + "/config/" + self.robot_name + ".srdf")
-            rospy.loginfo(str("MoveItInterface::create_models() -- SRDF Filename: " + srdf_filename))
+            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + srdf_filename))
             if self.srdf_model.parse_from_file(srdf_filename) :
-                rospy.loginfo("MoveItInterface::create_models() ================================================")
+                rospy.loginfo("PathPlanner::create_models() ================================================")
             return True
         except :
-            rospy.logerr("MoveItInterface()::create_models() -- error parsing SRDF from file")
+            rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
             return False
 
     # problaby can clean this up, it's messy FIXME
-    def add_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
-        rospy.loginfo(str("ADD GROUP: " + group_name))
+    def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
+        rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
         try :
-            self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
-            self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
-            self.groups[group_name].set_goal_position_tolerance(position_tolerance)
-            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
             self.group_types[group_name] = group_type
             self.control_frames[group_name] = ""
             self.control_meshes[group_name] = ""
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
-
-            controller_name = self.lookup_controller_name(group_name)
-            # msg_type = trajectory_msgs.msg.JointTrajectory
+            controller_name = self.lookup_controller_name(group_name)  # FIXME
             msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
-
             bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
             if bridge_topic_name != "" :
                 from pr2_joint_trajectory_bridge.msg import JointTrajectoryBridge
@@ -142,22 +134,22 @@ class MoveItInterface :
 
             # topic_name = "/" + controller_name + "/command"
             topic_name = "/" + controller_name + "/goal"
-
             rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
             self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
 
             # generate a random group_id
             id_found = False
             while not id_found :
-                r =  int(random.random()*10000000)
+                r = int(random.random()*10000000)
                 if not r in self.group_id_offset.values() :
                     self.group_id_offset[group_name] = r
                     id_found = True
 
             # check to see if the group has an associated end effector, and add it if so
-            if self.groups[group_name].has_end_effector_link() :
-                self.control_frames[group_name] = self.groups[group_name].get_end_effector_link()
-                ee_link = self.urdf_model.link_map[self.groups[group_name].get_end_effector_link()]
+            print "has tip: ", self.srdf_model.has_tip_link(group_name)
+            if self.srdf_model.has_end_effector(group_name) :
+                self.control_frames[group_name] = self.srdf_model.get_end_effector_link(group_name)
+                ee_link = self.urdf_model.link_map[self.srdf_model.get_end_effector_link(group_name)]
                 try :
                     # self.control_meshes[group_name] = ee_link.visual.geometry.filename
                     self.control_meshes[group_name] = self.get_child_mesh(ee_link)
@@ -166,10 +158,12 @@ class MoveItInterface :
                 for ee in self.srdf_model.end_effectors.keys() :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
-                        self.add_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
+                        self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=0.05, position_tolerance=0.005, orientation_tolerance=0.02)
             elif self.srdf_model.has_tip_link(group_name) :
+                print "adding group: ", group_name
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
+                print "con fr:", self.control_frames[group_name]
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
             elif self.group_types[group_name] == "endeffector" :
@@ -179,18 +173,17 @@ class MoveItInterface :
                     self.control_meshes[group_name] = ee_link.visual.geometry.filename
                 except :
                     self.control_meshes[group_name] = ""
-                    rospy.logwarn("no mesh found")
+                    rospy.logwarn("no mesh found")              
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
                 self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-                
+
             return True
 
         except :
-            rospy.logerr(str("MoveItInterface()::add_group() -- Robot " + self.robot_name + " has no group: " + group_name))
+            rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
             return False
 
-    def has_group(self, group_name) :
-        return self.robot.has_group(group_name)
+   
 
     def get_ee_parent_group(self, ee) :
         if ee in self.srdf_model.end_effectors :
@@ -214,27 +207,27 @@ class MoveItInterface :
             rospy.loginfo(str("============ Robot Name: " + self.robot_name))
             rospy.loginfo(str("============ Group: " + group_name))
            
-            if group_name in self.groups.keys() :
-                rospy.loginfo(str("============ Type: " + self.group_types[group_name]))
-                rospy.loginfo(str("============ MoveIt! Planning Frame: " + self.groups[group_name].get_planning_frame()))
-                rospy.loginfo(str("============ MoveIt! Pose Ref Frame: " + self.groups[group_name].get_pose_reference_frame()))
-                #rospy.loginfo(str("============ MoveIt! Goal Tolerance: " + self.groups[group_name].get_goal_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Joint Tolerance: " + self.groups[group_name].get_goal_joint_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Position Tolerance: " + self.groups[group_name].get_goal_position_tolerance()))
-                # rospy.loginfo(str("============ MoveIt! Goal Orientation Tolerance: " + self.groups[group_name].get_goal_orientation_tolerance()))
-                rospy.loginfo(str("============ Control Frame: " + self.get_control_frame(group_name)))
-                rospy.loginfo(str("============ Control Mesh: " + self.get_control_mesh(group_name)))
+            if group_name in self.get_group_names() :
+                rospy.loginfo(str("============ Type: " + str(self.group_types[group_name])))
+                rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_planning_frame(group_name))))
+                # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerance(group_name)))
+                rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
+                rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
             rospy.loginfo("============================================================")
 
     def print_basic_info(self) :
         rospy.loginfo(str("============================================================"))
         rospy.loginfo(str("============ Robot Name: " + self.robot_name))
         rospy.loginfo(str("============ Group Names: "))
-        for g in self.robot.get_group_names() :
+        for g in self.get_group_names() :
             rospy.loginfo(str("===============: " + g))
-        rospy.loginfo(str("============ Planning frame: " + self.robot.get_planning_frame() ))
+        rospy.loginfo(str("============ Planning frame: " + self.get_robot_planning_frame() ))
         rospy.loginfo(str("============================================================"))
-        for g in self.robot.get_group_names() :
+        for g in self.get_group_names() :
             self.print_group_info(g)
 
     def get_group_type(self, group_name) :
@@ -251,8 +244,8 @@ class MoveItInterface :
 
     def get_control_frame(self, group_name) :
         if self.has_group(group_name) :
-            if self.groups[group_name].has_end_effector_link() :
-                return self.groups[group_name].get_end_effector_link()
+            if self.srdf_model.has_end_effector(group_name) :
+                return self.srdf_model.get_end_effector_link(group_name)
             elif self.group_types[group_name] == "endeffector" :
                 if group_name in self.srdf_model.group_end_effectors :
                     return self.srdf_model.group_end_effectors[group_name].parent_link
@@ -262,9 +255,6 @@ class MoveItInterface :
                 return self.srdf_model.get_tip_link(group_name)
         else :
             return "world"
-
-    def get_planning_frame(self) :
-        return self.robot.get_planning_frame()
 
     def get_stored_group_state(self, group_name, group_state_name) :
         if group_state_name in self.srdf_model.get_group_state_list(group_name) :
@@ -331,17 +321,14 @@ class MoveItInterface :
 
 
     # publish path plan to the visualization topic (a MarkerArray you can view in RViz)
-    def publish_path_data(self, plan, group) :
+    def publish_path_data(self, jt, group) :
         if plan != None :
             # first clear out the last one cause RViz is terrible
             self.clear_published_path(group)
-            display_trajectory = moveit_msgs.msg.DisplayTrajectory()
-            display_trajectory.trajectory_start = self.robot.get_current_state()
-            display_trajectory.trajectory.append(plan)
-            self.trajectory_publishers[group].publish(display_trajectory)
+            
             # only do it if it is NOT an end-effector
             if self.group_types[group] != "endeffector" :
-                path_visualization_marker_array = self.joint_trajectory_to_marker_array(plan, group, self.display_modes[group])
+                path_visualization_marker_array = self.joint_trajectory_to_marker_array(jt, group, self.display_modes[group])
                 self.path_visualization.publish(path_visualization_marker_array)
 
 
@@ -355,154 +342,13 @@ class MoveItInterface :
             markers.markers.append(marker)
         self.path_visualization.publish(markers)
 
-
-    # computes a MoveIt! JointTrajectory to a single joint goal. 
-    def create_joint_plan_to_target(self, group_name, js) :
-
-        rospy.loginfo(str("MoveItInterface::create_joint_plan_to_target() == Robot Name: " + self.robot_name))
-        rospy.loginfo(str("MoveItInterface::create_joint_plan_to_target() ===== MoveIt! Group Name: " + group_name))
-        rospy.loginfo(str("MoveItInterface::create_joint_plan_to_target() ===== Generating Joint Plan "))
-
-        # set header nonsense
-        js.header.stamp = rospy.get_rostime()
-        js.header.frame_id = self.get_planning_frame()
-
-        # set the goal and compute the plan
-        self.groups[group_name].set_joint_value_target(js)
-        self.stored_plans[group_name] = self.groups[group_name].plan()
-
-        N = len(self.stored_plans[group_name].joint_trajectory.points)
-        rospy.logwarn(str("generated path of " + str(N) + " points"))
-        # check to make sure the plan has a non-0 amount of waypoints
-        self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
-
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
-
-        return self.plan_generated[group_name]
-
-    # computes a MoveIt! JointTrajectory to a single Cartesian goal. 
-    def create_plan_to_target(self, group_name, pt) :
-
-        rospy.loginfo(str("MoveItInterface::create_plan_to_target() == Robot Name: " + self.robot_name))
-        rospy.loginfo(str("MoveItInterface::create_plan_to_target() ===== MoveIt! Group Name: " + group_name))
-        rospy.loginfo(str("MoveItInterface::create_plan_to_target() ===== Generating Plan"))
-        
-        # transform the goal to the robot/group planning frame 
-        if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
-            self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
-            pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
-        pt.header.stamp = rospy.Time.now()
-        pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb MoveIt! thing)
-        
-        # set the goal and compute the plan
-        self.groups[group_name].set_pose_target(pt)
-        self.stored_plans[group_name] = self.groups[group_name].plan()
-        
-        # check to make sure the plan has a non-0 amount of waypoints
-        self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
-
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
-
-        return self.plan_generated[group_name]
-
-    # computes a MoveIt! JointTrajectory to a random Joint goal in the workspace. 
-    def create_random_target(self, group_name) :
-
-        rospy.loginfo(str("MoveItInterface::create_random_target() == Robot Name: " + self.robot_name))
-        rospy.loginfo(str("MoveItInterface::create_random_target() ===== MoveIt! Group Name: " + group_name))
-        rospy.loginfo(str("MoveItInterface::create_random_target() ===== Generating Random Joint Plan"))
-        
-        # compute a random, reachable goal
-        self.groups[group_name].set_random_target()
-        self.stored_plans[group_name] = self.groups[group_name].plan()
-
-        # check to make sure the plan has a non-0 amount of waypoints
-        self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].joint_trajectory.points)
-        
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
-
-        return self.plan_generated[group_name]
-
-
     def check_valid_plan(self, plan) :
         r = len(plan) > 0 
         if r :
-            rospy.loginfo(str("MoveItInterface::check_valid_plan() -- Plan Found, size: " + str(len(plan))))
+            rospy.loginfo(str("PathPlanner::check_valid_plan() -- Plan Found, size: " + str(len(plan))))
         else :
-            rospy.logwarn(str("MoveItInterface::check_valid_plan() -- No Plan Found"))
+            rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
         return r
-
-    # This will create a path plan from a list of waypoints.
-    # It will also transpose these waypoints to the robot's planning frame. 
-    def create_path_plan(self, group_name, frame_id, pt_list) :
-
-        rospy.loginfo(str("MoveItInterface::create_path_plan() -- Robot Name: " + self.robot_name))
-        rospy.loginfo(str("MoveItInterface::create_path_plan() ---- MoveIt! Group Name: " + group_name))
-        rospy.loginfo(str("MoveItInterface::create_path_plan() ---- Creating Path Plan"))
-
-        waypoints = []
-        # waypoints.append(self.groups[group_name].get_current_pose().pose)
-
-        rospy.logdebug("MoveItInterface::create_path_plan() -- transforming input waypoint list")
-        for p in pt_list :
-            pt = geometry_msgs.msg.PoseStamped()
-            pt.pose = p
-            rospy.logdebug(str("MoveItInterface::create_path_plan() -- INPUT FRAME: " + frame_id))
-            rospy.logdebug(str("MoveItInterface::create_path_plan() -- PLANNING FRAME: " + self.groups[group_name].get_planning_frame()))
-            pt.header.frame_id = frame_id
-            if pt.header.frame_id != self.groups[group_name].get_planning_frame() :
-                self.tf_listener.waitForTransform(pt.header.frame_id, self.groups[group_name].get_planning_frame(), rospy.Time(0), rospy.Duration(5.0))
-                pt = self.tf_listener.transformPose(self.groups[group_name].get_planning_frame(), pt)
-            pt.header.frame_id = self.groups[group_name].get_planning_frame()
-            waypoints.append(copy.deepcopy(pt.pose))
-                   
-        # if there is more then one waypoint, use the MoveIt! interface to create a Cartesian trajectory through each.
-        # this necessary as this is the only way to compute trajectories for multiple points.  FIXME
-        if len(waypoints) > 0 :
-
-            plan = moveit_msgs.msg.RobotTrajectory()
-            fraction = 0
-            try :
-                # this jump parameter often makes it fail---more investigation needed here.
-                # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
-                (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0)  
-            except :
-                rospy.logerr("MoveItInterface::create_path_plan() -- Generating Cartesian Path Plan Failed")
-            self.stored_plans[group_name] = plan
-            rospy.loginfo(str("MoveItInterface::create_path_plan() -- resulting plan of size: " + str(len(plan.joint_trajectory.points))))
-
-            # do a basic validity check.  This wont actuall catch all cases as compute_cartesian_path() will give partial trajectories in the direction of the goal
-            # if it is out of the workspace. This is annoying so FIXME
-            if len(plan.joint_trajectory.points) > 0 and fraction > 0 :
-                self.plan_generated[group_name] = True
-                self.stored_plans[group_name] = plan
-            else :
-                self.plan_generated[group_name] = False
-                
-        else :
-
-            # if there is just one waypoint, call the create_plan_to_target() to create a joint traj to get there
-            pt = geometry_msgs.msg.PoseStamped()
-            pt.header.frame_id = self.groups[group_name].get_planning_frame()
-            pt.header.stamp = rospy.get_rostime()
-            pt.pose = waypoints[0]
-
-            rospy.logwarn("MoveItInterface::create_path_plan() -- planning pose to: ")
-            print pt.pose
-            self.plan_generated[group_name] = self.create_plan_to_target(group_name,pt)
-
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
-
-        return self.plan_generated[group_name]
-
 
     # This is the main execution function for sending trajectories to the robot.
     # This will only return True if the plan has been previously (successfully) generated.
@@ -511,16 +357,16 @@ class MoveItInterface :
     # If we are using the gripper service to command end-effectors (rather then directly publishing JT msgs), it will do so accordingly here 
     def execute_plan(self, group_name, from_stored=False, wait=True) :
         r = False
-        if self.plan_generated[group_name] :
-            rospy.loginfo(str("MoveItInterface::execute_plan() -- executing plan for group: " + group_name))
+        if self.plan_generated[group_name] and self.stored_plans[group_name] :
+            rospy.loginfo(str("PathPlanner::execute_plan() -- executing plan for group: " + group_name))
             if self.group_types[group_name] != "endeffector" or not self.gripper_service:
                 if self.actionlib :
-                    rospy.logdebug("MoveItInterface::execute_plan() -- using actionlib")
-                    r = self.groups[group_name].go(wait)
+                    rospy.logdebug("PathPlanner::execute_plan() -- using actionlib")
+                    r = self.go(group_name, wait)
                 else :
-                    rospy.logdebug("MoveItInterface::execute_plan() -- publishing to topic")
+                    rospy.logdebug("PathPlanner::execute_plan() -- publishing to topic")
 
-                    jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name].joint_trajectory)
+                    jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])
                     
                     N = len(jt.goal.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
@@ -528,21 +374,22 @@ class MoveItInterface :
                     self.command_topics[group_name].publish(jt)
                     r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
             else :
-                r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name].joint_trajectory)
+                r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name])
         else :
-            rospy.logerr(str("MoveItInterface::execute_plan() -- no plan for group" + group_name + " yet generated."))
+            rospy.logerr(str("PathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
             r = False
-        rospy.logdebug(str("MoveItInterface::execute_plan() -- plan execution: " + str(r)))
+        rospy.logdebug(str("PathPlanner::execute_plan() -- plan execution: " + str(r)))
         return r
+
 
     # There is the option of publishing the JT topic directly to the actionlib goal topic, or to the "bridge" topic
     # that is necessary when commanding a robot using ROS groovy (the JT msg structure changed in hydro -- thanks osrf)  
     def translate_trajectory_msg(self, group_name, jt_in) :
         if group_name in self.bridge_topic_map : 
-            rospy.logdebug(str("MoveItInterface::translate_trajectory_msg() -- publishing to bridge topic: " + group_name))
+            rospy.logdebug(str("PathPlanner::translate_trajectory_msg() -- publishing to bridge topic: " + group_name))
             jt = self.translate_to_bridge_msg(jt_in)
         else :
-            rospy.logdebug("MoveItInterface::translate_trajectory_msg() -- publishing to actionlib goal topic")
+            rospy.logdebug("PathPlanner::translate_trajectory_msg() -- publishing to actionlib goal topic")
             jt = self.translate_to_actionlib_goal_msg(jt_in, group_name)
         return jt
 
@@ -580,41 +427,21 @@ class MoveItInterface :
     # to send a service call to any custom node that will interpret the JT as whatever is necessary
     def publish_to_gripper_service(self, group, traj) :
         try:
-            rospy.loginfo("MoveItInterface::publish_to_gripper_service() -- calling gripper service")
+            rospy.loginfo("PathPlanner::publish_to_gripper_service() -- calling gripper service")
             resp = self.gripper_service(traj, group, "end_effector_pose") # did i hardcode this? FIXME!! should be something like "Left Hand Close"
             return resp.result
         except rospy.ServiceException, e:
-            rospy.logerr("MoveItInterface::publish_to_gripper_service() -- gripper service call failed")
+            rospy.logerr("PathPlanner::publish_to_gripper_service() -- gripper service call failed")
             return False
 
-    # add collision object to MoveIt! planning scene
-    def add_collision_object(self, p, s, n) :
-        p.header.frame_id = self.robot.get_planning_frame()
-        self.scene.add_box(n, p, s)
-        m = visualization_msgs.msg.Marker()
-        m.header.frame_id = p.header.frame_id
-        m.type = m.CUBE
-        m.action = m.ADD
-        m.scale.x = s[0]
-        m.scale.y = s[1]
-        m.scale.z = s[2]
-        m.color.a = 0.8
-        m.color.r = 0
-        m.color.g = 1
-        m.color.b = 0
-        m.pose = p.pose
-        m.text = n
-        m.ns = n
-        self.obstacle_markers.markers.append(m)
-        self.obstacle_publisher.publish(self.obstacle_markers)
 
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
-    def joint_trajectory_to_marker_array(self, plan, group, display_mode) :
+    def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
-        joint_start = self.robot.get_current_state().joint_state
-        num_points = len(plan.joint_trajectory.points)
+        # joint_start = self.robot.get_current_state().joint_state
+        num_points = len(joint_trajectory.points)
         if num_points == 0 : return markers
         idx = 0
 
@@ -622,13 +449,13 @@ class MoveItInterface :
 
         if display_mode == "all_points" :
 
-            for point in plan.joint_trajectory.points[1:num_points:self.path_increment] :
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, plan.joint_trajectory.joint_names, point.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
+            for point in joint_trajectory.points[1:num_points:self.path_increment] :
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_planning_frame(group), idx, self.plan_color[3])
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
 
-                if self.groups[group].has_end_effector_link() and self.group_types[group] == "manipulator":
+                if self.srdf_model.has_end_effector(group) and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
                     if last_link != ee_root_frame :
@@ -638,20 +465,20 @@ class MoveItInterface :
                         ee_offset = toPose(trans, rot)
                         
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_planning_frame(group), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
         elif display_mode == "last_point" :
 
             if num_points > 0 :
-                points = plan.joint_trajectory.points[num_points-1]
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,plan.joint_trajectory.joint_names, points.positions, self.groups[group].get_planning_frame(), idx, self.plan_color[3])
+                points = joint_trajectory.points[num_points-1]
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_planning_frame(group), idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
 
-                if self.groups[group].has_end_effector_link() and self.group_types[group] == "manipulator":
+                if self.srdf_model.has_end_effector(group) and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
                     if last_link != ee_root_frame :
@@ -661,7 +488,7 @@ class MoveItInterface :
                         ee_offset = toPose(trans, rot)
 
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.groups[group].get_planning_frame(), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_planning_frame(group), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
@@ -673,16 +500,13 @@ class MoveItInterface :
 
     def get_joint_chain(self, first_link, last_link) :
         joints = []
-
         link = last_link
-
         while link != first_link :
             for j in self.urdf_model.joint_map.keys() :
                 if self.urdf_model.joint_map[j].child == link : 
                     joints.append(self.urdf_model.joint_map[j].name)
                     link = self.urdf_model.joint_map[j].parent
                     break
-
         joints.reverse()
         return joints
 
@@ -705,7 +529,6 @@ class MoveItInterface :
         for joint in full_names :
 
             marker = visualization_msgs.msg.Marker()
-            
             parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].parent]
             child_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].child]
             model_joint = self.urdf_model.joint_map[joint]
@@ -757,7 +580,8 @@ class MoveItInterface :
 
         return markers, T_acc, child_link.name
 
-    # this is where parse the MoveIt! config package for the robot and figure out what the controller names are 
+
+    # this is where parse the PathPlanner config package for the robot and figure out what the controller names are 
     def lookup_controller_name(self, group_name) :
 
         if not group_name in self.group_controllers.keys() :
@@ -767,18 +591,25 @@ class MoveItInterface :
                 rospy.logdebug("Controller yaml: " + controllers_file)
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
-                rospy.logerr("MoveItInterface::lookup_controller_name() -- Error loading controllers.yaml")
+                rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
 
-            joint_list = self.groups[group_name].get_active_joints()
+            joint_list = self.get_group_joints(group_name)
+            
+            jn = joint_list[0]
+            for j in joint_list:
+                if self.urdf_model.joint_map[j].type != "fixed" :
+                    jn = j
+                    break
+            print "-----------------------------------\n"
+            print "SEARCH JOINT: ", jn
             self.group_controllers[group_name] = ""
 
             for c in controller_config['controller_list'] :
-                if joint_list[0] in c['joints'] :
+                if jn in c['joints'] :
                     self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
 
-        rospy.loginfo(str("MoveItInterface::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
+        rospy.loginfo(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
-
 
     def lookup_bridge_topic_name(self, controller_name) :
         bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
@@ -789,53 +620,194 @@ class MoveItInterface :
             self.end_effector_display[k].stop_offset_update_thread()
 
 
-if __name__ == '__main__':
 
-    rospy.init_node('moveit_intefrace_test')
 
-    moveit_commander.roscpp_initialize(sys.argv)
+  
+        
 
-    try:
-        moveit_test = MoveItInterface("r2", "r2_moveit_config")
-        moveit_test.add_group("right_arm")
-        moveit_test.add_group("left_arm")
-        moveit_test.add_group("head", group_type="joint")
+    def create_plan_to_target(self, group_name, pt) :
 
-        q = (kdl.Rotation.RPY(-1.57,0,0)).GetQuaternion()
-        pt = geometry_msgs.msg.PoseStamped()
-        pt.header.frame_id = "world"
-        pt.header.seq = 0
+        rospy.loginfo(str("PathPlanner::create_plan_to_target() == Robot Name: " + self.robot_name))
+        rospy.loginfo(str("PathPlanner::create_plan_to_target() ===== PathPlanner Group Name: " + group_name))
+        rospy.loginfo(str("PathPlanner::create_plan_to_target() ===== Generating Plan"))
+        
+        # transform the goal to the robot/group planning frame 
+        if pt.header.frame_id != self.get_planning_frame(group_name) :
+            self.tf_listener.waitForTransform(pt.header.frame_id, self.get_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
+            pt = self.tf_listener.transformPose(self.get_planning_frame(group_name), pt)
         pt.header.stamp = rospy.Time.now()
-        pt.pose.position.x = -0.3
-        pt.pose.position.y = -0.5
-        pt.pose.position.z = 1.2
-        pt.pose.orientation.x = q[0]
-        pt.pose.orientation.y = q[1]
-        pt.pose.orientation.z = q[2]
-        pt.pose.orientation.w = q[3]
-        moveit_test.create_plan_to_target("left_arm", pt)
+        pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb PathPlanner thing)
 
-        q = (kdl.Rotation.RPY(1.57,0,-1.57)).GetQuaternion()
-        pt = geometry_msgs.msg.PoseStamped()
-        pt.header.frame_id = "world"
-        pt.header.seq = 0
-        pt.header.stamp = rospy.Time.now()
-        pt.pose.position.x = 0.3
-        pt.pose.position.y = -0.5
-        pt.pose.position.z = 1.2
-        pt.pose.orientation.x = q[0]
-        pt.pose.orientation.y = q[1]
-        pt.pose.orientation.z = q[2]
-        pt.pose.orientation.w = q[3]
-        moveit_test.create_plan_to_target("right_arm", pt)
+        # clear flag
+        self.plan_generated[group_name] = False
+        
+        # call the abstract method
+        self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt) 
+        
+        # check to make sure the plan has a non-0 amount of waypoints
+        if self.stored_plans[group_name] :
+            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+        
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
 
-        r1 = moveit_test.execute_plan("left_arm")
-        r2 = moveit_test.execute_plan("right_arm")
-        if not r1 : rospy.logerr("moveit_test(left_arm) -- couldn't execute plan")
-        if not r2 : rospy.logerr("moveit_test(right_arm) -- couldn't execute plan")
+        return self.plan_generated[group_name]
 
-        moveit_commander.roscpp_shutdown()
 
-    except rospy.ROSInterruptException:
-        pass
+    # computes a PathPlanner JointTrajectory to a single joint goal. 
+    def create_joint_plan_to_target(self, group_name, js) :
+
+        rospy.loginfo(str("PathPlanner::create_joint_plan_to_target() == Robot Name: " + self.robot_name))
+        rospy.loginfo(str("PathPlanner::create_joint_plan_to_target() ===== PathPlanner Group Name: " + group_name))
+        rospy.loginfo(str("PathPlanner::create_joint_plan_to_target() ===== Generating Joint Plan "))
+
+        # set header nonsense
+        js.header.stamp = rospy.get_rostime()
+        js.header.frame_id = self.get_robot_planning_frame()
+
+        # clear flag
+        self.plan_generated[group_name] = False
+        
+        # call the abstract method
+        self.stored_plans[group_name] = self.plan_to_joint_goal(group_name, js) 
+
+        # check to make sure the plan has a non-0 amount of waypoints
+        if self.stored_plans[group_name] :
+            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
+        return self.plan_generated[group_name]
+
+
+    # computes a PathPlanner JointTrajectory to a random Joint goal in the workspace. 
+    def create_random_target(self, group_name) :
+
+        rospy.loginfo(str("PathPlanner::create_random_target() == Robot Name: " + self.robot_name))
+        rospy.loginfo(str("PathPlanner::create_random_target() ===== PathPlanner Group Name: " + group_name))
+        rospy.loginfo(str("PathPlanner::create_random_target() ===== Generating Random Joint Plan"))
+        
+        # clear flag
+        self.plan_generated[group_name] = False
+        
+        # call the abstract method
+        self.stored_plans[group_name] = self.plan_to_random_goal(group_name) 
+
+        # check to make sure the plan has a non-0 amount of waypoints
+        if self.stored_plans[group_name] :
+            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
+        return self.plan_generated[group_name]
+
+    # This will create a path plan from a list of waypoints.
+    # It will also transpose these waypoints to the robot's planning frame. 
+    def create_path_plan(self, group_name, frame_id, pt_list) :
+
+        rospy.loginfo(str("PathPlanner::create_path_plan() -- Robot Name: " + self.robot_name))
+        rospy.loginfo(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
+        rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
+
+        waypoints = []
+
+        rospy.logdebug("PathPlanner::create_path_plan() -- transforming input waypoint list")
+        for p in pt_list :
+            pt = geometry_msgs.msg.PoseStamped()
+            pt.pose = p
+            rospy.logdebug(str("PathPlanner::create_path_plan() -- INPUT FRAME: " + frame_id))
+            rospy.logdebug(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_planning_frame(group_name)))
+            pt.header.frame_id = frame_id
+            if pt.header.frame_id != self.get_planning_frame(group_name) :
+                self.tf_listener.waitForTransform(pt.header.frame_id, self.get_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
+                pt = self.tf_listener.transformPose(self.get_planning_frame(group_name), pt)
+            pt.header.frame_id = self.get_planning_frame(group_name)
+            waypoints.append(copy.deepcopy(pt.pose))
+                   
+        # if there is more then one waypoint, use the PathPlanner interface to create a Cartesian trajectory through each.
+        # this necessary as this is the only way to compute trajectories for multiple points.  FIXME
+        if len(waypoints) > 0 :
+            rospy.logwarn("PathPlanner::create_path_plan() -- planning as Cartesian path")
+            self.stored_plans[group_name] = self.plan_cartesian_path(group_name, waypoints)                
+        else :
+            rospy.logwarn("PathPlanner::create_path_plan() -- planning as Joint path")
+            # if there is just one waypoint, call the create_plan_to_target() to create a joint traj to get there
+            pt = geometry_msgs.msg.PoseStamped()
+            pt.header.frame_id = self.get_planning_frame(group_name)
+            pt.header.stamp = rospy.get_rostime()
+            pt.pose = waypoints[0]
+            self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt)
+
+        # check to make sure the plan has a non-0 amount of waypoints
+        if self.stored_plans[group_name] :
+            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+
+        # if the plan was found publish it to be displayed in RViz as a MarkerArray
+        if self.plan_generated[group_name] :
+            self.publish_path_data(self.stored_plans[group_name], group_name)
+
+        return self.plan_generated[group_name]
+
+
+    # virtual methods
+    def add_obstacle(self, p, s, n) :
+        rospy.logwarn("PathPlanner::add_obstacle() -- collision free path planning not supported")
+        raise NotImplementedError
+
+    def get_planning_frame(self, group_name) :
+        rospy.logerror("PathPlanner::get_planning_frame() -- not implemented")
+        raise NotImplementedError
+
+    def get_robot_planning_frame(self) :
+        rospy.logerror("PathPlanner::get_robot_planning_frame() -- not implemented")
+        raise NotImplementedError
+
+    def get_group_joints(self, group_name) :
+        rospy.logerror("PathPlanner::get_group_joints() -- not implemented")
+        raise NotImplementedError
+
+    def get_goal_tolerance(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def get_goal_position_tolerance(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_position_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def get_goal_joint_tolerance(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_joint_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def get_goal_orientation_tolerance(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_orientation_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def plan_to_cartesian_goal(self, group_name, pt) :
+        rospy.logerror("PathPlanner::plan_to_cartesian_point() -- not implemented")
+        raise NotImplementedError
+
+    def plan_to_joint_goal(self, group_name, js) :
+        rospy.logerror("PathPlanner::plan_to_joint_goal() -- not implemented")
+        raise NotImplementedError
+
+    def plan_to_random_goal(self, group_name) :
+        rospy.logerror("PathPlanner::plan_to_random_goal() -- not implemented")
+        raise NotImplementedError
+    
+    def plan_cartesian_path(self, group_name, frame_id, pt_list) :
+        rospy.logerror("PathPlanner::create_path_plan() -- not implemented")
+        raise NotImplementedError
+
+    def go(self, group_name, wait) :
+        rospy.logerror("PathPlanner::go() -- not implemented")
+        raise NotImplementedError
+
+    def clear_goal_targets(self, group_name) :
+        rospy.logerror("PathPlanner::clear_goal_targets() -- not implemented")
+        raise NotImplementedError
 

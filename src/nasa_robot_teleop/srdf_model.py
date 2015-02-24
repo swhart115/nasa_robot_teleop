@@ -163,6 +163,18 @@ class SRDFModel :
     def get_end_effector_parent_group(self, ee_group) :
         return self.group_end_effectors[ee_group].parent_group
 
+    def has_end_effector(self, group) :
+        for ee in self.group_end_effectors.keys() : 
+            if self.group_end_effectors[ee].parent_group == group :
+                return True
+        return False
+
+    def get_end_effector_link(self, group) :
+        for ee in self.group_end_effectors.keys() : 
+            if self.group_end_effectors[ee].parent_group == group :
+                return self.group_end_effectors[ee].parent_link
+        return ""
+
     def print_group_state(self, group, name) :
         if group in self.group_states :
             if name in self.group_states[group] :
