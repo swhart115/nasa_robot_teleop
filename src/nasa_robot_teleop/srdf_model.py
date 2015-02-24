@@ -126,6 +126,8 @@ class SRDFModel :
         return True
 
     def has_tip_link(self, group) :
+        print "HAS TIP LINK[" + group + "]: ", group in self.tip_links 
+        print self.tip_links[group]
         return group in self.tip_links and self.tip_links[group] != None
 
     def get_tip_link(self, group) :
