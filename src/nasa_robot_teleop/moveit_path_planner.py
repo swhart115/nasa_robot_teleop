@@ -46,18 +46,16 @@ class MoveItPathPlanner(PathPlanner) :
     ##############################
 
     def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
-        r = super(MoveItPathPlanner, self).add_planning_group(group_name,group_type,joint_tolerance,position_tolerance,orientation_tolerance)       
         rospy.loginfo(str("MoveItPathPlanner::add_planning_group() -- " + group_name))     
-        if r :
-            try :
-                self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
-                self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
-                self.groups[group_name].set_goal_position_tolerance(position_tolerance)
-                self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
-                r = True
-            except :
-                rospy.logerr(str("MoveItInterface()::add_planning_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander for: " + group_name))
-                r = False
+        try :
+            self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
+            self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
+            self.groups[group_name].set_goal_position_tolerance(position_tolerance)
+            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
+            r = super(MoveItPathPlanner, self).add_planning_group(group_name,group_type,joint_tolerance,position_tolerance,orientation_tolerance)       
+        except :
+            rospy.logerr(str("MoveItInterface()::add_planning_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander for: " + group_name))
+            r = False
         return r
     
 
@@ -107,20 +105,20 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].get_planning_frame()
 
-    # def has_end_effector_link(self, group_name) :
-    #     print self.groups.keys()
-    #     if not group_name in self.groups.keys() :
-    #         rospy.logerr(str("MoveItPathPlanner::has_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
-    #         return False
-    #     else :
-    #         return self.groups[group_name].has_end_effector_link()
+    def has_end_effector_link(self, group_name) :
+        # print self.groups.keys()
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::has_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
+            return False
+        else :
+            return self.groups[group_name].has_end_effector_link()
 
-    # def get_end_effector_link(self, group_name) :
-    #     if not group_name in self.groups.keys() :
-    #         rospy.logerr(str("MoveItPathPlanner::get_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
-    #         return ""
-    #     else :
-    #         return self.groups[group_name].get_end_effector_link()
+    def get_end_effector_link(self, group_name) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::get_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
+            return ""
+        else :
+            return self.groups[group_name].get_end_effector_link()
 
     def clear_goal_targets(self, group_name) :
         try :

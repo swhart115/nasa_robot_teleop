@@ -146,10 +146,9 @@ class PathPlanner(object):
                     id_found = True
 
             # check to see if the group has an associated end effector, and add it if so
-            print "has tip: ", self.srdf_model.has_tip_link(group_name)
-            if self.srdf_model.has_end_effector(group_name) :
-                self.control_frames[group_name] = self.srdf_model.get_end_effector_link(group_name)
-                ee_link = self.urdf_model.link_map[self.srdf_model.get_end_effector_link(group_name)]
+            if self.has_end_effector_link(group_name) :
+                self.control_frames[group_name] = self.get_end_effector_link(group_name)
+                ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
                 try :
                     # self.control_meshes[group_name] = ee_link.visual.geometry.filename
                     self.control_meshes[group_name] = self.get_child_mesh(ee_link)
@@ -161,9 +160,7 @@ class PathPlanner(object):
                         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=0.05, position_tolerance=0.005, orientation_tolerance=0.02)
             elif self.srdf_model.has_tip_link(group_name) :
-                print "adding group: ", group_name
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
-                print "con fr:", self.control_frames[group_name]
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
             elif self.group_types[group_name] == "endeffector" :
@@ -244,8 +241,8 @@ class PathPlanner(object):
 
     def get_control_frame(self, group_name) :
         if self.has_group(group_name) :
-            if self.srdf_model.has_end_effector(group_name) :
-                return self.srdf_model.get_end_effector_link(group_name)
+            if self.has_end_effector_link(group_name) :
+                return self.get_end_effector_link(group_name)
             elif self.group_types[group_name] == "endeffector" :
                 if group_name in self.srdf_model.group_end_effectors :
                     return self.srdf_model.group_end_effectors[group_name].parent_link
@@ -322,7 +319,7 @@ class PathPlanner(object):
 
     # publish path plan to the visualization topic (a MarkerArray you can view in RViz)
     def publish_path_data(self, jt, group) :
-        if plan != None :
+        if jt != None :
             # first clear out the last one cause RViz is terrible
             self.clear_published_path(group)
             
@@ -455,7 +452,7 @@ class PathPlanner(object):
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
 
-                if self.srdf_model.has_end_effector(group) and self.group_types[group] == "manipulator":
+                if self.has_end_effector_link(group) and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
                     if last_link != ee_root_frame :
@@ -478,7 +475,7 @@ class PathPlanner(object):
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
 
-                if self.srdf_model.has_end_effector(group) and self.group_types[group] == "manipulator":
+                if self.has_end_effector_link(group) and self.group_types[group] == "manipulator":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
                     if last_link != ee_root_frame :
@@ -600,15 +597,13 @@ class PathPlanner(object):
                 if self.urdf_model.joint_map[j].type != "fixed" :
                     jn = j
                     break
-            print "-----------------------------------\n"
-            print "SEARCH JOINT: ", jn
             self.group_controllers[group_name] = ""
 
             for c in controller_config['controller_list'] :
                 if jn in c['joints'] :
                     self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
 
-        rospy.loginfo(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
+        rospy.logdebug(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
 
     def lookup_bridge_topic_name(self, controller_name) :
@@ -785,6 +780,14 @@ class PathPlanner(object):
 
     def get_goal_orientation_tolerance(self, group_name) :
         rospy.logerror("PathPlanner::get_goal_orientation_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def has_end_effector_link(self, group_name) :
+        rospy.logerror("PathPlanner::has_end_effector_link() -- not implemented")
+        raise NotImplementedError
+
+    def get_end_effector_link(self, group_name) :
+        rospy.logerror("PathPlanner::get_end_effector_link() -- not implemented")
         raise NotImplementedError
 
     def plan_to_cartesian_goal(self, group_name, pt) :

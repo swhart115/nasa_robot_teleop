@@ -145,10 +145,8 @@ class RobotTeleop:
 
             elif  self.path_planner.get_group_type(group) == "joint" :
 
-                print "GROUP: ", group
                 self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
                 control_frame = self.path_planner.get_control_frame(group)
-                print "CF: ", control_frame
                 jg_links = urdf.get_all_child_links(control_frame)
             
                 idx = 0
