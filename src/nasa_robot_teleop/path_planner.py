@@ -117,6 +117,10 @@ class PathPlanner(object):
 
     # problaby can clean this up, it's messy FIXME
     def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
+        
+        # virtual function
+        self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance)
+
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
         try :
             self.group_types[group_name] = group_type
@@ -158,7 +162,7 @@ class PathPlanner(object):
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
                         self.end_effector_map[group_name] = ee
                         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=0.05, position_tolerance=0.005, orientation_tolerance=0.02)
+                            joint_tolerance=joint_tolerance, position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance)
             elif self.srdf_model.has_tip_link(group_name) :
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
@@ -206,7 +210,7 @@ class PathPlanner(object):
            
             if group_name in self.get_group_names() :
                 rospy.loginfo(str("============ Type: " + str(self.group_types[group_name])))
-                rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_planning_frame(group_name))))
+                rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_group_planning_frame(group_name))))
                 # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
                 # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
                 # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
@@ -447,7 +451,7 @@ class PathPlanner(object):
         if display_mode == "all_points" :
 
             for point in joint_trajectory.points[1:num_points:self.path_increment] :
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_planning_frame(group), idx, self.plan_color[3])
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
                 for m in waypoint_markers: markers.markers.append(m)
@@ -462,7 +466,7 @@ class PathPlanner(object):
                         ee_offset = toPose(trans, rot)
                         
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_planning_frame(group), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
@@ -470,7 +474,7 @@ class PathPlanner(object):
 
             if num_points > 0 :
                 points = joint_trajectory.points[num_points-1]
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_planning_frame(group), idx, self.plan_color[3])
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
                 for m in waypoint_markers: markers.markers.append(m)
                 idx += self.group_id_offset[group]
                 idx += len(waypoint_markers)
@@ -485,7 +489,7 @@ class PathPlanner(object):
                         ee_offset = toPose(trans, rot)
 
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_planning_frame(group), idx=idx)
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
 
@@ -613,11 +617,6 @@ class PathPlanner(object):
     def tear_down(self) :
         for k in self.end_effector_display.keys() :
             self.end_effector_display[k].stop_offset_update_thread()
-
-
-
-
-  
         
 
     def create_plan_to_target(self, group_name, pt) :
@@ -627,9 +626,9 @@ class PathPlanner(object):
         rospy.loginfo(str("PathPlanner::create_plan_to_target() ===== Generating Plan"))
         
         # transform the goal to the robot/group planning frame 
-        if pt.header.frame_id != self.get_planning_frame(group_name) :
-            self.tf_listener.waitForTransform(pt.header.frame_id, self.get_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
-            pt = self.tf_listener.transformPose(self.get_planning_frame(group_name), pt)
+        if pt.header.frame_id != self.get_group_planning_frame(group_name) :
+            self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
+            pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), pt)
         pt.header.stamp = rospy.Time.now()
         pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb PathPlanner thing)
 
@@ -716,12 +715,12 @@ class PathPlanner(object):
             pt = geometry_msgs.msg.PoseStamped()
             pt.pose = p
             rospy.logdebug(str("PathPlanner::create_path_plan() -- INPUT FRAME: " + frame_id))
-            rospy.logdebug(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_planning_frame(group_name)))
+            rospy.logdebug(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_group_planning_frame(group_name)))
             pt.header.frame_id = frame_id
-            if pt.header.frame_id != self.get_planning_frame(group_name) :
-                self.tf_listener.waitForTransform(pt.header.frame_id, self.get_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
-                pt = self.tf_listener.transformPose(self.get_planning_frame(group_name), pt)
-            pt.header.frame_id = self.get_planning_frame(group_name)
+            if pt.header.frame_id != self.get_group_planning_frame(group_name) :
+                self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
+                pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), pt)
+            pt.header.frame_id = self.get_group_planning_frame(group_name)
             waypoints.append(copy.deepcopy(pt.pose))
                    
         # if there is more then one waypoint, use the PathPlanner interface to create a Cartesian trajectory through each.
@@ -733,7 +732,7 @@ class PathPlanner(object):
             rospy.logwarn("PathPlanner::create_path_plan() -- planning as Joint path")
             # if there is just one waypoint, call the create_plan_to_target() to create a joint traj to get there
             pt = geometry_msgs.msg.PoseStamped()
-            pt.header.frame_id = self.get_planning_frame(group_name)
+            pt.header.frame_id = self.get_group_planning_frame(group_name)
             pt.header.stamp = rospy.get_rostime()
             pt.pose = waypoints[0]
             self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt)
@@ -750,12 +749,16 @@ class PathPlanner(object):
 
 
     # virtual methods
+    def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+        rospy.logwarn("PathPlanner::setup_group() -- not implemented")
+        raise NotImplementedError
+
     def add_obstacle(self, p, s, n) :
         rospy.logwarn("PathPlanner::add_obstacle() -- collision free path planning not supported")
         raise NotImplementedError
 
-    def get_planning_frame(self, group_name) :
-        rospy.logerror("PathPlanner::get_planning_frame() -- not implemented")
+    def get_group_planning_frame(self, group_name) :
+        rospy.logerror("PathPlanner::get_group_planning_frame() -- not implemented")
         raise NotImplementedError
 
     def get_robot_planning_frame(self) :
@@ -780,6 +783,18 @@ class PathPlanner(object):
 
     def get_goal_orientation_tolerance(self, group_name) :
         rospy.logerror("PathPlanner::get_goal_orientation_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def set_goal_position_tolerance(self, group_name, tol) :
+        rospy.logerror("PathPlanner::set_goal_position_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def set_goal_joint_tolerance(self, group_name, tol) :
+        rospy.logerror("PathPlanner::set_goal_joint_tolerance() -- not implemented")
+        raise NotImplementedError
+
+    def set_goal_orientation_tolerance(self, group_name, tol) :
+        rospy.logerror("PathPlanner::set_goal_orientation_tolerance() -- not implemented")
         raise NotImplementedError
 
     def has_end_effector_link(self, group_name) :

@@ -40,24 +40,22 @@ class MoveItPathPlanner(PathPlanner) :
         
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\' finished"))
         
-
     ##############################
     ####### SETUP METHODS ########   
     ##############################
 
-    def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
-        rospy.loginfo(str("MoveItPathPlanner::add_planning_group() -- " + group_name))     
+    def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+        r = True
+        rospy.loginfo(str("MoveItPathPlanner::setup_group() -- " + group_name))     
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
             self.groups[group_name].set_goal_position_tolerance(position_tolerance)
             self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
-            r = super(MoveItPathPlanner, self).add_planning_group(group_name,group_type,joint_tolerance,position_tolerance,orientation_tolerance)       
         except :
-            rospy.logerr(str("MoveItInterface()::add_planning_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander for: " + group_name))
+            rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
-        return r
-    
+        return r 
 
     #################################
     ####### OBSTACLE METHODS ########   
@@ -98,9 +96,9 @@ class MoveItPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItPathPlanner::get_robot_planning_frame() -- no robot set yet"))
             return None
 
-    def get_planning_frame(self, group_name) :
+    def get_group_planning_frame(self, group_name) :
         if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_planning_frame() -- group name \'" + str(group_name) + "\' not found"))
+            rospy.logerr(str("MoveItPathPlanner::get_group_planning_frame() -- group name \'" + str(group_name) + "\' not found"))
             return ""
         else :
             return self.groups[group_name].get_planning_frame()
@@ -161,6 +159,24 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].get_goal_orientation_tolerance()
     
+    def set_goal_position_tolerance(self, group_name, tol) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::set_goal_position_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+        else :
+            self.groups[group_name].set_goal_position_tolerance(tol)
+
+    def set_goal_joint_tolerance(self, group_name, tol) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::set_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+        else :
+            self.groups[group_name].set_goal_joint_tolerance(tol)
+
+    def set_goal_orientation_tolerance(self, group_name, tol) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::set_goal_orientation_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+        else :
+            self.groups[group_name].set_goal_orientation_tolerance(tol)
+
 
     ###################################
     ######## EXECUTION METHODS ########
