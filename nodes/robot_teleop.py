@@ -281,7 +281,7 @@ class RobotTeleop:
                     r = self.path_planner.execute_plan(feedback.marker_name)
                     if not r : rospy.logerr(str("RobotTeleop::process_feedback(pose) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
-                    self.path_planner.clear_goal_targets(feedback.marker_name)
+                    self.path_planner.clear_goal_target(feedback.marker_name)
                     self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
                 if self.path_planner.get_group_type(feedback.marker_name) == "manipulator" :
                     rospy.sleep(3)
@@ -304,7 +304,7 @@ class RobotTeleop:
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
-                    self.path_planner.clear_goal_targets(feedback.marker_name)
+                    self.path_planner.clear_goal_target(feedback.marker_name)
                     self.path_planner.create_plan_to_target(feedback.marker_name, pt)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:

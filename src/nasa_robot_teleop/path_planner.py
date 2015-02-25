@@ -747,8 +747,11 @@ class PathPlanner(object):
 
         return self.plan_generated[group_name]
 
+    ############################
+    ##### virtual methods ######
+    ############################
 
-    # virtual methods
+    ### setup methods
     def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
         rospy.logwarn("PathPlanner::setup_group() -- not implemented")
         raise NotImplementedError
@@ -769,6 +772,15 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::get_group_joints() -- not implemented")
         raise NotImplementedError
 
+    def has_end_effector_link(self, group_name) :
+        rospy.logerror("PathPlanner::has_end_effector_link() -- not implemented")
+        raise NotImplementedError
+
+    def get_end_effector_link(self, group_name) :
+        rospy.logerror("PathPlanner::get_end_effector_link() -- not implemented")
+        raise NotImplementedError
+
+
     def get_goal_tolerance(self, group_name) :
         rospy.logerror("PathPlanner::get_goal_tolerance() -- not implemented")
         raise NotImplementedError
@@ -785,6 +797,10 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::get_goal_orientation_tolerance() -- not implemented")
         raise NotImplementedError
 
+    def set_goal_tolerance(self, group_name) :
+        rospy.logerror("PathPlanner::set_goal_tolerance() -- not implemented")
+        raise NotImplementedError
+
     def set_goal_position_tolerance(self, group_name, tol) :
         rospy.logerror("PathPlanner::set_goal_position_tolerance() -- not implemented")
         raise NotImplementedError
@@ -797,14 +813,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::set_goal_orientation_tolerance() -- not implemented")
         raise NotImplementedError
 
-    def has_end_effector_link(self, group_name) :
-        rospy.logerror("PathPlanner::has_end_effector_link() -- not implemented")
-        raise NotImplementedError
 
-    def get_end_effector_link(self, group_name) :
-        rospy.logerror("PathPlanner::get_end_effector_link() -- not implemented")
-        raise NotImplementedError
-
+    ### planing and execution methods
     def plan_to_cartesian_goal(self, group_name, pt) :
         rospy.logerror("PathPlanner::plan_to_cartesian_point() -- not implemented")
         raise NotImplementedError
@@ -825,7 +835,33 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::go() -- not implemented")
         raise NotImplementedError
 
-    def clear_goal_targets(self, group_name) :
-        rospy.logerror("PathPlanner::clear_goal_targets() -- not implemented")
+    def clear_goal_target(self, group_name) :
+        rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
         raise NotImplementedError
 
+
+
+    ### multi group functions
+    def plan_to_cartesian_goals(self, group_names, pts) :
+        rospy.logerror("PathPlanner::plan_to_cartesian_points() -- not implemented")
+        raise NotImplementedError
+
+    def plan_to_joint_goals(self, group_names, jss) :
+        rospy.logerror("PathPlanner::plan_to_joint_goals() -- not implemented")
+        raise NotImplementedError
+
+    def plan_to_random_goals(self, group_names) :
+        rospy.logerror("PathPlanner::plan_to_random_goals() -- not implemented")
+        raise NotImplementedError
+    
+    def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
+        rospy.logerror("PathPlanner::create_path_plans() -- not implemented")
+        raise NotImplementedError
+
+    def multigroup_go(self, group_names, wait) :
+        rospy.logerror("PathPlanner::multigroup_go() -- not implemented")
+        raise NotImplementedError
+
+    def clear_goal_targets(self, group_names) :
+        rospy.logerror("PathPlanner::clear_goal_targets() -- not implemented")
+        raise NotImplementedError

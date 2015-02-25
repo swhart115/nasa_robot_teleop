@@ -118,11 +118,11 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].get_end_effector_link()
 
-    def clear_goal_targets(self, group_name) :
+    def clear_goal_target(self, group_name) :
         try :
             self.groups[group_name].clear_pose_targets()
         except :
-            rospy.logwarn(str("MoveItPathPlanner::clear_goal_targets(" + group_name + ") -- failed"))
+            rospy.logwarn(str("MoveItPathPlanner::clear_goal_target(" + group_name + ") -- failed"))
 
     def get_group_joints(self, group_name) :
         if self.robot :
@@ -159,6 +159,12 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].get_goal_orientation_tolerance()
     
+    def set_goal_tolerance(self, group_name, tol) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::set_goal_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+        else :
+            self.groups[group_name].set_goal_tolerance(tol)
+
     def set_goal_position_tolerance(self, group_name, tol) :
         if not group_name in self.groups.keys() :
             rospy.logerr(str("MoveItPathPlanner::set_goal_position_tolerance() -- group name \'" + str(group_name) + "\' not found"))
@@ -188,6 +194,12 @@ class MoveItPathPlanner(PathPlanner) :
             return False
         else :
             return self.groups[group_name].go(wait)
+
+    def multigroup_go(self, group_names, wait) :
+        r = []
+        for g in group_names:
+            r.append(self.go(g,wait))
+        return r
 
 
     ##################################
@@ -238,3 +250,43 @@ class MoveItPathPlanner(PathPlanner) :
             return None
 
 
+    def plan_to_cartesian_goals(self, group_names, pts) :
+        r = []
+        if not len(group_names) == len(pts) :
+            rospy.logerr("MoveItPathPlanner::plan_to_cartesian_goals() -- input arg size mismatch")
+            r.append(False)
+        else :
+            for i in len(group_names) :
+                r.append(self.plan_to_cartesian_goal(group_names[i], pts[i]))
+        return r
+
+    def plan_to_joint_goals(self, group_names, jss) :
+        r = []
+        if not len(group_names) == len(jss) :
+            rospy.logerr("MoveItPathPlanner::plan_to_joint_goals() -- input arg size mismatch")
+            r.append(False)
+        else :
+            for i in len(group_names) :
+                r.append(self.plan_to_joint_goal(group_names[i], jss[i]))
+        return r
+        
+    def plan_to_random_goals(self, group_names) :
+        r = []
+        for i in len(group_names) :
+            r.append(self.plan_to_random_goal(group_names[i]))
+        return r
+        
+    def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
+        r = []
+        if not len(group_names) == len(pt_lists) == len(frame_ids):
+            rospy.logerr("MoveItPathPlanner::plan_cartesian_paths() -- input arg size mismatch")
+            r.append(False)
+        else :
+            for i in len(group_names) :
+                r.append(self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i]))
+        return r
+                
+    def clear_goal_targets(self, group_names) :
+        for g in group_names :
+            self.clear_goal_target(g)
+        
