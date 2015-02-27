@@ -1,14 +1,5 @@
-# joint name/id maps
-JointNameMap[] joint_map
-
-# group names
-string[] group_names
-
-# group control frames
-string[] control_frames
-
-# joint masks
-JointMask[] joint_masks
+# group configs
+PlanGroupConfiguration[] group_configurations
 
 ---
 

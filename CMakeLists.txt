@@ -44,6 +44,7 @@ catkin_python_setup()
 add_message_files(
   FILES
   PlanRequestSpecification.msg
+  PlanGroupConfiguration.msg
   JointNameMap.msg
   JointMask.msg
 )
