@@ -1,0 +1,26 @@
+# the specifications for each group's plan request
+PlanRequestSpecification[] group_plan_specs
+
+#if true, dense_reach will move down the path even if it can't solve the whole path
+bool move_as_far_as_possible 
+
+# only probe
+bool only_probe
+
+#if left or right poses are empty, fill it with fixed offsets from the filled one
+bool maintain_hand_pose_offsets 
+
+# should these be per group?
+bool execute_on_plan
+bool execute_previous_plan
+
+# can request not to get back the trajectory data
+bool return_trajectories
+
+----
+
+# return status
+bool status
+
+# per group trajectories
+JointTrajectory[] result

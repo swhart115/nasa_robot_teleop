@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import argparse
 
 import rospy
 import roslib; roslib.load_manifest("nasa_robot_teleop")
@@ -8,7 +7,10 @@ import math
 import copy
 import threading
 import tf
+import argparse
+import PyKDL as kdl
 
+# ros messages
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
@@ -19,15 +21,16 @@ from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
 
-import PyKDL as kdl
-
-from nasa_robot_teleop.path_planner import *
-from nasa_robot_teleop.moveit_path_planner import *
-
+# heler files
 from nasa_robot_teleop.marker_helper import *
 from nasa_robot_teleop.kdl_posemath import *
 from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
+
+# path planner instances
+from nasa_robot_teleop.path_planner import *
+from nasa_robot_teleop.moveit_path_planner import *
+from nasa_robot_teleop.atlas_path_planner import *
 
 class RobotTeleop:
 
@@ -304,7 +307,7 @@ class RobotTeleop:
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
-                    self.path_planner.clear_goal_target(feedback.marker_name)
+                    self.path_planner.clear_goal_target (feedback.marker_name)
                     self.path_planner.create_plan_to_target(feedback.marker_name, pt)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:

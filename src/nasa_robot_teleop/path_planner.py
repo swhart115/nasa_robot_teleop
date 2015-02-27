@@ -19,8 +19,6 @@ import trajectory_msgs.msg
 import control_msgs.msg
 import actionlib_msgs.msg
 
-# import controller_manager_msgs.srv
-
 from nasa_robot_teleop.srv import *
 
 from srdf_model import SRDFModel
