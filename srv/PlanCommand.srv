@@ -23,4 +23,4 @@ bool return_trajectories
 bool status
 
 # per group trajectories
-JointTrajectory[] result
+trajectory_msgs/JointTrajectory[] result
