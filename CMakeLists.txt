@@ -54,6 +54,7 @@ add_service_files(
   EndEffectorCommand.srv
   PlanCommand.srv
   ConfigurePlanningService.srv
+  GetPlanningServiceConfiguration.srv
 )
 
 ## Generate actions in the 'action' folder

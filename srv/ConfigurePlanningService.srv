@@ -9,3 +9,8 @@ string[] control_frames
 
 # joint masks
 JointMask[] joint_masks
+
+---
+
+# return status
+bool status
