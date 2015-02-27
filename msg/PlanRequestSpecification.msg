@@ -1,23 +1,23 @@
 # a low-dimensional ID to indicate which group
-Int8 group_id
+int8 group_id
 
 # a higher-dimensional ID to indicate which group
-String group_name
+string group_name
 
 # mask on which joints not to control in the plan
 JointMask joint_mask
 
 # the control frame to plan (usually end-effector or tool-frame, but not always)
-String control_frame
+string control_frame
 
 # a list of waypoints for the controlled frame
-PoseStamped[] waypoints
+geometry_msgs/PoseStamped[] waypoints
 
 # duration of plan
 float32 duration
 
 # the number of waypoints to visualize in RViz (0 will show all, 1 will show just the last/goal point, any other number will evenly distribute between start and goal)
-Int16 num_visualizaton_points
+int16 num_visualizaton_points
 
 # tolerance mode
 int8 angle_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
