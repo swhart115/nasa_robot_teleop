@@ -26,6 +26,7 @@ from nasa_robot_teleop.marker_helper import *
 from nasa_robot_teleop.kdl_posemath import *
 from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
+from nasa_robot_teleop.tolerances import *
 
 # path planner instances
 from nasa_robot_teleop.path_planner import *
@@ -52,6 +53,8 @@ class RobotTeleop:
         self.pose_store = {}
         self.auto_execute = {}
         self.end_effector_link_data = {}
+        self.position_tolerance_modes = {}
+        self.orientation_tolerance_modes = {}
 
         self.gripper_service = None
 
@@ -63,10 +66,10 @@ class RobotTeleop:
         if config_package=="" :
             config_package =  str(self.robot_name + "_moveit_config")
 
-        # self.path_planner = MoveItInterface(self.robot_name,config_package)
-        self.path_planner = MoveItPathPlanner(self.robot_name, config_package)
+        # self.path_planner = MoveItPathPlanner(self.robot_name,config_package)
+        self.path_planner = AtlasPathPlanner(self.robot_name, config_package)
         self.root_frame = self.path_planner.get_robot_planning_frame()
-
+        
         # add user specified groups
         for n in self.manipulator_group_names :
             self.path_planner.add_planning_group(n, group_type="manipulator")
@@ -87,6 +90,8 @@ class RobotTeleop:
         # set up menu info
         self.menu_options = []
         self.menu_options.append(("Stored Poses", False))
+        self.menu_options.append(("Position Tolerance", False))
+        self.menu_options.append(("Angle Tolerance", False))
         self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Execute", False))
         self.menu_options.append(("Execute On Move", True))
@@ -99,6 +104,11 @@ class RobotTeleop:
             for state_name in self.path_planner.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
 
+        # get tolerance modes and append it to each group (probably will all be the same)
+        for group in self.group_names :
+            self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
+            self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
+        
         # start update threads for manipulators
         for n in self.manipulator_group_names :
             self.start_pose_update_thread(n)
@@ -218,7 +228,7 @@ class RobotTeleop:
                 self.auto_execute[group] = True
 
             # Set up stored pose sub menu
-            self.setup_stored_pose_menu(group)
+            self.setup_sub_menus(group)
 
             if self.path_planner.get_group_type(group) == "endeffector" :
                 self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Move")], MenuHandler.CHECKED )
@@ -240,16 +250,25 @@ class RobotTeleop:
         self.gripper_service = None
         self.path_planner.clear_gripper_service()
 
-    def setup_stored_pose_menu(self, group) :
+    def setup_sub_menus(self, group) :
         for m,c in self.menu_options :
             if m == "Stored Poses" :
                 sub_menu_handle = self.marker_menus[group].insert(m)
                 for p in self.path_planner.get_stored_state_list(group) :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
+            elif m == "Position Tolerance" :
+                sub_menu_handle = self.marker_menus[group].insert(m)
+                for p in self.position_tolerance_modes[group] :
+                    self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.position_tolerance_callback)
+                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+            elif m == "Angle Tolerance" :
+                sub_menu_handle = self.marker_menus[group].insert(m)
+                for p in self.orientation_tolerance_modes[group] :
+                    self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.orientation_tolerance_callback)   
+                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )         
             else :
                 self.group_menu_handles[(group,m)] = self.marker_menus[group].insert( m, callback=self.process_feedback )
                 if c : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m)], MenuHandler.UNCHECKED )
-
 
     def start_pose_update_thread(self, group) :
         self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
@@ -275,6 +294,12 @@ class RobotTeleop:
 
     def joint_state_callback(self, data) :
         self.joint_data = data
+
+    def position_tolerance_callback(self,feedback) :
+        pass
+
+    def orientation_tolerance_callback(self,feedback) :
+        pass
 
     def stored_pose_callback(self, feedback) :
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :

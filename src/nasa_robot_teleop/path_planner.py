@@ -27,6 +27,7 @@ import urdf_parser_py as urdf
 from urdf_helper import *
 import end_effector_helper as end_effector
 
+from tolerances import *
 
 class PathPlanner(object):
 
@@ -59,8 +60,12 @@ class PathPlanner(object):
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
 
+        self.tolerances = Tolerance(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
+
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
+        
+        rospy.logwarn("STARTING TF LISTENER") 
         self.tf_listener = tf.TransformListener()
   
         if not self.create_models(config_package) :
@@ -114,7 +119,7 @@ class PathPlanner(object):
             return False
 
     # problaby can clean this up, it's messy FIXME
-    def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=.005, orientation_tolerance=.02) :
+    def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
         
         # virtual function
         self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance)
@@ -175,7 +180,7 @@ class PathPlanner(object):
                     rospy.logwarn("no mesh found")              
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
                 self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-
+            
             return True
 
         except :
@@ -212,8 +217,8 @@ class PathPlanner(object):
                 # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
                 # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
                 # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerances(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerances(group_name)))
                 rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
                 rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
             rospy.loginfo("============================================================")
@@ -593,14 +598,13 @@ class PathPlanner(object):
                 rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
 
             joint_list = self.get_group_joints(group_name)
-            
             jn = joint_list[0]
             for j in joint_list:
-                if self.urdf_model.joint_map[j].type != "fixed" :
-                    jn = j
-                    break
+                if j in self.urdf_model.joint_map :
+                    if self.urdf_model.joint_map[j].type != "fixed" :
+                        jn = j
+                        break
             self.group_controllers[group_name] = ""
-
             for c in controller_config['controller_list'] :
                 if jn in c['joints'] :
                     self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
@@ -745,12 +749,19 @@ class PathPlanner(object):
 
         return self.plan_generated[group_name]
 
+
+    def set_goal_position_tolerance_mode(self, group_name, mode) :
+        self.set_goal_position_tolerances(group_name, self.tolerances.get_tolerance_vals('PositionTolerance', mode))
+
+    def set_goal_orientation_tolerance_mode(self, group_name, mode) :
+        self.set_goal_orientation_tolerances(group_name, self.tolerances.get_tolerance_vals('OrientationTolerance',mode))
+
     ############################
     ##### virtual methods ######
     ############################
 
     ### setup methods
-    def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+    def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
         rospy.logwarn("PathPlanner::setup_group() -- not implemented")
         raise NotImplementedError
 
@@ -779,36 +790,32 @@ class PathPlanner(object):
         raise NotImplementedError
 
 
-    def get_goal_tolerance(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_tolerance() -- not implemented")
-        raise NotImplementedError
-
-    def get_goal_position_tolerance(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_position_tolerance() -- not implemented")
+    def get_goal_position_tolerances(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_position_tolerances() -- not implemented")
         raise NotImplementedError
 
     def get_goal_joint_tolerance(self, group_name) :
         rospy.logerror("PathPlanner::get_goal_joint_tolerance() -- not implemented")
         raise NotImplementedError
 
-    def get_goal_orientation_tolerance(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_orientation_tolerance() -- not implemented")
+    def get_goal_orientation_tolerances(self, group_name) :
+        rospy.logerror("PathPlanner::get_goal_orientation_tolerances() -- not implemented")
         raise NotImplementedError
 
     def set_goal_tolerance(self, group_name) :
         rospy.logerror("PathPlanner::set_goal_tolerance() -- not implemented")
         raise NotImplementedError
 
-    def set_goal_position_tolerance(self, group_name, tol) :
-        rospy.logerror("PathPlanner::set_goal_position_tolerance() -- not implemented")
+    def set_goal_position_tolerances(self, group_name, tol) :
+        rospy.logerror("PathPlanner::set_goal_position_tolerances() -- not implemented")
+        raise NotImplementedError
+
+    def set_goal_orientation_tolerances(self, group_name, tol) :
+        rospy.logerror("PathPlanner::set_goal_orientation_tolerances() -- not implemented")
         raise NotImplementedError
 
     def set_goal_joint_tolerance(self, group_name, tol) :
         rospy.logerror("PathPlanner::set_goal_joint_tolerance() -- not implemented")
-        raise NotImplementedError
-
-    def set_goal_orientation_tolerance(self, group_name, tol) :
-        rospy.logerror("PathPlanner::set_goal_orientation_tolerance() -- not implemented")
         raise NotImplementedError
 
 
@@ -836,7 +843,6 @@ class PathPlanner(object):
     def clear_goal_target(self, group_name) :
         rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
         raise NotImplementedError
-
 
 
     ### multi group functions

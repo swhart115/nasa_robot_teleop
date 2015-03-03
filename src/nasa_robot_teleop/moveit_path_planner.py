@@ -44,14 +44,26 @@ class MoveItPathPlanner(PathPlanner) :
     ####### SETUP METHODS ########   
     ##############################
 
-    def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+    def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
         r = True
         rospy.loginfo(str("MoveItPathPlanner::setup_group() -- " + group_name))     
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
-            self.groups[group_name].set_goal_position_tolerance(position_tolerance)
-            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerance)
+
+            if len(position_tolerances) != 3 or len(orientation_tolerances) != 3 :
+                rospy.logwarn("MoveItPathPlanner::setup_group() tolerance vectors of wrong size. Just using first val")
+                position_tolerances = [position_tolerances[0]]*3
+                orientation_tolerances = [orientation_tolerances[0]]*3
+            else :
+                if not(position_tolerances[0] == position_tolerances[1] == position_tolerances[2]) :
+                    position_tolerances = [position_tolerances[0]]*3
+                    rospy.logwarn("MoveItPathPlanner::setup_group() dimensional position tolerances not supported. Just using first val")
+                if not(orientation_tolerances[0] == orientation_tolerances[1] == orientation_tolerances[2]) :
+                    orientation_tolerances = [orientation_tolerances[0]]*3
+                    rospy.logwarn("MoveItPathPlanner::setup_group() dimensional orientation tolerances not supported. Just using first val")                              
+            self.groups[group_name].set_goal_position_tolerance(position_tolerances[0])
+            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerances[0])
         except :
             rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
@@ -131,20 +143,20 @@ class MoveItPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItPathPlanner::get_group_joints() -- group name \'" + str(group_name) + "\' not found"))
             return [] 
 
-    def get_goal_tolerance(self, group_name) :
+    def get_goal_position_tolerances(self, group_name) :
         if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+            rospy.logerr(str("MoveItPathPlanner::get_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
             return 0
         else :
-            return self.groups[group_name].get_goal_tolerance()
+            return self.groups[group_name].get_goal_position_tolerances()
 
-    def get_goal_position_tolerance(self, group_name) :
+    def get_goal_orientation_tolerances(self, group_name) :
         if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_position_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+            rospy.logerr(str("MoveItPathPlanner::get_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
             return 0
         else :
-            return self.groups[group_name].get_goal_position_tolerance()
-
+            return self.groups[group_name].get_goal_orientation_tolerances()
+    
     def get_goal_joint_tolerance(self, group_name) :
         if not group_name in self.groups.keys() :
             rospy.logerr(str("MoveItPathPlanner::get_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
@@ -152,37 +164,29 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].get_goal_joint_tolerance()
 
-    def get_goal_orientation_tolerance(self, group_name) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_orientation_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.groups[group_name].get_goal_orientation_tolerance()
-    
     def set_goal_tolerance(self, group_name, tol) :
         if not group_name in self.groups.keys() :
             rospy.logerr(str("MoveItPathPlanner::set_goal_tolerance() -- group name \'" + str(group_name) + "\' not found"))
         else :
             self.groups[group_name].set_goal_tolerance(tol)
 
-    def set_goal_position_tolerance(self, group_name, tol) :
+    def set_goal_position_tolerances(self, group_name, tol) :
         if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_position_tolerance() -- group name \'" + str(group_name) + "\' not found"))
+            rospy.logerr(str("MoveItPathPlanner::set_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
         else :
-            self.groups[group_name].set_goal_position_tolerance(tol)
+            self.groups[group_name].set_goal_position_tolerances(tol)
+
+    def set_goal_orientation_tolerances(self, group_name, tol) :
+        if not group_name in self.groups.keys() :
+            rospy.logerr(str("MoveItPathPlanner::set_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
+        else :
+            self.groups[group_name].set_goal_orientation_tolerances(tol)
 
     def set_goal_joint_tolerance(self, group_name, tol) :
         if not group_name in self.groups.keys() :
             rospy.logerr(str("MoveItPathPlanner::set_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
         else :
             self.groups[group_name].set_goal_joint_tolerance(tol)
-
-    def set_goal_orientation_tolerance(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_orientation_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            self.groups[group_name].set_goal_orientation_tolerance(tol)
-
 
     ###################################
     ######## EXECUTION METHODS ########

@@ -13,15 +13,15 @@ string control_frame
 # a list of waypoints for the controlled frame
 geometry_msgs/PoseStamped[] waypoints
 
-# duration of plan
-float32 duration
+# duration of plan (per waypoint)
+float32[] duration
 
 # the number of waypoints to visualize in RViz (0 will show all, 1 will show just the last/goal point, any other number will evenly distribute between start and goal)
 int16 num_visualizaton_points
 
 # tolerance mode
-int8 angle_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
-int8 maximum_angle_variance  #set to 0 to copy angle_variance
+int8[] angle_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
+int8[] maximum_angle_variance  #set to 0 to copy angle_variance
   int8 COPY_DESIRED = 0   #ONLY USE WITH maximum_angle_variance!!
   int8 FULL_CYLINDER = 1   #CYLINDER types can rotate partially around the x axis of the tool frame, with minimal rotation on the other axes
   int8 HALF_CYLINDER = 2

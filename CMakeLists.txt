@@ -54,6 +54,7 @@ add_service_files(
   FILES
   EndEffectorCommand.srv
   PlanCommand.srv
+  ExecuteCommand.srv
   ConfigurePlanningService.srv
   GetPlanningServiceConfiguration.srv
 )
