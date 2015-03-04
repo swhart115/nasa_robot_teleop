@@ -34,6 +34,7 @@ class AtlasPathPlanner(PathPlanner) :
         PathPlanner.__init__(self, robot_name, config_package)
         rospy.loginfo(str("============ Setting up Path Planner for: \'" + self.robot_name + "\'"))
         self.planning_frame = "/world"
+        self.use_tolerances = True
         self.groups = {}
               
         self.position_tolerance_modes = {}
@@ -41,6 +42,15 @@ class AtlasPathPlanner(PathPlanner) :
         self.max_position_tolerance_modes = {}
         self.max_orientation_tolerance_modes = {}
         
+        rospy.set_param("/atlas_path_planner/interpolation_type", 1)
+        rospy.set_param("/atlas_path_planner/duration", 2.0)
+        rospy.set_param("/atlas_path_planner/num_visualizaton_points", 5)
+        rospy.set_param("/atlas_path_planner/visualize_path", True)
+        rospy.set_param("/atlas_path_planner/maintain_hand_pose_offsets", True)
+        rospy.set_param("/atlas_path_planner/move_as_far_as_possible", True)
+            
+        self.set_tolerance_file(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
+
         self.load_configurations()       
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
         
@@ -87,11 +97,15 @@ class AtlasPathPlanner(PathPlanner) :
             
             rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))
             
-            m = self.tolerances.get_tolerance_mode('PositionTolerance', [position_tolerance[0],position_tolerance[1],position_tolerance[2]])
-            if m: self.position_tolerance_modes[group_name] = m            
-            
-            m = self.tolerances.get_tolerance_mode('OrientationTolerance', [orientation_tolerance[0],orientation_tolerance[1],orientation_tolerance[2]])
-            if m :self.orientation_tolerance_modes[group_name]
+            if self.use_tolerances :
+                self.position_tolerance_modes[group_name] = "FULL"
+                self.orientation_tolerance_modes[group_name] = "FULL"
+                
+                m = self.tolerances.get_tolerance_mode('PositionTolerance', [position_tolerance[0],position_tolerance[1],position_tolerance[2]])
+                if m: self.position_tolerance_modes[group_name] = m            
+                
+                m = self.tolerances.get_tolerance_mode('OrientationTolerance', [orientation_tolerance[0],orientation_tolerance[1],orientation_tolerance[2]])
+                if m :self.orientation_tolerance_modes[group_name]
         
             return True
         else : 
@@ -184,6 +198,7 @@ class AtlasPathPlanner(PathPlanner) :
                 rospy.logwarn(str("AtlasPathPlanner::set_goal_tolerance() -- NO ORIENTATION TOLERANCE MODE SET"))
 
     def set_goal_position_tolerances(self, group_name, tol) :
+        # print "trying to set goal pos tol: ", group_name, " to ", tol
         if not group_name in self.groups.keys() :
             rospy.logerr(str("AtlasPathPlanner::set_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
         elif len(tol) != 3 :
@@ -196,14 +211,15 @@ class AtlasPathPlanner(PathPlanner) :
                 rospy.logwarn(str("AtlasPathPlanner::set_goal_position_tolerances() -- NO TOLERANCE MODE SET"))
 
     def set_goal_orientation_tolerances(self, group_name, tol) :
+        # print "trying to set goal angle tol: ", group_name, " to ", tol
         if not group_name in self.groups.keys() :
             rospy.logerr(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
         elif len(tol) != 3 :
             rospy.logerr(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- tol vector not of size 3"))
         else:
-            m = OrientationTolerance.get_tolerance_mode(tol[0],tol[1],tol[2])
+            m = self.tolerances.get_tolerance_mode('OrientationTolerance', [tol[0],tol[1],tol[2]])
             if m :
-                self.orientation_tolerance_modes[group_name]
+                self.orientation_tolerance_modes[group_name] = m
             else :
                 rospy.logwarn(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- NO TOLERANCE MODE SET"))
         
@@ -219,21 +235,24 @@ class AtlasPathPlanner(PathPlanner) :
     ######## EXECUTION METHODS ########
     ###################################
     
-    def go(self, group_name, wait=False) :
+    def execute(self, group_name, from_stored=False, wait=True) :
+        rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name+ ")"))
         rospy.wait_for_service("/atlas_planner/execute_command")
         try :
             executor = rospy.ServiceProxy("/atlas_planner/execute_command", ExecuteCommand)
             resp = executor()
-            print "AtlasPathPlanner::go(" + group_name + ") progress: " + resp.progress
+            for p in resp.progress :
+                rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name + ") progress: " + str(p)))
             return True
         except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::go(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
-            return None
+            rospy.logerr(str("AtlasPathPlanner::execute(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
+            return False
 
-    def multigroup_go(self, group_names, wait) :
+
+    def multigroup_execute(self, group_names, from_stored=False, wait=True) :
         r = []
         for g in group_names:
-            r.append(self.go(g,wait))
+            r.append(self.execute(g,from_stored,wait))
         return r
 
 
@@ -244,20 +263,37 @@ class AtlasPathPlanner(PathPlanner) :
     def plan_to_cartesian_goal(self, group_name, pt) :
         req = PlanCommandRequest()
         
-        if group_name in self.groups.keys() :
-            spec = copy.deepcopy(self.groups[group_name])
-            spec.waypoints.append(pt)
-            req.group_plan_specs.append(spec)
+        interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
+        duration = rospy.get_param("/atlas_path_planner/duration")
+        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
 
-            req.move_as_far_as_possible  = True
-            req.maintain_hand_pose_offsets = False
-            req.execute_on_plan = False
-            req.return_trajectories = True
+        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
+        req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
+        req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
+
+        if group_name in self.groups.keys() :
+            
+            req.execute_on_plan = self.auto_execute[group_name]
+    
+            spec = PlanRequestSpecification()
+            spec.group_id = self.groups[group_name].group_id
+            spec.group_name = self.groups[group_name].group_name
+            spec.joint_mask = self.groups[group_name].joint_mask
+            spec.control_frame = self.groups[group_name].control_frame
+            spec.waypoints.append(pt)
+            spec.duration.append(duration)
+            spec.num_visualizaton_points = num_visualizaton_points
+            spec.angle_variance.append(self.orientation_tolerance_modes[group_name]) 
+            spec.maximum_angle_variance.append("") 
+            spec.position_variance.append(self.position_tolerance_modes[group_name]) 
+            spec.maximum_position_variance.append("") 
+            spec.interpolation_type = interpolation_type
+            req.group_plan_specs.append(spec)
 
         else :
             rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
             return None
-
+       
         rospy.wait_for_service("/atlas_planner/plan_command")
         try :
             planner = rospy.ServiceProxy("/atlas_planner/plan_command", PlanCommand)
@@ -268,12 +304,13 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
     def plan_to_joint_goal(self, group_name, js) :
+        rospy.wait_for_service("/atlas_planner/joint_plan_command")
         try :
-            self.groups[group_name].set_joint_value_target(js)       
-            plan = self.groups[group_name].plan()               # FIXME
-            return plan.joint_trajectory
-        except :
-            rospy.logwarn(str("AtlasPathPlanner::plan_to_joint_goal(" + group_name + ") -- failed"))
+            planner = rospy.ServiceProxy("/atlas_planner/joint_plan_command", PlanCommand)
+            resp = planner(req)
+            return resp.result
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::plan_to_joint_goal(" + group_name + ") -- JointPlanCommand service call failed: " + str(e)))
             return None
 
     def plan_to_random_goal(self, group_name) :
@@ -287,29 +324,50 @@ class AtlasPathPlanner(PathPlanner) :
 
     def plan_cartesian_path(self, group_name, waypoints) :
         req = PlanCommandRequest()
-        rospy.wait_for_service("/atlas_planner/plan_command")
-        
+
+
+        interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
+        duration = rospy.get_param("/atlas_path_planner/duration")
+        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
+
+        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
+        req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
+        req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
+
         if group_name in self.groups.keys() :
-            spec = copy.deepcopy(self.groups[group_name])
-            spec.waypoints = copy.deepcopy(waypoints)
+
+            req.execute_on_plan = self.auto_execute[group_name]
+
+            spec = PlanRequestSpecification()
+            spec.group_id = self.groups[group_name].group_id
+            spec.group_name = self.groups[group_name].group_name
+            spec.joint_mask = self.groups[group_name].joint_mask
+            spec.control_frame = self.groups[group_name].control_frame
+        
+            for wp in waypoints :
+                spec.waypoints.append(wp)
+                spec.duration.append(duration)
+                spec.angle_variance.append(self.orientation_tolerance_modes[group_name]) 
+                spec.maximum_angle_variance.append("") 
+                spec.position_variance.append(self.position_tolerance_modes[group_name]) 
+                spec.maximum_position_variance.append("") 
+            
+            spec.interpolation_type = interpolation_type
+            spec.num_visualizaton_points = num_visualizaton_points
             req.group_plan_specs.append(spec)
 
-            req.move_as_far_as_possible  = True
-            req.maintain_hand_pose_offsets = False
-            req.execute_on_plan = False
-            # req.execute_previous_plan
-            req.return_trajectories = True
         else :
-            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_path(" + group_name + ") -- no group found of that name!"))
-            return None
+            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
+            return False
 
+        rospy.wait_for_service("/atlas_planner/plan_command")
         try :
             planner = rospy.ServiceProxy("/atlas_planner/plan_command", PlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_path(" + group_name + ") -- PlanCommand service call failed: " + str(e)))
-            return None
+            rospy.logerr(str("AtlasPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- PlanCommand service call failed: " + str(e)))
+            return False
 
 
     ### multigroup functions
@@ -352,8 +410,21 @@ class AtlasPathPlanner(PathPlanner) :
     def clear_goal_targets(self, group_names) :
         for g in group_names :
             self.clear_goal_target(g)
-        
+    
+    def has_joint_map(self, group_name) :
+        return True
 
+    def get_joint_map(self, group_name) :
+        return self.groups[group_name].joint_map
+
+    def has_joint_mask(self, group_name) :
+        return True
+
+    def get_joint_mask(self, group_name) :
+        return self.groups[group_name].joint_mask.mask
+        
+    def set_joint_mask(self, group_name, mask) :
+        self.groups[group_name].joint_mask.mask = mask
 
 if __name__=="__main__":
 

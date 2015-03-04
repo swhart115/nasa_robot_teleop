@@ -17,7 +17,6 @@ import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
-import actionlib_msgs.msg
 
 from nasa_robot_teleop.srv import *
 
@@ -34,6 +33,7 @@ class PathPlanner(object):
     def __init__(self, robot_name, config_package):
         self.robot_name = robot_name
         self.config_package = config_package
+        self.use_tolerances = False
 
         self.robot_name = robot_name
         self.group_types = {}
@@ -57,10 +57,12 @@ class PathPlanner(object):
         self.bridge_topic_map = {}
         self.actionlib = False
 
+        self.auto_execute = {}
+
         self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 2
 
-        self.tolerances = Tolerance(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
+        self.tolerances = None
 
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
@@ -74,11 +76,14 @@ class PathPlanner(object):
      
         # for g in self.robot.get_group_names() :
         for g in self.get_group_names() :
-            # self.trajectory_publishers[g] = rospy.Publisher(str('/' + self.robot_name + '/' + g + '/move_group/display_planned_path'), moveit_msgs.msg.DisplayTrajectory, queue_size=10)
             self.plan_generated[g] = False
             self.stored_plans[g] = None
             self.display_modes[g] = "last_point"
+            self.auto_execute[g] = False
         
+    def set_tolerance_file(self, filename) :
+        self.use_tolerances = True
+        self.tolerances = Tolerance(filename)
 
     def get_group_names(self) :
         return self.group_types.keys()
@@ -86,8 +91,8 @@ class PathPlanner(object):
     def has_group(self, group_name) :
         return group_name in self.get_group_names()
 
-    def use_actionlib(self, v) :
-        self.actionlib = v
+    def uses_tolerances(self) :
+        return self.use_tolerances
 
     def set_gripper_service(self, srv) :
         rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ")")
@@ -120,15 +125,18 @@ class PathPlanner(object):
 
     # problaby can clean this up, it's messy FIXME
     def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
-        
-        # virtual function
-        self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance)
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
+        
+        if not self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+            return False
+
         try :
+
             self.group_types[group_name] = group_type
             self.control_frames[group_name] = ""
             self.control_meshes[group_name] = ""
+            self.auto_execute[group_name] = False
             self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
             controller_name = self.lookup_controller_name(group_name)  # FIXME
             msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
@@ -354,78 +362,17 @@ class PathPlanner(object):
             rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
         return r
 
-    # This is the main execution function for sending trajectories to the robot.
-    # This will only return True if the plan has been previously (successfully) generated.
-    # It will allow the goal to be published using actionlib (which doesnt work for commanding multiple groups at once cause the pything moveit api blocks)
-    # or directly to a goal topic (which makes it kind of open loop).
-    # If we are using the gripper service to command end-effectors (rather then directly publishing JT msgs), it will do so accordingly here 
-    def execute_plan(self, group_name, from_stored=False, wait=True) :
+    def execute_gripper_service(self, group_name, from_stored=False, wait=True) :
         r = False
+        rospy.loginfo(str("PathPlanner::execute_gripper_service() -- executing plan for group: " + group_name))                
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
-            rospy.loginfo(str("PathPlanner::execute_plan() -- executing plan for group: " + group_name))
-            if self.group_types[group_name] != "endeffector" or not self.gripper_service:
-                if self.actionlib :
-                    rospy.logdebug("PathPlanner::execute_plan() -- using actionlib")
-                    r = self.go(group_name, wait)
-                else :
-                    rospy.logdebug("PathPlanner::execute_plan() -- publishing to topic")
-
-                    jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])
-                    
-                    N = len(jt.goal.trajectory.points)
-                    rospy.logwarn(str("executing path of " + str(N) + " points"))
-
-                    self.command_topics[group_name].publish(jt)
-                    r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
-            else :
+            if self.group_types[group_name] == "endeffector" and self.gripper_service:
                 r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name])
         else :
-            rospy.logerr(str("PathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
+            rospy.logerr(str("PathPlanner::execute_gripper_service() -- no plan for group" + group_name + " yet generated."))
             r = False
-        rospy.logdebug(str("PathPlanner::execute_plan() -- plan execution: " + str(r)))
+        rospy.logdebug(str("PathPlanner::execute_gripper_service() -- plan execution: " + str(r)))
         return r
-
-
-    # There is the option of publishing the JT topic directly to the actionlib goal topic, or to the "bridge" topic
-    # that is necessary when commanding a robot using ROS groovy (the JT msg structure changed in hydro -- thanks osrf)  
-    def translate_trajectory_msg(self, group_name, jt_in) :
-        if group_name in self.bridge_topic_map : 
-            rospy.logdebug(str("PathPlanner::translate_trajectory_msg() -- publishing to bridge topic: " + group_name))
-            jt = self.translate_to_bridge_msg(jt_in)
-        else :
-            rospy.logdebug("PathPlanner::translate_trajectory_msg() -- publishing to actionlib goal topic")
-            jt = self.translate_to_actionlib_goal_msg(jt_in, group_name)
-        return jt
-
-    # this takes the JointTrajectory msg and converts it to a JointTrajectoryBridge msg 
-    # (necessary when sending to pre-hydro ROS systems)
-    def translate_to_bridge_msg(self, jt) :
-        from pr2_joint_trajectory_bridge.msg import JointTrajectoryBridge, JointTrajectoryPointBridge
-        jt_old = JointTrajectoryBridge()
-        jt_old.header = jt.header
-        jt_old.joint_names = jt.joint_names
-        jt_old.points = []
-        for p in jt.points :
-            point = JointTrajectoryPointBridge()
-            point.positions = p.positions
-            point.velocities = p.velocities
-            point.accelerations = p.accelerations
-            point.time_from_start = p.time_from_start
-            jt_old.points.append(point)
-        return jt_old
-
-    # this takes the JointTrajectory msg and converts it to a FollowJointTrajectoryActionGoal msg
-    def translate_to_actionlib_goal_msg(self, jt, group_name, duration=2.0) :
-        from control_msgs.msg import FollowJointTrajectoryActionGoal
-        from actionlib_msgs.msg import GoalID
-        t = rospy.Time.now()
-        ag = FollowJointTrajectoryActionGoal()
-        ag.header.stamp = t
-        ag.goal_id.stamp = t
-        ag.goal_id.id = str("action_goal[" + group_name + "]_" + str(int(random.random()*10000000)))
-        ag.goal.trajectory = jt
-        ag.goal.goal_time_tolerance = rospy.Duration(duration)       
-        return ag
 
     # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
     # to send a service call to any custom node that will interpret the JT as whatever is necessary
@@ -751,10 +698,20 @@ class PathPlanner(object):
 
 
     def set_goal_position_tolerance_mode(self, group_name, mode) :
-        self.set_goal_position_tolerances(group_name, self.tolerances.get_tolerance_vals('PositionTolerance', mode))
+        if self.use_tolerances :
+            self.set_goal_position_tolerances(group_name, self.tolerances.get_tolerance_vals('PositionTolerance', mode))
 
     def set_goal_orientation_tolerance_mode(self, group_name, mode) :
-        self.set_goal_orientation_tolerances(group_name, self.tolerances.get_tolerance_vals('OrientationTolerance',mode))
+        if self.use_tolerances :
+            self.set_goal_orientation_tolerances(group_name, self.tolerances.get_tolerance_vals('OrientationTolerance',mode))
+
+    def plan_joint_goal_and_execute(self, group_name, js) :
+        self.auto_execute[group_name] = True
+        self.plan_to_joint_goal(group_name,js)
+
+    def plan_cartesian_goal_and_execute(self, group_name, pt) :
+        self.auto_execute[group_name] = True
+        return self.plan_to_cartesian_goal(group_name,pt)
 
     ############################
     ##### virtual methods ######
@@ -789,6 +746,26 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::get_end_effector_link() -- not implemented")
         raise NotImplementedError
 
+    def has_joint_map(self, group_name) :
+        rospy.logwarn("PathPlanner::has_joint_map() -- not implemented")
+        raise NotImplementedError
+
+    def get_joint_map(self, group_name) :
+        rospy.logwarn("PathPlanner::get_joint_map() -- not implemented")
+        raise NotImplementedError
+
+    def has_joint_mask(self, group_name) :
+        rospy.logwarn("PathPlanner::has_joint_mask() -- not implemented")
+        raise NotImplementedError
+
+    def get_joint_mask(self, group_name) :
+        rospy.logwarn("PathPlanner::get_joint_mask() -- not implemented")
+        raise NotImplementedError
+
+    def set_joint_mask(self, group_name, mask) :
+        rospy.logwarn("PathPlanner::set_joint_mask() -- not implemented")
+        raise NotImplementedError
+    
 
     def get_goal_position_tolerances(self, group_name) :
         rospy.logerror("PathPlanner::get_goal_position_tolerances() -- not implemented")
@@ -836,8 +813,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plan() -- not implemented")
         raise NotImplementedError
 
-    def go(self, group_name, wait) :
-        rospy.logerror("PathPlanner::go() -- not implemented")
+    def execute(self, group_name, wait) :
+        rospy.logerror("PathPlanner::execute() -- not implemented")
         raise NotImplementedError
 
     def clear_goal_target(self, group_name) :
@@ -862,8 +839,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plans() -- not implemented")
         raise NotImplementedError
 
-    def multigroup_go(self, group_names, wait) :
-        rospy.logerror("PathPlanner::multigroup_go() -- not implemented")
+    def multigroup_execute(self, group_names, wait) :
+        rospy.logerror("PathPlanner::multigroup_execute() -- not implemented")
         raise NotImplementedError
 
     def clear_goal_targets(self, group_names) :

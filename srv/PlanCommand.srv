@@ -9,7 +9,6 @@ bool maintain_hand_pose_offsets
 
 # should these be per group?
 bool execute_on_plan
-bool execute_previous_plan
 
 # can request not to get back the trajectory data
 bool return_trajectories

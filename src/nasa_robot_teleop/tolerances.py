@@ -23,18 +23,18 @@ class Tolerance(object) :
         v1 = [round(v,round_digits) for v in vals]   
         if not mode in self.tolerances : 
             rospy.logerr(str("Tolerance::get_tolerance_mode() -- " + mode + " not in Tolerance set: " + self.tolerances.keys()))
-            return None
+            return "FULL"
         for tol_type in self.tolerances[mode] :
             for t in tol_type.keys() :
                 v2 = [round(v,round_digits) for v in tol_type[t]]   
                 if v1==v2 :
                     return t       
-        return None
+        return "FULL"
 
     def get_tolerance_vals(self, mode, tol_type) :
         if not mode in self.tolerances : 
             rospy.logerr(str("Tolerance::get_tolerance_vals() -- " + mode + " not in Tolerance set: " + self.tolerances.keys()))
-            return None       
+            return [0,0,0]      
         for tol in self.tolerances[mode] :
             if tol_type in tol.keys() :
                 return tol[tol_type]

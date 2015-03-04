@@ -35,14 +35,14 @@ from nasa_robot_teleop.atlas_path_planner import *
 
 class RobotTeleop:
 
-    def __init__(self, robot_name, config_package, manipulator_group_names, joint_group_names):
+    def __init__(self, robot_name, planner_type, config_package, manipulator_group_names, joint_group_names):
         self.robot_name = robot_name
+        self.group_names = []
         self.manipulator_group_names = manipulator_group_names
         self.joint_group_names = joint_group_names
-        self.group_names = manipulator_group_names + joint_group_names
         self.tf_listener = tf.TransformListener()
         self.joint_data = sensor_msgs.msg.JointState()
-
+        
         self.markers = {}
         self.marker_menus = {}
         self.group_pose_data = {}
@@ -55,7 +55,8 @@ class RobotTeleop:
         self.end_effector_link_data = {}
         self.position_tolerance_modes = {}
         self.orientation_tolerance_modes = {}
-
+        self.group_position_tolerance_mode = {}
+        self.group_orientation_tolerance_mode = {}
         self.gripper_service = None
 
         # interactive marker server
@@ -66,16 +67,33 @@ class RobotTeleop:
         if config_package=="" :
             config_package =  str(self.robot_name + "_moveit_config")
 
-        # self.path_planner = MoveItPathPlanner(self.robot_name,config_package)
-        self.path_planner = AtlasPathPlanner(self.robot_name, config_package)
+        if planner_type == "moveit" :
+            self.path_planner = MoveItPathPlanner(self.robot_name,config_package)
+        elif planner_type == "atlas" :
+            self.path_planner = AtlasPathPlanner(self.robot_name, config_package)
+        else :
+            rospy.logerr("RobotTeleop() unrecognized planner type!!")
+            exit()
+
         self.root_frame = self.path_planner.get_robot_planning_frame()
         
+        self.use_tolerances = self.path_planner.uses_tolerances()
+
         # add user specified groups
         for n in self.manipulator_group_names :
-            self.path_planner.add_planning_group(n, group_type="manipulator")
+            if self.path_planner.add_planning_group(n, group_type="manipulator") :
+                self.group_names.append(n)
+            else :
+                self.manipulator_group_names.remove(n)
+                rospy.logwarn(str("RobotTeleop::init() -- not adding manipulator group: " + n))
+        
         for n in self.joint_group_names :
-            self.path_planner.add_planning_group(n, group_type="joint")
-
+            if self.path_planner.add_planning_group(n, group_type="joint") :
+                self.group_names.append(n)
+            else :
+                self.joint_group_names.remove(n)
+                rospy.logwarn(str("RobotTeleop::init() -- not adding joint group: " + n))
+        
         # append group list with auto-found end effectors
         for n in self.path_planner.get_end_effector_names() :
             self.group_names.append(n)
@@ -90,12 +108,10 @@ class RobotTeleop:
         # set up menu info
         self.menu_options = []
         self.menu_options.append(("Stored Poses", False))
-        self.menu_options.append(("Position Tolerance", False))
-        self.menu_options.append(("Angle Tolerance", False))
         self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Execute", False))
         self.menu_options.append(("Execute On Move", True))
-        self.menu_options.append(("Show Path", True))
+        self.menu_options.append(("Show Path", True))       
         # self.menu_options.append(("Turn on Joint Control", True))
 
         # get stored poses from model
@@ -106,8 +122,11 @@ class RobotTeleop:
 
         # get tolerance modes and append it to each group (probably will all be the same)
         for group in self.group_names :
-            self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
-            self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
+            if self.use_tolerances :
+                self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
+                self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
+                self.path_planner.set_goal_position_tolerance_mode(group, None)
+                self.path_planner.set_goal_orientation_tolerance_mode(group, None)
         
         # start update threads for manipulators
         for n in self.manipulator_group_names :
@@ -116,8 +135,6 @@ class RobotTeleop:
         # Create EndEffectorHelper objects to help with EE displays
         for n in self.path_planner.get_end_effector_names() :
             self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
-            # ee_links = self.path_planner.get_group_links(n)
-            # ee_links.append(self.path_planner.get_control_frame(n))
             self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.path_planner.get_urdf_model(), self.path_planner.get_srdf_model())
 
         # set group to display only last point in path by default (can turn on full train from menu)
@@ -146,6 +163,16 @@ class RobotTeleop:
             menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
 
             if self.path_planner.get_group_type(group) == "manipulator" :
+
+                if self.path_planner.has_joint_mask(group) :
+                    if ("Joint Mask", False) not in  self.menu_options :
+                        self.menu_options.append(("Joint Mask", False))
+
+                if self.use_tolerances :
+                    if ("Position Tolerance", False) not in  self.menu_options :
+                        self.menu_options.append(("Position Tolerance", False))
+                    if ("Angle Tolerance", False) not in  self.menu_options :
+                        self.menu_options.append(("Angle Tolerance", False))
 
                 self.markers[group].controls = make6DOFControls()
                 self.markers[group].header.frame_id = self.root_frame
@@ -237,11 +264,7 @@ class RobotTeleop:
             # add menus to server
             self.marker_menus[group].apply( self.server, group )
             self.server.applyChanges()
-
-
-    def use_actionlib(self, v) :
-        self.path_planner.use_actionlib(v)
-        
+       
     def set_gripper_service(self, srv) :
         self.gripper_service = srv
         self.path_planner.set_gripper_service(srv)
@@ -260,15 +283,30 @@ class RobotTeleop:
                 sub_menu_handle = self.marker_menus[group].insert(m)
                 for p in self.position_tolerance_modes[group] :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.position_tolerance_callback)
-                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+                    self.marker_menus[group].setCheckState(self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
             elif m == "Angle Tolerance" :
                 sub_menu_handle = self.marker_menus[group].insert(m)
                 for p in self.orientation_tolerance_modes[group] :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.orientation_tolerance_callback)   
-                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )         
+                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+            elif m == "Joint Mask" :
+                sub_menu_handle = self.marker_menus[group].insert(m) 
+                if self.path_planner.has_joint_mask(group) and self.path_planner.has_joint_map(group):
+                    joint_map = self.path_planner.get_joint_map(group)
+                    joint_mask = self.path_planner.get_joint_mask(group)
+                    for idx in range(len(joint_map.names)) :
+                        jnt = joint_map.names[idx]
+                        jnt_id = joint_map.ids[idx]
+                        mask_val = joint_mask[idx]
+                        self.group_menu_handles[(group,m,jnt)] = self.marker_menus[group].insert(jnt,parent=sub_menu_handle,callback=self.joint_mask_callback)   
+                        if mask_val :
+                            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.CHECKED )        
+                        else :
+                            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.UNCHECKED )        
             else :
                 self.group_menu_handles[(group,m)] = self.marker_menus[group].insert( m, callback=self.process_feedback )
                 if c : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m)], MenuHandler.UNCHECKED )
+
 
     def start_pose_update_thread(self, group) :
         self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
@@ -296,18 +334,88 @@ class RobotTeleop:
         self.joint_data = data
 
     def position_tolerance_callback(self,feedback) :
-        pass
+        print ""
+        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+            if feedback.marker_name in self.group_names :
+                self.group_position_tolerance_mode[feedback.marker_name] = "FULL"
+                self.path_planner.set_goal_position_tolerance_mode(feedback.marker_name, "FULL")
+                handle = feedback.menu_entry_id
+                for p in self.position_tolerance_modes[feedback.marker_name] :
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Position Tolerance", p)] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            print " setting (", feedback.marker_name,", Position Tolerance, ", p, ") to unchecked"
+                        elif state == MenuHandler.UNCHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                            print " setting (", feedback.marker_name, ", Position Tolerance, ", p, ") to checked"
+                            self.group_position_tolerance_mode[feedback.marker_name] = p
+                            self.path_planner.set_goal_position_tolerance_mode(feedback.marker_name, p)
+                    else :
+                        h = self.group_menu_handles[(feedback.marker_name,"Position Tolerance", p)]
+                        self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
+                        # print "    unchecking (", feedback.marker_name, ", Position Tolerance, ", p, ")"
+        self.marker_menus[feedback.marker_name].reApply( self.server )
+        self.server.applyChanges()
 
     def orientation_tolerance_callback(self,feedback) :
-        pass
+        print ""
+        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+            if feedback.marker_name in self.group_names :
+                handle = feedback.menu_entry_id
+                self.group_orientation_tolerance_mode[feedback.marker_name] = "FULL"
+                self.path_planner.set_goal_orientation_tolerance_mode(feedback.marker_name, "FULL")
+                for p in self.orientation_tolerance_modes[feedback.marker_name] :
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Angle Tolerance", p)] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            print " setting (", feedback.marker_name, ", Angle Tolerance, ", p, ") to unchecked"
+                        elif state == MenuHandler.UNCHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                            print " setting (", feedback.marker_name, ", Angle Tolerance, ", p, ") to checked"
+                            self.group_orientation_tolerance_mode[feedback.marker_name] = p
+                            self.path_planner.set_goal_orientation_tolerance_mode(feedback.marker_name, p)
+                    else :
+                        h = self.group_menu_handles[(feedback.marker_name,"Angle Tolerance", p)]
+                        self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
+                        # print "    unchecking (", feedback.marker_name, ", Angle Tolerance, ", p, ")"
+                
+        self.marker_menus[feedback.marker_name].reApply( self.server )
+        self.server.applyChanges()
+                                 
+    def joint_mask_callback(self, feedback) :
+        if self.path_planner.has_joint_mask(feedback.marker_name) and self.path_planner.has_joint_map(feedback.marker_name) :
+            joint_map = self.path_planner.get_joint_map(feedback.marker_name)
+            joint_mask = self.path_planner.get_joint_mask(feedback.marker_name)
+            if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+                if feedback.marker_name in self.group_names :
+                    handle = feedback.menu_entry_id
+                    for idx in range(len(joint_map.names)) :
+                        jnt = joint_map.names[idx]
+                        jnt_id = joint_map.ids[idx]
+                        if handle == self.group_menu_handles[(feedback.marker_name,"Joint Mask", jnt)] :
+                            state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                            if state == MenuHandler.CHECKED:
+                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                                joint_mask[jnt_id] = False
+                                self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
+                            else:
+                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )                                                      
+                                joint_mask[jnt_id] = True
+                                self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
+
+            self.marker_menus[feedback.marker_name].reApply( self.server )
+            self.server.applyChanges()
 
     def stored_pose_callback(self, feedback) :
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
             if self.group_menu_handles[(feedback.marker_name,"Stored Poses",p)] == feedback.menu_entry_id :
                 if self.auto_execute[feedback.marker_name] :
                     self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                    r = self.path_planner.execute_plan(feedback.marker_name)
-                    if not r : rospy.logerr(str("RobotTeleop::process_feedback(pose) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
+                    r = self.path_planner.execute(feedback.marker_name)
+                    # r = self.path_planner.plan_joint_goal_and_execute(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
+                    if not r : rospy.logerr(str("RobotTeleop::process_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
                     self.path_planner.clear_goal_target(feedback.marker_name)
                     self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
@@ -327,10 +435,9 @@ class RobotTeleop:
                 pt.header = feedback.header
                 pt.pose = feedback.pose
                 if self.auto_execute[feedback.marker_name] :
-                    self.path_planner.create_plan_to_target(feedback.marker_name, pt)
-                    r = self.path_planner.execute_plan(feedback.marker_name)
+                    r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
                     if not r :
-                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
+                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 else :
                     self.path_planner.clear_goal_target (feedback.marker_name)
                     self.path_planner.create_plan_to_target(feedback.marker_name, pt)
@@ -345,9 +452,11 @@ class RobotTeleop:
                     if state == MenuHandler.CHECKED:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
                         self.auto_execute[feedback.marker_name] = False
+                        self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
                     else :
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
                         self.auto_execute[feedback.marker_name] = True
+                        self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
                 if handle == self.group_menu_handles[(feedback.marker_name,"Show Path")] :
                     state = self.marker_menus[feedback.marker_name].getCheckState( handle )
                     if state == MenuHandler.CHECKED:
@@ -357,9 +466,9 @@ class RobotTeleop:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
                         self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                    r = self.path_planner.execute_plan(feedback.marker_name)
+                    r = self.path_planner.execute(feedback.marker_name)
                     if not r :
-                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
+                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
 
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
@@ -368,18 +477,16 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Robot Teleop')
     parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
     parser.add_argument('-c, --config', dest='config', help='e.g. r2_fullbody_moveit_config')
+    parser.add_argument('-p, --planner', dest='planner_type', help='e.g. moveit, atlas')
     parser.add_argument('-m, --manipulator_groups', nargs="*", dest='manipulator_groups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
     parser.add_argument('-j, --joint_groups', nargs="*", dest='joint_groups', help='space limited string e.g. "head waist"')
     parser.add_argument('-g, --gripper_service', nargs="*", dest='gripper_service', help='string e.g. "/pr2_gripper_bridge/end_effector_command"')
-    # parser.add_argument('-a, --use_actionlib', nargs="*", dest='use_actionlib', help='bool e.g. [True | False]"', default=False, type=bool)
     parser.add_argument('positional', nargs='*')
     args = parser.parse_args()
 
     rospy.init_node("RobotTeleop")
 
-    robot = RobotTeleop(args.robot, args.config, args.manipulator_groups, args.joint_groups)
-
-    robot.use_actionlib(False)
+    robot = RobotTeleop(args.robot, args.planner_type, args.config, args.manipulator_groups, args.joint_groups)
 
     if args.gripper_service :
         rospy.loginfo(str("Setting Gripper Service: " + args.gripper_service[0]))
