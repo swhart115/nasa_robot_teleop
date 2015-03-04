@@ -1,3 +1,7 @@
+# if we want to execute only a subset of groups.  Leave empty if all
+string[] groups
+int8[] ids
+
 ----
 
 # return status

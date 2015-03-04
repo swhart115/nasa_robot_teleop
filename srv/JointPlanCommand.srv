@@ -1,0 +1,16 @@
+# the specifications for each group's plan request
+JointPlanRequestSpecification[] group_plan_specs
+
+# should these be per group?
+bool execute_on_plan
+
+# can request not to get back the trajectory data
+bool return_trajectories
+
+----
+
+# return status
+bool status
+
+# per group trajectories
+trajectory_msgs/JointTrajectory[] result

@@ -10,6 +10,7 @@ import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import moveit_msgs.msg
+import control_msgs.msg
 
 from path_planner import *
 from tolerances import *
@@ -261,7 +262,7 @@ class AtlasPathPlanner(PathPlanner) :
     ##################################    
     
     def plan_to_cartesian_goal(self, group_name, pt) :
-        req = PlanCommandRequest()
+        req = CartesianPlanCommandRequest()
         
         interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
         duration = rospy.get_param("/atlas_path_planner/duration")
@@ -275,7 +276,7 @@ class AtlasPathPlanner(PathPlanner) :
             
             req.execute_on_plan = self.auto_execute[group_name]
     
-            spec = PlanRequestSpecification()
+            spec = CartesianPlanRequestSpecification()
             spec.group_id = self.groups[group_name].group_id
             spec.group_name = self.groups[group_name].group_name
             spec.joint_mask = self.groups[group_name].joint_mask
@@ -294,19 +295,54 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
             return None
        
-        rospy.wait_for_service("/atlas_planner/plan_command")
+        rospy.wait_for_service("/atlas_planner/cartesian_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/plan_command", PlanCommand)
+            planner = rospy.ServiceProxy("/atlas_planner/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- PlanCommand service call failed: " + str(e)))
+            rospy.logerr(str("AtlasPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- CartesianPlanCommand service call failed: " + str(e)))
             return None
 
     def plan_to_joint_goal(self, group_name, js) :
+
+        req = JointPlanCommandRequest()
+
+        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
+        duration = rospy.get_param("/atlas_path_planner/duration")
+
+        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
+
+        if group_name in self.groups.keys() :           
+            req.execute_on_plan = self.auto_execute[group_name]
+
+            spec = JointPlanRequestSpecification()
+            spec.num_visualizaton_points = num_visualizaton_points
+            
+            goal = control_msgs.msg.FollowJointTrajectoryGoal()
+            goal.trajectory = trajectory_msgs.msg.JointTrajectory()
+            goal.trajectory.header = js.header
+            goal.trajectory.joint_names = js.name
+
+            point = trajectory_msgs.msg.JointTrajectoryPoint()
+            point.positions = js.position
+            point.velocities = js.velocity
+            point.time_from_start = rospy.Duration(duration)
+            goal.trajectory.points.append(point)
+
+            for n in js.name :
+                tol = control_msgs.msg.JointTolerance()
+                tol.name = n
+                tol.position = self.joint_tolerance
+                goal.path_tolerance.append(tol)
+                goal.goal_tolerance.append(tol)
+
+            spec.waypoints.append(goal)
+            req.group_plan_specs.append(spec)
+
         rospy.wait_for_service("/atlas_planner/joint_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/joint_plan_command", PlanCommand)
+            planner = rospy.ServiceProxy("/atlas_planner/joint_plan_command", JointPlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
@@ -323,7 +359,7 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
     def plan_cartesian_path(self, group_name, waypoints) :
-        req = PlanCommandRequest()
+        req = CartesianPlanCommandRequest()
 
 
         interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
@@ -338,7 +374,7 @@ class AtlasPathPlanner(PathPlanner) :
 
             req.execute_on_plan = self.auto_execute[group_name]
 
-            spec = PlanRequestSpecification()
+            spec = CartesianPlanRequestSpecification()
             spec.group_id = self.groups[group_name].group_id
             spec.group_name = self.groups[group_name].group_name
             spec.joint_mask = self.groups[group_name].joint_mask
@@ -360,9 +396,9 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
             return False
 
-        rospy.wait_for_service("/atlas_planner/plan_command")
+        rospy.wait_for_service("/atlas_planner/cartesian_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/plan_command", PlanCommand)
+            planner = rospy.ServiceProxy("/atlas_planner/cartesian_plan_command", PlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:

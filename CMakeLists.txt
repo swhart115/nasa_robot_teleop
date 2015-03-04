@@ -4,7 +4,7 @@ project(nasa_robot_teleop)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED roscpp rospy std_msgs trajectory_msgs geometry_msgs message_generation)
+find_package(catkin REQUIRED roscpp rospy std_msgs trajectory_msgs geometry_msgs message_generation control_msgs moveit_msgs)
 
 
 ## System dependencies are found with CMake's conventions
@@ -43,7 +43,8 @@ catkin_python_setup()
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  PlanRequestSpecification.msg
+  JointPlanRequestSpecification.msg
+  CartesianPlanRequestSpecification.msg
   PlanGroupConfiguration.msg
   JointNameMap.msg
   JointMask.msg
@@ -53,7 +54,8 @@ add_message_files(
 add_service_files(
   FILES
   EndEffectorCommand.srv
-  PlanCommand.srv
+  JointPlanCommand.srv
+  CartesianPlanCommand.srv
   ExecuteCommand.srv
   ConfigurePlanningService.srv
   GetPlanningServiceConfiguration.srv
@@ -72,6 +74,8 @@ generate_messages(
   std_msgs  # Or other packages containing msgs
   trajectory_msgs
   geometry_msgs
+  control_msgs
+  moveit_msgs
 )
 
 ###################################

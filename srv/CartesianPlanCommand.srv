@@ -1,5 +1,5 @@
 # the specifications for each group's plan request
-PlanRequestSpecification[] group_plan_specs
+CartesianPlanRequestSpecification[] group_plan_specs
 
 #if true, dense_reach will move down the path even if it can't solve the whole path
 bool move_as_far_as_possible 

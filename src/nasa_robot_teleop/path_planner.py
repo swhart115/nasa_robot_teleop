@@ -63,7 +63,7 @@ class PathPlanner(object):
         self.path_increment = 2
 
         self.tolerances = None
-
+        self.joint_tolerance = 0.01
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
         

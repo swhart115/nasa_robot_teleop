@@ -22,7 +22,8 @@ class AtlasDummyService(object) :
     def __init__(self) :
 
         self.get_config_service = rospy.Service('/atlas_planner/get_config', GetPlanningServiceConfiguration, self.handle_get_config)
-        self.planner_service = rospy.Service('/atlas_planner/plan_command', PlanCommand, self.handle_plan_command)
+        self.cartesian_planner_service = rospy.Service('/atlas_planner/cartesian_plan_command', CartesianPlanCommand, self.handle_cartesian_plan_command)
+        self.joint_planner_service = rospy.Service('/atlas_planner/joint_plan_command', JointPlanCommand, self.handle_joint_plan_command)
         self.execute_service = rospy.Service('/atlas_planner/execute_command', ExecuteCommand, self.handle_execute_command)
 
     def handle_get_config(self, req):
@@ -147,10 +148,16 @@ class AtlasDummyService(object) :
 
         return response
 
-    def handle_plan_command(self, req) :
-        rospy.loginfo("PlanCommand()")
+    def handle_cartesian_plan_command(self, req) :
+        rospy.loginfo("CartesianPlanCommand()")
         print req
-        resp = PlanCommandResponse()
+        resp = CartesianPlanCommandResponse()
+        return resp
+
+    def handle_joint_plan_command(self, req) :
+        rospy.loginfo("JointPlanCommand()")
+        print req
+        resp = JointPlanCommandResponse()
         return resp
 
     def handle_execute_command(self, req) :
