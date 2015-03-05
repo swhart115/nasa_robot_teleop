@@ -107,6 +107,11 @@ def get_link_joint(link, urdf) :
         if urdf.joint_map[j].child == link :
             return j
 
+def get_joint_child_link(joint, urdf) :
+    if joint in urdf.joint_map :
+        return urdf.joint_map[joint].child
+    return None
+    
 def get_mesh_marker_for_link(link_name, urdf) :
     
     try :

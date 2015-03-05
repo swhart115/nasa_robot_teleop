@@ -5,12 +5,15 @@ import random
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
 
+roslib.load_manifest('matec_msgs')
+
 import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import moveit_msgs.msg
 import control_msgs.msg
+import matec_msgs.msg
 
 from path_planner import *
 from tolerances import *
@@ -34,9 +37,10 @@ class AtlasPathPlanner(PathPlanner) :
     def __init__(self, robot_name, config_package):
         PathPlanner.__init__(self, robot_name, config_package)
         rospy.loginfo(str("============ Setting up Path Planner for: \'" + self.robot_name + "\'"))
-        self.planning_frame = "/world"
+        self.planning_frame = "/global"
         self.use_tolerances = True
         self.groups = {}
+        self.joint_names = []
               
         self.position_tolerance_modes = {}
         self.orientation_tolerance_modes = {}
@@ -52,9 +56,11 @@ class AtlasPathPlanner(PathPlanner) :
             
         self.set_tolerance_file(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
 
-        self.load_configurations()       
+        # self.load_configurations()       
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
-        
+
+        joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback) 
+        rospy.sleep(2)
 
     ##############################
     ####### SETUP METHODS ########   
@@ -93,11 +99,9 @@ class AtlasPathPlanner(PathPlanner) :
 
     def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
         rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))     
-        
-        if group_name in self.groups.keys() :
-            
-            rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))
-            
+
+        if self.load_group_from_srdf(group_name) : 
+                      
             if self.use_tolerances :
                 self.position_tolerance_modes[group_name] = "FULL"
                 self.orientation_tolerance_modes[group_name] = "FULL"
@@ -111,6 +115,58 @@ class AtlasPathPlanner(PathPlanner) :
             return True
         else : 
             return False
+
+    def load_group_from_srdf(self, group_name) :
+
+        print "SRDF Groups: ", self.srdf_model.groups
+        if not group_name in self.srdf_model.groups :
+            return False
+
+        self.groups[group_name] = PlanGroupConfiguration()
+        self.groups[group_name].joint_map = self.lookup_joint_map(group_name)
+        
+        N = len(self.groups[group_name].joint_map.names)
+        last_joint = self.groups[group_name].joint_map.names[N-1]
+
+        self.groups[group_name].group_name = group_name
+        self.groups[group_name].group_id = self.srdf_model.groups.index(group_name)
+        self.groups[group_name].control_frame = self.srdf_model.get_tip_link(group_name)
+        self.groups[group_name].planning_frame = self.planning_frame
+
+        self.groups[group_name].joint_mask = JointMask()
+        self.groups[group_name].joint_mask.mask = [True]*len(self.groups[group_name].joint_map.names)
+
+        return True
+
+    def lookup_joint_map(self, group_name) :
+
+        root = self.srdf_model.get_base_link(group_name)
+        tip = self.srdf_model.get_tip_link(group_name)
+        joint_list = [] 
+
+        joint_list = self.urdf_model.get_chain(root, tip, joints=True, fixed=True)
+        # joint_list = self.srdf_model.get_group_joints(group_name)
+        rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
+        print joint_list    
+        print self.joint_names
+
+        joint_name_map = JointNameMap() 
+        
+        for j in joint_list :
+            if not j in self.joint_names :
+                rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- joint " + str(j) + " not found in joint names!!"))
+                continue
+            joint_name_map.names.append(j)
+            joint_name_map.ids.append(self.joint_names.index(j))
+
+        print joint_name_map
+        return joint_name_map
+
+    def joint_name_callback(self, msg) :
+        self.joint_names = msg.data
+        rospy.loginfo("GOT JOINT NAMES!!")
+        # print self.joint_names
+
 
     #################################
     ####### OBSTACLE METHODS ########   

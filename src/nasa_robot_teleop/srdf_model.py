@@ -135,6 +135,13 @@ class SRDFModel :
             rospy.logerr(str("No Tip Link for Group " + group))
             return ""
 
+    def get_base_link(self, group) :
+        if group in self.base_links and self.base_links[group] != None :
+            return self.base_links[group]
+        else :
+            rospy.logerr(str("No base Link for Group " + group))
+            return ""
+
     def get_groups(self) :
         return self.groups
 

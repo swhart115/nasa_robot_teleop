@@ -1,8 +1,9 @@
 <?xml version="1.0" ?>
 <launch>
     <arg name="robot"              default="atlas" />
+    <arg name="planner"            default="atlas" />
     <arg name="config"             default="atlas_moveit_config" />
     <arg name="manipulator_groups" default="left_arm right_arm" />
     <arg name="joint_groups"       default="" />
-    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
+    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -p $(arg planner) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
 </launch>

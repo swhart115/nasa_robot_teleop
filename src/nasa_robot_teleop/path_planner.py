@@ -73,13 +73,7 @@ class PathPlanner(object):
         if not self.create_models(config_package) :
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
-     
-        # for g in self.robot.get_group_names() :
-        for g in self.get_group_names() :
-            self.plan_generated[g] = False
-            self.stored_plans[g] = None
-            self.display_modes[g] = "last_point"
-            self.auto_execute[g] = False
+    
         
     def set_tolerance_file(self, filename) :
         self.use_tolerances = True
@@ -133,6 +127,11 @@ class PathPlanner(object):
 
         try :
 
+            self.plan_generated[group_name] = False
+            self.stored_plans[group_name] = None
+            self.display_modes[group_name] = "last_point"
+            self.auto_execute[group_name] = False
+
             self.group_types[group_name] = group_type
             self.control_frames[group_name] = ""
             self.control_meshes[group_name] = ""
@@ -160,10 +159,14 @@ class PathPlanner(object):
                     self.group_id_offset[group_name] = r
                     id_found = True
 
+            print "test !!"
             # check to see if the group has an associated end effector, and add it if so
             if self.has_end_effector_link(group_name) :
+                print "test !!!!"
                 self.control_frames[group_name] = self.get_end_effector_link(group_name)
+                print self.control_frames[group_name]
                 ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+                print ee_link
                 try :
                     # self.control_meshes[group_name] = ee_link.visual.geometry.filename
                     self.control_meshes[group_name] = self.get_child_mesh(ee_link)
@@ -175,6 +178,7 @@ class PathPlanner(object):
                         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=joint_tolerance, position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance)
             elif self.srdf_model.has_tip_link(group_name) :
+                print "test ------"
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
@@ -545,6 +549,7 @@ class PathPlanner(object):
                 rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
 
             joint_list = self.get_group_joints(group_name)
+            print joint_list
             jn = joint_list[0]
             for j in joint_list:
                 if j in self.urdf_model.joint_map :
