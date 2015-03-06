@@ -51,7 +51,7 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("/atlas_path_planner/duration", 2.0)
         rospy.set_param("/atlas_path_planner/num_visualizaton_points", 5)
         rospy.set_param("/atlas_path_planner/visualize_path", True)
-        rospy.set_param("/atlas_path_planner/maintain_hand_pose_offsets", True)
+        rospy.set_param("/atlas_path_planner/maintain_hand_pose_offsets", False)
         rospy.set_param("/atlas_path_planner/move_as_far_as_possible", True)
             
         self.set_tolerance_file(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
@@ -103,8 +103,8 @@ class AtlasPathPlanner(PathPlanner) :
         if self.load_group_from_srdf(group_name) : 
                       
             if self.use_tolerances :
-                self.position_tolerance_modes[group_name] = "FULL"
-                self.orientation_tolerance_modes[group_name] = "FULL"
+                self.position_tolerance_modes[group_name] = "SPHERE"
+                self.orientation_tolerance_modes[group_name] = "SPHERE"
                 
                 m = self.tolerances.get_tolerance_mode('PositionTolerance', [position_tolerance[0],position_tolerance[1],position_tolerance[2]])
                 if m: self.position_tolerance_modes[group_name] = m            

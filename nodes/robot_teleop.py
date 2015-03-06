@@ -53,6 +53,7 @@ class RobotTeleop:
         self.waypoint_menu_handles = {}
         self.pose_update_thread = {}
         self.pose_store = {}
+        self.auto_plan = {}
         self.auto_execute = {}
         self.end_effector_link_data = {}
         self.position_tolerance_modes = {}
@@ -114,6 +115,8 @@ class RobotTeleop:
         self.menu_options = []
         self.menu_options.append(("Stored Poses", False))
         self.menu_options.append(("Sync To Actual", False))
+        self.menu_options.append(("Plan", False))
+        self.menu_options.append(("Plan On Move", True))
         self.menu_options.append(("Execute", False))
         self.menu_options.append(("Execute On Move", True))
         self.menu_options.append(("Show Path", True))       
@@ -166,6 +169,7 @@ class RobotTeleop:
         for group in self.path_planner.get_group_names() :
 
             self.auto_execute[group] = False
+            self.auto_plan[group] = False
             self.markers[group] = InteractiveMarker()
             self.markers[group].name = group
             self.markers[group].description = group
@@ -273,6 +277,7 @@ class RobotTeleop:
                 self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Move")], MenuHandler.CHECKED )
 
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
+            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Plan On Move")], MenuHandler.UNCHECKED )
             # add menus to server
             self.marker_menus[group].apply( self.server, group )
             self.server.applyChanges()
@@ -666,16 +671,20 @@ class RobotTeleop:
 
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.manipulator_group_names :
-                pt = geometry_msgs.msg.PoseStamped()
-                pt.header = feedback.header
-                pt.pose = feedback.pose
-                if self.auto_execute[feedback.marker_name] :
-                    r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
-                    if not r :
-                        rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
-                else :
-                    self.path_planner.clear_goal_target (feedback.marker_name)
-                    self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                if self.auto_plan[feedback.marker_name] :
+                    pt = geometry_msgs.msg.PoseStamped()
+                    pt.header = feedback.header
+                    pt.pose = feedback.pose
+                    print "=====================\nFEEDBACK\n"
+                    print feedback
+                    print "=====================\n"
+                    if self.auto_execute[feedback.marker_name] :
+                        r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                        if not r :
+                            rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                    else :
+                        self.path_planner.clear_goal_target (feedback.marker_name)
+                        self.path_planner.create_plan_to_target(feedback.marker_name, pt)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
@@ -692,6 +701,14 @@ class RobotTeleop:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
                         self.auto_execute[feedback.marker_name] = True
                         self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
+                if handle == self.group_menu_handles[(feedback.marker_name,"Plan On Move")] :
+                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                    if state == MenuHandler.CHECKED:
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                        self.auto_plan[feedback.marker_name] = False
+                    else :
+                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                        self.auto_plan[feedback.marker_name] = True
                 if handle == self.group_menu_handles[(feedback.marker_name,"Show Path")] :
                     state = self.marker_menus[feedback.marker_name].getCheckState( handle )
                     if state == MenuHandler.CHECKED:
@@ -704,6 +721,17 @@ class RobotTeleop:
                     r = self.path_planner.execute(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
+                    pt = geometry_msgs.msg.PoseStamped()
+                    pt.header = feedback.header
+                    pt.pose = feedback.pose
+                    if self.auto_execute[feedback.marker_name] :
+                        r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                        if not r :
+                            rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                    else :
+                        self.path_planner.clear_goal_target (feedback.marker_name)
+                        self.path_planner.create_plan_to_target(feedback.marker_name, pt)
 
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
