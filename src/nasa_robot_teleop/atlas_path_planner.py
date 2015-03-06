@@ -68,9 +68,9 @@ class AtlasPathPlanner(PathPlanner) :
 
     def load_configurations(self) :
         req = GetPlanningServiceConfigurationRequest()
-        rospy.wait_for_service("/atlas_planner/get_config")
+        rospy.wait_for_service("/interactive_controls_bridge/get_config")
         try :
-            get_planner_config = rospy.ServiceProxy("/atlas_planner/get_config", GetPlanningServiceConfiguration)
+            get_planner_config = rospy.ServiceProxy("/interactive_controls_bridge/get_config", GetPlanningServiceConfiguration)
             resp = get_planner_config(req)
             for g in resp.group_configurations:
                 self.groups[g.group_name] = g
@@ -85,10 +85,10 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::configure_group(" + group_name + ") -- group not found"))
             return False
         req = ConfigurePlanningServiceRequest()
-        rospy.wait_for_service("/atlas_planner/config")
+        rospy.wait_for_service("/interactive_controls_bridge/config")
         try :
             req.group_configurations.append(self.groups[group_name])
-            configure_planner = rospy.ServiceProxy("/atlas_planner/config", ConfigurePlanningService)
+            configure_planner = rospy.ServiceProxy("/interactive_controls_bridge/config", ConfigurePlanningService)
             resp = configure_planner(req)
             if not resp.status :
                 rospy.logwarn(str("AtlasPathPlanner::configure_group(" + group_name + ") -- status error"))
@@ -294,9 +294,9 @@ class AtlasPathPlanner(PathPlanner) :
     
     def execute(self, group_name, from_stored=False, wait=True) :
         rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name+ ")"))
-        rospy.wait_for_service("/atlas_planner/execute_command")
+        rospy.wait_for_service("/interactive_controls_bridge/execute_command")
         try :
-            executor = rospy.ServiceProxy("/atlas_planner/execute_command", ExecuteCommand)
+            executor = rospy.ServiceProxy("/interactive_controls_bridge/execute_command", ExecuteCommand)
             resp = executor()
             for p in resp.progress :
                 rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name + ") progress: " + str(p)))
@@ -351,9 +351,9 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
             return None
        
-        rospy.wait_for_service("/atlas_planner/cartesian_plan_command")
+        rospy.wait_for_service("/interactive_controls_bridge/cartesian_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/cartesian_plan_command", CartesianPlanCommand)
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
@@ -396,9 +396,9 @@ class AtlasPathPlanner(PathPlanner) :
             spec.waypoints.append(goal)
             req.group_plan_specs.append(spec)
 
-        rospy.wait_for_service("/atlas_planner/joint_plan_command")
+        rospy.wait_for_service("/interactive_controls_bridge/joint_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/joint_plan_command", JointPlanCommand)
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/joint_plan_command", JointPlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
