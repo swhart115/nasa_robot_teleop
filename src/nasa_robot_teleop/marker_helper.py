@@ -223,13 +223,25 @@ def createArrow(id):
     arrow.scale.z = 0.05 #* scaleFactorZ
     return arrow
 
-def createCylinder(id):
-    radius = makePrimitive(0.0, Marker.CYLINDER, id)
-    radius.color.r = 0.5
-    radius.color.a = 0.5
-    radius.scale.x = 0.25
-    radius.scale.y = 0.25
-    radius.scale.z = 0.01
-    radius.pose.position.z = -0.01
-    return radius
+def createCylinder(id, height=0.01, radius=0.25):
+    cly = makePrimitive(0.0, Marker.CYLINDER, id)
+    cly.color.b = 0.5
+    cly.color.r = 0.75
+    cly.color.a = 0.75
+    cly.scale.x = radius
+    cly.scale.y = radius
+    cly.scale.z = height
+    cly.pose.position.z = height/2.0
+    return cly
+
+def createSphere(id, height=0.01, radius=0.25):
+    sph = makePrimitive(0.0, Marker.SPHERE, id)
+    sph.color.b = 0.5
+    sph.color.r = 0.75
+    sph.color.a = 0.75
+    sph.scale.x = radius
+    sph.scale.y = radius
+    sph.scale.z = radius
+    sph.pose.position.z = height
+    return sph
 

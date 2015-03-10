@@ -59,7 +59,7 @@ class PathPlanner(object):
 
         self.auto_execute = {}
 
-        self.plan_color = (0.5,0.1,0.75,1)
+        self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
 
         self.tolerances = None
@@ -121,22 +121,23 @@ class PathPlanner(object):
     def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
+
+        self.plan_generated[group_name] = False
+        self.stored_plans[group_name] = None
+        self.display_modes[group_name] = "last_point"
+        self.auto_execute[group_name] = False
+
+        self.group_types[group_name] = group_type
+        self.control_frames[group_name] = ""
+        self.control_meshes[group_name] = ""
+        self.auto_execute[group_name] = False
+        self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
         
         if not self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
             return False
 
         try :
 
-            self.plan_generated[group_name] = False
-            self.stored_plans[group_name] = None
-            self.display_modes[group_name] = "last_point"
-            self.auto_execute[group_name] = False
-
-            self.group_types[group_name] = group_type
-            self.control_frames[group_name] = ""
-            self.control_meshes[group_name] = ""
-            self.auto_execute[group_name] = False
-            self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
             controller_name = self.lookup_controller_name(group_name)  # FIXME
             msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
             bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
@@ -159,14 +160,11 @@ class PathPlanner(object):
                     self.group_id_offset[group_name] = r
                     id_found = True
 
-            print "test !!"
             # check to see if the group has an associated end effector, and add it if so
             if self.has_end_effector_link(group_name) :
-                print "test !!!!"
+                print "has end-effector"
                 self.control_frames[group_name] = self.get_end_effector_link(group_name)
-                print self.control_frames[group_name]
                 ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
-                print ee_link
                 try :
                     # self.control_meshes[group_name] = ee_link.visual.geometry.filename
                     self.control_meshes[group_name] = self.get_child_mesh(ee_link)
@@ -174,6 +172,7 @@ class PathPlanner(object):
                     rospy.logwarn("no mesh found")
                 for ee in self.srdf_model.end_effectors.keys() :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
+                        print "   setting up corresponding end effector"
                         self.end_effector_map[group_name] = ee
                         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=joint_tolerance, position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance)
@@ -183,6 +182,7 @@ class PathPlanner(object):
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
             elif self.group_types[group_name] == "endeffector" :
+                print "is end-effector"
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
                 ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
                 try :
@@ -824,6 +824,10 @@ class PathPlanner(object):
 
     def clear_goal_target(self, group_name) :
         rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
+        raise NotImplementedError
+
+    def plan_navigation_path(self, waypoints) :
+        rospy.logerror("PathPlanner::plan_navigation_path() -- not implemented")
         raise NotImplementedError
 
 

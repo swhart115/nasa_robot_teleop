@@ -94,6 +94,7 @@ class RobotTeleop:
                 rospy.logwarn(str("RobotTeleop::init() -- not adding manipulator group: " + n))
         
         for n in self.joint_group_names :
+            print "teleop adding joint group: ", n
             if self.path_planner.add_planning_group(n, group_type="joint") :
                 self.group_names.append(n)
             else :
@@ -118,7 +119,7 @@ class RobotTeleop:
         self.menu_options.append(("Plan", False))
         self.menu_options.append(("Plan On Move", True))
         self.menu_options.append(("Execute", False))
-        self.menu_options.append(("Execute On Move", True))
+        self.menu_options.append(("Execute On Plan", True))
         self.menu_options.append(("Show Path", True))       
         # self.menu_options.append(("Turn on Joint Control", True))
 
@@ -274,7 +275,7 @@ class RobotTeleop:
             self.setup_sub_menus(group)
 
             if self.path_planner.get_group_type(group) == "endeffector" :
-                self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Move")], MenuHandler.CHECKED )
+                self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Plan")], MenuHandler.CHECKED )
 
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Plan On Move")], MenuHandler.UNCHECKED )
@@ -292,7 +293,6 @@ class RobotTeleop:
 
     def activate_navigation_markers(self, v) :
         self.navigation_markers_on = v
-        print "Activating nav markers"
 
         p = geometry_msgs.msg.Pose()
         p.orientation = Quaternion()
@@ -374,6 +374,9 @@ class RobotTeleop:
         waypoint.scale = 0.25
         waypoint.pose = offset
 
+
+        # print "adding waypoint [", key, "] at offset (replace=", replace, ") --- ", offset
+
         waypoint_id = len(self.navigation_markers)
         # unless we're replacing a waypoint, slightly adjust the position so we're not inserting
         # directly on top of an existing waypoint
@@ -398,13 +401,15 @@ class RobotTeleop:
         
         self.waypoint_controls[key] = full_controls
 
-        # radius = createCylinder(len(self.navigation_markers)+1)
-        # radius_control = CreateVisualControlFromMarker(radius, 0.25)
-        # waypoint.controls.append(radius_control)
+        cyl = createCylinder(waypoint_id, height=1.0, radius=0.25)
+        cyl_control = CreateVisualControlFromMarker(cyl)#,interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
+        waypoint.controls.append(cyl_control)
+        # height_control = makeYTransControl()
+        # waypoint.controls.append(height_control)
 
-        radius = createCylinder(waypoint_id)
-        radius_control = CreateVisualControlFromMarker(radius)
-        waypoint.controls.append(radius_control)
+        # radius = createCylinder(waypoint_id)
+        # cyl_control = CreateVisualControlFromMarker(radius)
+        # waypoint.controls.append(cyl_control)
 
         self.server.insert(waypoint, self.navigation_marker_callback)
         
@@ -436,6 +441,13 @@ class RobotTeleop:
 
     def get_next_id(self):
         id = len(self.navigation_markers)
+        if id < 10:
+            str_id = "0" + str(id)
+        else:
+            str_id = str(id)
+        return str_id
+
+    def get_waypoint_name(self, id):
         if id < 10:
             str_id = "0" + str(id)
         else:
@@ -492,8 +504,32 @@ class RobotTeleop:
         self.navigation_markers = self.navigation_markers[:index+1]
 
 
-    def request_navigation_plan(self, waypoint_name) :
-        pass
+    def request_navigation_plan(self, data) :
+
+        waypoint_name = data.marker_name
+        rospy.loginfo(str("RobotTeleop::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
+        
+        waypoints = []
+
+        for id in self.navigation_markers :
+
+            print " ID: ", id
+            n = self.get_waypoint_name(id)
+            print " NAME: ", n
+            data = self.server.get(n)
+            print " POSE: ",
+            print data.pose
+            # print data
+                  
+            wp = PoseStamped()
+            wp.pose = data.pose
+            wp.header = data.header
+            waypoints.append(wp)
+            
+            if self.get_waypoint_name(id) == waypoint_name: 
+                break        
+
+        plan = self.path_planner.plan_navigation_path(waypoints)
 
     def setup_sub_menus(self, group) :
         for m,c in self.menu_options :
@@ -659,7 +695,7 @@ class RobotTeleop:
             elif handle == self.waypoint_menu_handles["Delete Waypoint"] :
                 self.delete_waypoint(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Request Plan"] :
-                self.request_navigation_plan(feedback.marker_name)
+                self.request_navigation_plan(feedback)
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
 
@@ -691,7 +727,7 @@ class RobotTeleop:
                 handle = feedback.menu_entry_id
                 if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
                     self.reset_group_marker(feedback.marker_name)
-                if handle == self.group_menu_handles[(feedback.marker_name,"Execute On Move")] :
+                if handle == self.group_menu_handles[(feedback.marker_name,"Execute On Plan")] :
                     state = self.marker_menus[feedback.marker_name].getCheckState( handle )
                     if state == MenuHandler.CHECKED:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )

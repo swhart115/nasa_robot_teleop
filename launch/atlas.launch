@@ -5,6 +5,6 @@
     <arg name="config"             default="atlas_moveit_config" />
     <arg name="manipulator_groups" default="left_arm right_arm left_leg right_leg" />
     <arg name="navigation"  	   default="True" />
-    <arg name="joint_groups"       default="" />
+    <arg name="joint_groups"       default="head" />
     <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -p $(arg planner) -n $(arg navigation) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
 </launch>

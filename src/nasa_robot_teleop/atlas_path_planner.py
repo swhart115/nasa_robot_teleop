@@ -101,8 +101,9 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))     
 
         if self.load_group_from_srdf(group_name) : 
-                      
-            if self.use_tolerances :
+            
+            print "what"
+            if self.use_tolerances and (self.group_types[group_name] == "manipulator"):
                 self.position_tolerance_modes[group_name] = "SPHERE"
                 self.orientation_tolerance_modes[group_name] = "SPHERE"
                 
@@ -112,6 +113,7 @@ class AtlasPathPlanner(PathPlanner) :
                 m = self.tolerances.get_tolerance_mode('OrientationTolerance', [orientation_tolerance[0],orientation_tolerance[1],orientation_tolerance[2]])
                 if m :self.orientation_tolerance_modes[group_name]
         
+            print "??"
             return True
         else : 
             return False
@@ -144,7 +146,11 @@ class AtlasPathPlanner(PathPlanner) :
         tip = self.srdf_model.get_tip_link(group_name)
         joint_list = [] 
 
-        joint_list = self.urdf_model.get_chain(root, tip, joints=True, fixed=True)
+        if root == tip == '' :
+            joint_list = self.srdf_model.get_group_joints(group_name)
+        else :
+            joint_list = self.urdf_model.get_chain(root, tip, joints=True, fixed=True)
+
         # joint_list = self.srdf_model.get_group_joints(group_name)
         rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
         print joint_list    
@@ -154,7 +160,7 @@ class AtlasPathPlanner(PathPlanner) :
         
         for j in joint_list :
             if not j in self.joint_names :
-                rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- joint " + str(j) + " not found in joint names!!"))
+                # rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- joint " + str(j) + " not found in joint names!!"))
                 continue
             joint_name_map.names.append(j)
             joint_name_map.ids.append(self.joint_names.index(j))
@@ -197,6 +203,7 @@ class AtlasPathPlanner(PathPlanner) :
             return False
         else :
             return self.groups[group_name].control_frame != None
+            # return self.srdf_model.has_end_effector(group_name) and (self.groups[group_name].control_frame != None)
 
     def get_end_effector_link(self, group_name) :
         if not group_name in self.groups.keys() :
@@ -454,13 +461,56 @@ class AtlasPathPlanner(PathPlanner) :
 
         rospy.wait_for_service("/atlas_planner/cartesian_plan_command")
         try :
-            planner = rospy.ServiceProxy("/atlas_planner/cartesian_plan_command", PlanCommand)
+            planner = rospy.ServiceProxy("/atlas_planner/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
             return resp.result
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- PlanCommand service call failed: " + str(e)))
             return False
 
+    def plan_navigation_path(self, waypoints) :
+
+        req = CartesianPlanCommandRequest()
+
+        interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
+        duration = rospy.get_param("/atlas_path_planner/duration")
+        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
+
+        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
+        req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
+        req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
+
+        group_name = "left_arm"
+
+        for wp in waypoints :
+
+            spec = CartesianPlanRequestSpecification()
+            spec.group_name = group_name
+            spec.control_frame = wp.header.frame_id
+        
+            spec.waypoints.append(wp)
+            spec.duration.append(duration)
+            spec.angle_variance.append("") 
+            spec.maximum_angle_variance.append("") 
+            spec.position_variance.append("") 
+            spec.maximum_position_variance.append("") 
+            
+            spec.interpolation_type = interpolation_type
+            spec.num_visualizaton_points = num_visualizaton_points
+            req.group_plan_specs.append(spec)
+
+        else :
+            rospy.logerr(str("RobotTeleopAtlasPathPlanner::plan_navigation()"))
+            return None
+
+        rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
+        try :
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
+            resp = planner(req)
+            return resp.result
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::plan_navigation()" + str(e)))
+            return None
 
     ### multigroup functions
     def plan_to_cartesian_goals(self, group_names, pts) :
@@ -498,7 +548,8 @@ class AtlasPathPlanner(PathPlanner) :
             for i in len(group_names) :
                 r.append(self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i]))
         return r
-                
+    
+
     def clear_goal_targets(self, group_names) :
         for g in group_names :
             self.clear_goal_target(g)
