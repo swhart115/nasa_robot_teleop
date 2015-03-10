@@ -330,20 +330,6 @@ class RobotTeleop:
                     if not r :
                         rospy.logerr(str("RobotTeleop::process_feedback(mouse) -- failed moveit execution for group: " + feedback.marker_name + ". re-synching..."))
 
-        # elif feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE :
-        #     if feedback.marker_name in self.manipulator_group_names :
-        #         if not feedback.marker_name in self.pose_store: return
-        #         p = toMsg(fromMsg(self.pose_store[feedback.marker_name]).Inverse()*fromMsg(feedback.pose))
-        #         r = (kdl.Rotation.Quaternion(p.orientation.x,p.orientation.y,p.orientation.z,p.orientation.w)).GetRPY()
-        #         # print "delta p: ", p
-        #         axis_name =  feedback.control_name
-        #         axis_id = self.axis_map(axis_name)
-        #         axis_delta = self.get_axis(axis_name, p, r)
-
-        #         self.moveit_interface.groups[feedback.marker_name].shift_pose_target(axis_id, axis_delta)
-        #         self.pose_store[feedback.marker_name] = feedback.pose
-        #         # print self.moveit_interface.groups[feedback.marker_name].plan()
-
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
 
