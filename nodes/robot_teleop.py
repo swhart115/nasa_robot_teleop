@@ -73,7 +73,7 @@ class RobotTeleop:
         # nav control markers
         self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
 
-
+        # joint state sub
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
 
         # set up MoveIt! interface
@@ -585,6 +585,6 @@ if __name__=="__main__":
     if args.navigation_markers :
         robot.navigation_controls.activate_navigation_markers(True)
 
-    r = rospy.Rate(50.0)
+    r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
         r.sleep()

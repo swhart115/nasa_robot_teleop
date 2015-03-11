@@ -48,6 +48,7 @@ class NavigationWaypointControl(object) :
         self.add_waypoint(None, p, False)
 
     def add_waypoint(self, parent_name=None, offset=Pose(), replace=False, full_controls=False) :
+        
         # add a new waypoint if it's the first
         if len(self.navigation_markers) == 0:
             self.insert_waypoint(offset, replace, full_controls)
@@ -340,9 +341,10 @@ if __name__=="__main__":
     rospy.init_node("NavigationControl")
 
     server = InteractiveMarkerServer(str(args.robot + "_teleop"))
-    nc = NavigationControl(args.robot, server, args.frame)
+    nc = NavigationWaypointControl(args.robot, server, args.frame)
 
-  
+    nc.activate_navigation_markers(True)
+    
     r = rospy.Rate(50.0)
     while not rospy.is_shutdown():
         r.sleep()
