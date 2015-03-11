@@ -63,10 +63,11 @@ class SRDFModel :
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []
                 self.group_states[group_name] = dict()
+                self.base_links[elem.attrib["name"]] = None
+                self.tip_links[elem.attrib["name"]] = None
 
                 for group_elem in elem.getchildren() :
-                    self.base_links[elem.attrib["name"]] = None
-                    self.tip_links[elem.attrib["name"]] = None
+                    
                     if group_elem.tag == "chain" :
                         if "base_link" in group_elem.attrib :
                             self.base_links[elem.attrib["name"]] = group_elem.attrib["base_link"]
@@ -123,6 +124,7 @@ class SRDFModel :
                 r = elem.attrib["reason"]
                 self.disable_collisions[(l1,l2)] = r
 
+        # self.print_groups()
         return True
 
     def has_tip_link(self, group) :

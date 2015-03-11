@@ -26,8 +26,13 @@ class MoveItPathPlanner(PathPlanner) :
     ####### CONSTRUCTOR ########   
     ############################
 
-    def __init__(self, robot_name, config_package):
-        PathPlanner.__init__(self, robot_name, config_package)
+    def __init__(self, robot_name, config_file):
+        PathPlanner.__init__(self, robot_name, config_file)
+
+        self.config_file = config_file
+
+        s = self.config_file[:self.config_file.rfind("/")]
+        self.config_package = s[:s.rfind("/")]
 
         # connect to moveit server
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\'"))
@@ -51,6 +56,25 @@ class MoveItPathPlanner(PathPlanner) :
     def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
         r = True
         rospy.loginfo(str("MoveItPathPlanner::setup_group() -- " + group_name))     
+
+        try :
+            controller_name = self.lookup_controller_name(group_name)  # FIXME
+            msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
+            bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
+            if bridge_topic_name != "" :
+                from pr2_joint_trajectory_bridge.msg import JointTrajectoryBridge
+                controller_name = bridge_topic_name
+                msg_type = JointTrajectoryBridge
+                self.bridge_topic_map[group_name] = bridge_topic_name
+
+            # topic_name = "/" + controller_name + "/command"
+            topic_name = "/" + controller_name + "/goal"
+            rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
+            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
+        except :
+            rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up controller for: " + group_name))
+            r = False
+
         try :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
@@ -72,6 +96,34 @@ class MoveItPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
         return r 
+
+     # this is where parse the PathPlanner config package for the robot and figure out what the controller names are 
+    def lookup_controller_name(self, group_name) :
+
+        if not group_name in self.group_controllers.keys() :
+            import yaml
+            try:
+                controllers_file = self.config_package + "/config/controllers.yaml"
+                rospy.logdebug("Controller yaml: " + controllers_file)
+                controller_config = yaml.load(file(controllers_file, 'r'))
+            except :
+                rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
+
+            joint_list = self.get_group_joints(group_name)
+            print joint_list
+            jn = joint_list[0]
+            for j in joint_list:
+                if j in self.urdf_model.joint_map :
+                    if self.urdf_model.joint_map[j].type != "fixed" :
+                        jn = j
+                        break
+            self.group_controllers[group_name] = ""
+            for c in controller_config['controller_list'] :
+                if jn in c['joints'] :
+                    self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
+
+        rospy.logdebug(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
+        return self.group_controllers[group_name]
 
     #################################
     ####### OBSTACLE METHODS ########   

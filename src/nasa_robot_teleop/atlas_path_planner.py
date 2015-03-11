@@ -115,7 +115,6 @@ class AtlasPathPlanner(PathPlanner) :
 
     def load_group_from_srdf(self, group_name) :
 
-        print "SRDF Groups: ", self.srdf_model.groups
         if not group_name in self.srdf_model.groups :
             return False
 
@@ -148,7 +147,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         # joint_list = self.srdf_model.get_group_joints(group_name)
         rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
-
+        print joint_list
         joint_name_map = JointNameMap() 
         
         for j in joint_list :

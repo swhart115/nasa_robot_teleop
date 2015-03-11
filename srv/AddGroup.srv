@@ -1,0 +1,11 @@
+string name
+string type
+
+string control_frame
+string root_frame
+
+string[] joint_list
+
+----
+
+int8 id

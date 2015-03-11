@@ -19,6 +19,7 @@ import trajectory_msgs.msg
 import control_msgs.msg
 
 from nasa_robot_teleop.srv import *
+from nasa_robot_teleop.group_config import *
 
 from srdf_model import SRDFModel
 from kdl_posemath import *
@@ -30,9 +31,9 @@ from tolerances import *
 
 class PathPlanner(object):
 
-    def __init__(self, robot_name, config_package):
+    def __init__(self, robot_name, config_file):
         self.robot_name = robot_name
-        self.config_package = config_package
+        self.config_file = config_file
         self.use_tolerances = False
 
         self.robot_name = robot_name
@@ -51,7 +52,6 @@ class PathPlanner(object):
         self.plan_generated = {}
         self.marker_store = {}
         self.stored_plans = {}
-        self.config_package = config_package
         self.command_topics = {}
         self.gripper_service = None
         self.bridge_topic_map = {}
@@ -66,14 +66,12 @@ class PathPlanner(object):
         self.joint_tolerance = 0.01
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
-        
-        rospy.logwarn("STARTING TF LISTENER") 
+      
         self.tf_listener = tf.TransformListener()
   
-        if not self.create_models(config_package) :
+        if not self.create_models(config_file) :
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
-    
         
     def set_tolerance_file(self, filename) :
         self.use_tolerances = True
@@ -96,7 +94,7 @@ class PathPlanner(object):
     def clear_gripper_service(self) :
         self.gripper_service = None    
 
-    def create_models(self, config_package) :
+    def create_models(self, config_file) :
 
         rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
         self.urdf_model = urdf.Robot.from_parameter_server()
@@ -107,24 +105,24 @@ class PathPlanner(object):
         self.srdf_model = SRDFModel(self.robot_name)
 
         try :
-            rospy.loginfo(str("PathPlanner::create_models() -- PathPlanner config package: " + config_package))
-            srdf_filename = str(RosPack().get_path(config_package) + "/config/" + self.robot_name + ".srdf")
-            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + srdf_filename))
-            if self.srdf_model.parse_from_file(srdf_filename) :
+            rospy.loginfo(str("PathPlanner::create_models() -- PathPlanner config package: " + config_file))
+            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
+            if self.srdf_model.parse_from_file(config_file) :
                 rospy.loginfo("PathPlanner::create_models() ================================================")
             return True
         except :
             rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
             return False
 
-    # problaby can clean this up, it's messy FIXME
-    def add_planning_group(self, group_name, group_type="manipulator", joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
+
+    # probably can clean this up, it's messy FIXME
+    def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
 
         self.plan_generated[group_name] = False
         self.stored_plans[group_name] = None
-        self.display_modes[group_name] = "last_point"
+        self.display_modes[group_name] = "all_points"
         self.auto_execute[group_name] = False
 
         self.group_types[group_name] = group_type
@@ -136,21 +134,7 @@ class PathPlanner(object):
         if not self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
             return False
 
-        try :
-
-            controller_name = self.lookup_controller_name(group_name)  # FIXME
-            msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
-            bridge_topic_name = self.lookup_bridge_topic_name(controller_name)
-            if bridge_topic_name != "" :
-                from pr2_joint_trajectory_bridge.msg import JointTrajectoryBridge
-                controller_name = bridge_topic_name
-                msg_type = JointTrajectoryBridge
-                self.bridge_topic_map[group_name] = bridge_topic_name
-
-            # topic_name = "/" + controller_name + "/command"
-            topic_name = "/" + controller_name + "/goal"
-            rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
-            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
+        try :           
 
             # generate a random group_id
             id_found = False
@@ -162,7 +146,6 @@ class PathPlanner(object):
 
             # check to see if the group has an associated end effector, and add it if so
             if self.has_end_effector_link(group_name) :
-                print "has end-effector"
                 self.control_frames[group_name] = self.get_end_effector_link(group_name)
                 ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
                 try :
@@ -172,17 +155,14 @@ class PathPlanner(object):
                     rospy.logwarn("no mesh found")
                 for ee in self.srdf_model.end_effectors.keys() :
                     if self.srdf_model.end_effectors[ee].parent_group == group_name :
-                        print "   setting up corresponding end effector"
                         self.end_effector_map[group_name] = ee
                         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
                             joint_tolerance=joint_tolerance, position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance)
             elif self.srdf_model.has_tip_link(group_name) :
-                print "test ------"
                 self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                 ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
                 self.control_meshes[group_name] = ee_link.visual.geometry.filename
             elif self.group_types[group_name] == "endeffector" :
-                print "is end-effector"
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
                 ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
                 try :
@@ -200,6 +180,8 @@ class PathPlanner(object):
             return False
 
    
+    def remove_planning_group(self, group) :
+        pass
 
     def get_ee_parent_group(self, ee) :
         if ee in self.srdf_model.end_effectors :
@@ -259,19 +241,15 @@ class PathPlanner(object):
         return ee_list
 
     def get_control_frame(self, group_name) :
-        if self.has_group(group_name) :
-            if self.has_end_effector_link(group_name) :
-                return self.get_end_effector_link(group_name)
-            elif self.group_types[group_name] == "endeffector" :
-                if group_name in self.srdf_model.group_end_effectors :
-                    return self.srdf_model.group_end_effectors[group_name].parent_link
-                else :
-                    return "world"
-            elif self.srdf_model.has_tip_link(group_name) :
-                return self.srdf_model.get_tip_link(group_name)
-        else :
-            return "world"
-
+        if self.srdf_model.has_tip_link(group_name) :
+            return self.srdf_model.get_tip_link(group_name)
+        elif self.has_end_effector_link(group_name) :
+            return self.get_end_effector_link(group_name)
+        elif self.group_types[group_name] == "endeffector" :
+            if group_name in self.srdf_model.group_end_effectors :
+                return self.srdf_model.group_end_effectors[group_name].parent_link
+        return "world"
+    
     def get_stored_group_state(self, group_name, group_state_name) :
         if group_state_name in self.srdf_model.get_group_state_list(group_name) :
             return self.srdf_model.get_group_state(group_name, group_state_name).to_joint_state_msg()
@@ -536,33 +514,7 @@ class PathPlanner(object):
         return markers, T_acc, child_link.name
 
 
-    # this is where parse the PathPlanner config package for the robot and figure out what the controller names are 
-    def lookup_controller_name(self, group_name) :
-
-        if not group_name in self.group_controllers.keys() :
-            import yaml
-            try:
-                controllers_file = str(RosPack().get_path(self.config_package) + "/config/controllers.yaml") 
-                rospy.logdebug("Controller yaml: " + controllers_file)
-                controller_config = yaml.load(file(controllers_file, 'r'))
-            except :
-                rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
-
-            joint_list = self.get_group_joints(group_name)
-            print joint_list
-            jn = joint_list[0]
-            for j in joint_list:
-                if j in self.urdf_model.joint_map :
-                    if self.urdf_model.joint_map[j].type != "fixed" :
-                        jn = j
-                        break
-            self.group_controllers[group_name] = ""
-            for c in controller_config['controller_list'] :
-                if jn in c['joints'] :
-                    self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
-
-        rospy.logdebug(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
-        return self.group_controllers[group_name]
+   
 
     def lookup_bridge_topic_name(self, controller_name) :
         bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")

@@ -39,10 +39,11 @@ from navigation_waypoint_control import *
 
 class InteractiveControl:
 
-    def __init__(self, robot_name, planner_type, config_file, navigation_frame):
+    def __init__(self, robot_name, planner_type, navigation_frame, group_config_file, planner_config_file):
 
         self.robot_name = robot_name
-        self.config_file = config_file
+        self.group_config_file = group_config_file
+        self.planner_config_file = planner_config_file
 
         self.group_map = []
         
@@ -103,53 +104,45 @@ class InteractiveControl:
         self.menu_options.append(("Sync To Actual", False))
         self.menu_options.append(("Stored Poses", False))       
 
+        # get the groups from the config file
+        self.group_map = self.parse_config_file(self.group_config_file)
+
         # planner instantiatation
         if planner_type == "moveit" :
-            self.path_planner = MoveItPathPlanner(self.robot_name, self.config_file)
+            self.path_planner = MoveItPathPlanner(self.robot_name, self.planner_config_file)
         elif planner_type == "atlas" :
-            self.path_planner = AtlasPathPlanner(self.robot_name, self.config_file)
+            self.path_planner = AtlasPathPlanner(self.robot_name, self.planner_config_file)
         else :
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
             exit()
 
         self.root_frame = self.path_planner.get_robot_planning_frame()
-        
-        self.use_tolerances = self.path_planner.uses_tolerances()
-
-        # get the groups from the config file
-        self.group_map = self.parse_config_file(self.config_file)
-        self.setup_groups()       
-
         # set the control frames for all types of groups
         for n in self.get_groups() :
             self.control_frames[n] = self.path_planner.get_control_frame(n)
 
-        # what do we have?
-        self.path_planner.print_basic_info()
+        self.use_tolerances = self.path_planner.uses_tolerances()
 
+        # load the urdf
+        self.urdf = self.path_planner.get_urdf_model()
+
+        # setup the groups
+        self.setup_groups()       
         
+        # what do we have?  
+        self.path_planner.print_basic_info()
+       
         # get stored poses from model
         for group in self.get_groups() :
             self.stored_poses[group] = {}
             for state_name in self.path_planner.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
-
-        # get tolerance modes and append it to each group (probably will all be the same)
-        for group in self.get_groups() :
-            if self.use_tolerances :
-                self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
-                self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
-                self.path_planner.set_goal_position_tolerance_mode(group, None)
-                self.path_planner.set_goal_orientation_tolerance_mode(group, None)
-        
-        # start update threads for manipulators
-        for n in self.get_groups('cartesian') :
-            self.start_pose_update_thread(n)
+       
 
         # Create EndEffectorHelper objects to help with EE displays
         for n in self.path_planner.get_end_effector_names() :
             self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
-            self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.path_planner.get_urdf_model(), self.path_planner.get_srdf_model())
+            self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.urdf, self.path_planner.get_srdf_model())
 
         
     def parse_config_file(self, config_file) :
@@ -160,7 +153,8 @@ class InteractiveControl:
         if group_type==None :
             l = []
             for t in self.group_map.keys() :
-                l = l+self.group_map[t]
+                if self.group_map[t] :
+                    l = l+self.group_map[t]
             g = list(set(l))
             return g
         else :
@@ -191,7 +185,6 @@ class InteractiveControl:
     def initialize_all_group_markers(self) :
         self.group_menu_handles = {}
         self.marker_menus = {}
-        urdf = self.path_planner.get_urdf_model()
         for g in self.get_groups() :
             self.initialize_group_markers(g)
     
@@ -206,18 +199,14 @@ class InteractiveControl:
         
         group_type = self.get_group_type(group)
 
-        menu_control = InteractiveMarkerControl()
-        menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
-
         if group_type == "cartesian" :
-            self.initialize_manipulator_group(group)
+            self.initialize_cartesian_group(group)
         elif group_type == "joint" :
             self.initialize_joint_group(group)
         elif group_type == "endeffector" :
             self.initialize_endeffector_group(group)
 
         # insert marker and menus
-        self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
         self.auto_execute[group] = True
 
@@ -237,8 +226,11 @@ class InteractiveControl:
         self.server.applyChanges()
 
 
-    def initialize_manipulator_group(self, group) : 
+    def initialize_cartesian_group(self, group) : 
     
+        menu_control = InteractiveMarkerControl()
+        menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
+
         if self.path_planner.has_joint_mask(group) :
             if ("Joint Mask", False) not in  self.menu_options :
                 self.menu_options.append(("Joint Mask", False))
@@ -256,16 +248,31 @@ class InteractiveControl:
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
-        self.reset_group_marker(group)
+        self.markers[group].controls.append(menu_control)
 
+        if self.use_tolerances :
+            self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
+            self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
+            self.path_planner.set_goal_position_tolerance_mode(group, None)
+            self.path_planner.set_goal_orientation_tolerance_mode(group, None)
+
+        # start update threads for cartesian groups
+        self.start_pose_update_thread(group)
+        self.reset_group_marker(group)
+        
+ 
     def initialize_joint_group(self, group) :    
+
+        menu_control = InteractiveMarkerControl()
+        menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
+
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         control_frame = self.path_planner.get_control_frame(group)
-        jg_links = urdf.get_all_child_links(control_frame)
+        jg_links = self.urdf.get_all_child_links(control_frame)
         idx = 0
         for jg_link in jg_links :
             try :
-                marker = get_mesh_marker_for_link(jg_link, urdf)
+                marker = get_mesh_marker_for_link(jg_link, self.urdf)
                 if marker != None :
                     marker.color.r = 1
                     marker.color.g = 1
@@ -283,16 +290,22 @@ class InteractiveControl:
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
+        self.markers[group].controls.append(menu_control)
+ 
 
     def initialize_endeffector_group(self, group) : 
+
+        menu_control = InteractiveMarkerControl()
+        menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
+
         control_frame = self.path_planner.get_control_frame(group)
-        ee_links = urdf.get_all_child_links(control_frame)
+        ee_links = self.urdf.get_all_child_links(control_frame)
         self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
 
         idx = 0
         for ee_link in ee_links :
             try :
-                end_effector_marker = get_mesh_marker_for_link(ee_link, urdf)
+                end_effector_marker = get_mesh_marker_for_link(ee_link, self.urdf)
 
                 if end_effector_marker != None :
                     end_effector_marker.color.r = 1
@@ -307,7 +320,9 @@ class InteractiveControl:
 
         if self.path_planner.get_group_type(group) == "endeffector" :
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Plan")], MenuHandler.CHECKED )
-                 
+
+        self.markers[group].controls.append(menu_control)
+ 
 
     def remove_group_markers(self, group) :
         self.server.erase(self.markers[group].name)
@@ -349,13 +364,13 @@ class InteractiveControl:
             for idx in range(len(joint_map.names)) :
 
                 jnt = joint_map.names[idx]
-                lnk = get_joint_child_link(jnt,self.path_planner.get_urdf_model())
+                lnk = get_joint_child_link(jnt,self.urdf)
                 self.joint_group_map[jnt] = group
 
                 if self.posture_markers_on[group] :
                     self.server.erase(self.posture_markers[group][lnk].name)
                 else :
-                    joint = self.path_planner.get_urdf_model().joint_map[jnt]
+                    joint = self.urdf.joint_map[jnt]
                     int_marker = InteractiveMarker()
                     int_marker.header.frame_id = lnk
                     int_marker.scale = 0.2
@@ -382,15 +397,17 @@ class InteractiveControl:
                 for p in self.path_planner.get_stored_state_list(group) :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
             elif m == "Position Tolerance" :
-                sub_menu_handle = self.marker_menus[group].insert(m)
-                for p in self.position_tolerance_modes[group] :
-                    self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.position_tolerance_callback)
-                    self.marker_menus[group].setCheckState(self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+                if self.get_group_type(group) == "cartesian" :
+                    sub_menu_handle = self.marker_menus[group].insert(m)
+                    for p in self.position_tolerance_modes[group] :
+                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.position_tolerance_callback)
+                        self.marker_menus[group].setCheckState(self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
             elif m == "Angle Tolerance" :
-                sub_menu_handle = self.marker_menus[group].insert(m)
-                for p in self.orientation_tolerance_modes[group] :
-                    self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.orientation_tolerance_callback)   
-                    self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+                if self.get_group_type(group) == "cartesian" :
+                    sub_menu_handle = self.marker_menus[group].insert(m)
+                    for p in self.orientation_tolerance_modes[group] :
+                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.orientation_tolerance_callback)   
+                        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
             elif m == "Joint Mask" :
                 sub_menu_handle = self.marker_menus[group].insert(m) 
                 if self.path_planner.has_joint_mask(group) and self.path_planner.has_joint_map(group):
@@ -413,6 +430,7 @@ class InteractiveControl:
     def start_pose_update_thread(self, group) :
         self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
         try :
+            rospy.logwarn(str("starting pose_update_thread() for group: " + group + " with frame: " + self.control_frames[group]))
             self.pose_update_thread[group] = PoseUpdateThread(group, self.root_frame, self.control_frames[group], self.tf_listener, None)
             self.pose_update_thread[group].start()
         except :
@@ -536,11 +554,11 @@ class InteractiveControl:
     def process_feedback(self, feedback) :
         
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_DOWN:
-            if feedback.marker_name in self.self.get_groups('cartesian') :
+            if feedback.marker_name in self.get_groups('cartesian') :
                 self.pose_store[feedback.marker_name] = feedback.pose
         
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
-            if feedback.marker_name in self.self.get_groups('cartesian') :
+            if feedback.marker_name in self.get_groups('cartesian') :
                 if self.auto_plan[feedback.marker_name] :
                     pt = geometry_msgs.msg.PoseStamped()
                     pt.header = feedback.header
@@ -607,25 +625,26 @@ class InteractiveControl:
         self.server.applyChanges()
 
 if __name__=="__main__":
-    parser = argparse.ArgumentParser(description='Robot Teleop')
-    parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
-    parser.add_argument('-c, --config_file', dest='config_file', help='e.g. <path>/r2_fullbody_moveit_config/config/r2_fullbody.srdf')
-    parser.add_argument('-p, --planner', dest='planner_type', help='e.g. moveit, atlas')
-    parser.add_argument('-g, --gripper_service', nargs="*", dest='gripper_service', help='string e.g. "/pr2_gripper_bridge/end_effector_command"')
-    parser.add_argument('-n, --navigation', dest='navigation_markers', help='True | False')
-    parser.add_argument('positional', nargs='*')
-    args = parser.parse_args()
 
     rospy.init_node("InteractiveControl")
 
-    robot = InteractiveControl(args.robot, args.planner_type, args.config_file, "/ground")
+    robot = rospy.get_param("~robot")
+    planner = rospy.get_param("~planner_type")
+    group_config_file = rospy.get_param("~group_config_file")
 
-    if args.gripper_service :
-        rospy.loginfo(str("Setting Gripper Service: " + args.gripper_service[0]))
-        robot.set_gripper_service(args.gripper_service[0])
+    planner_config_file = rospy.get_param("~planner_config_file", None)   
+    tolerance_config_file = rospy.get_param("~tolerance_config_file", None)   
+    navigation_frame = rospy.get_param("~navigation_frame", None)
+    gripper_service = rospy.get_param("~gripper_service", None)
 
-    if args.navigation_markers :
-        robot.navigation_controls.activate_navigation_markers(True)
+    control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file)
+
+    if gripper_service :
+        rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
+        control.set_gripper_service(gripper_service)
+
+    if navigation_frame :
+        control.navigation_controls.activate_navigation_markers(True)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
