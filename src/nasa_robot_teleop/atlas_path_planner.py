@@ -74,7 +74,6 @@ class AtlasPathPlanner(PathPlanner) :
             resp = get_planner_config(req)
             for g in resp.group_configurations:
                 self.groups[g.group_name] = g
-            print resp
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::load_configurations() -- GetPlanningServiceConfiguration service call failed: " + str(e)))
 
@@ -101,8 +100,6 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))     
 
         if self.load_group_from_srdf(group_name) : 
-            
-            print "what"
             if self.use_tolerances and (self.group_types[group_name] == "manipulator"):
                 self.position_tolerance_modes[group_name] = "SPHERE"
                 self.orientation_tolerance_modes[group_name] = "SPHERE"
@@ -112,8 +109,6 @@ class AtlasPathPlanner(PathPlanner) :
                 
                 m = self.tolerances.get_tolerance_mode('OrientationTolerance', [orientation_tolerance[0],orientation_tolerance[1],orientation_tolerance[2]])
                 if m :self.orientation_tolerance_modes[group_name]
-        
-            print "??"
             return True
         else : 
             return False
@@ -153,8 +148,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         # joint_list = self.srdf_model.get_group_joints(group_name)
         rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
-        print joint_list    
-        print self.joint_names
 
         joint_name_map = JointNameMap() 
         
@@ -165,7 +158,6 @@ class AtlasPathPlanner(PathPlanner) :
             joint_name_map.names.append(j)
             joint_name_map.ids.append(self.joint_names.index(j))
 
-        print joint_name_map
         return joint_name_map
 
     def joint_name_callback(self, msg) :

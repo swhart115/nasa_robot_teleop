@@ -21,7 +21,7 @@ from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
 
-# heler files
+# helper files
 from nasa_robot_teleop.marker_helper import *
 from nasa_robot_teleop.kdl_posemath import *
 from nasa_robot_teleop.pose_update_thread import *
@@ -33,24 +33,28 @@ from nasa_robot_teleop.path_planner import *
 from nasa_robot_teleop.moveit_path_planner import *
 from nasa_robot_teleop.atlas_path_planner import *
 
+from navigation_waypoint_control import *
+
 class RobotTeleop:
 
-    def __init__(self, robot_name, planner_type, config_package, manipulator_group_names, joint_group_names):
+    def __init__(self, robot_name, planner_type, config_package, manipulator_group_names, joint_group_names, navigation_frame):
         self.robot_name = robot_name
         self.group_names = []
         self.manipulator_group_names = manipulator_group_names
         self.joint_group_names = joint_group_names
+        self.navigation_frame = navigation_frame
         self.tf_listener = tf.TransformListener()
         self.joint_data = sensor_msgs.msg.JointState()
         
+
         self.markers = {}
         self.marker_menus = {}
-        self.waypoint_marker_menus = {}
+        self.posture_markers = {}
+        self.posture_markers_on = {}
         self.group_pose_data = {}
         self.control_frames = {}
         self.stored_poses = {}
         self.group_menu_handles = {}
-        self.waypoint_menu_handles = {}
         self.pose_update_thread = {}
         self.pose_store = {}
         self.auto_plan = {}
@@ -61,12 +65,15 @@ class RobotTeleop:
         self.group_position_tolerance_mode = {}
         self.group_orientation_tolerance_mode = {}
         self.gripper_service = None
-        self.navigation_markers_on = False
-        self.navigation_markers = []
-        self.wp_stack = []
-        self.waypoint_controls = {}
+        self.joint_group_map = {}
+
         # interactive marker server
         self.server = InteractiveMarkerServer(str(self.robot_name + "_teleop"))
+
+        # nav control markers
+        self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
+
+
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
 
         # set up MoveIt! interface
@@ -121,13 +128,7 @@ class RobotTeleop:
         self.menu_options.append(("Execute", False))
         self.menu_options.append(("Execute On Plan", True))
         self.menu_options.append(("Show Path", True))       
-        # self.menu_options.append(("Turn on Joint Control", True))
-
-        self.waypoint_menu_options = []
-        self.waypoint_menu_options.append("Add Waypoint")
-        self.waypoint_menu_options.append("Toggle Full Control")
-        self.waypoint_menu_options.append("Delete Waypoint")
-        self.waypoint_menu_options.append("Request Plan")
+        self.menu_options.append(("Toggle Joint Control", False))
 
         # get stored poses from model
         for group in self.group_names :
@@ -223,18 +224,8 @@ class RobotTeleop:
                             marker.id = idx
                             menu_control.markers.append(marker)
                             idx += 1
-                            # print "ADDING MESH FOR LINK: ", jg_link
-                            # print marker
                     except :
                         pass
-
-
-                # original 
-                # mesh = self.path_planner.get_control_mesh(group)
-                # pose = self.path_planner.get_control_mesh_pose_offset(group)
-                # scale = self.path_planner.get_control_mesh_scale(group)
-                # marker = makeMesh( self.markers[group], mesh, pose, [s*1.02 for s in scale], alpha=0.1 )
-                # menu_control.markers.append( marker )
 
                 # insert marker and menus
                 self.markers[group].controls.append(menu_control)
@@ -244,10 +235,6 @@ class RobotTeleop:
                 control_frame = self.path_planner.get_control_frame(group)
                 ee_links = urdf.get_all_child_links(control_frame)
                 self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
-                
-                # original 
-                # end_effector_marker = self.end_effector_link_data[group].get_current_position_marker(self.markers[group].header.frame_id, scale=1.02, color=(1,1,1,0.1))
-                # menu_control.markers.append( end_effector_marker )
 
                 idx = 0
                 for ee_link in ee_links :
@@ -266,11 +253,15 @@ class RobotTeleop:
                     except :
                         pass
 
-                # insert marker and menus
-                self.markers[group].controls.append(menu_control)
-                self.server.insert(self.markers[group], self.process_feedback)
-                self.auto_execute[group] = True
+            # insert marker and menus
+            self.markers[group].controls.append(menu_control)
+            self.server.insert(self.markers[group], self.process_feedback)
+            self.auto_execute[group] = True
 
+            # posture stuff
+            self.posture_markers[group] = {}
+            self.posture_markers_on[group] = False
+            
             # Set up stored pose sub menu
             self.setup_sub_menus(group)
 
@@ -281,6 +272,7 @@ class RobotTeleop:
             self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Plan On Move")], MenuHandler.UNCHECKED )
             # add menus to server
             self.marker_menus[group].apply( self.server, group )
+            
             self.server.applyChanges()
        
     def set_gripper_service(self, srv) :
@@ -291,245 +283,39 @@ class RobotTeleop:
         self.gripper_service = None
         self.path_planner.clear_gripper_service()
 
-    def activate_navigation_markers(self, v) :
-        self.navigation_markers_on = v
+    def toggle_posture_control(self, group) :
 
-        p = geometry_msgs.msg.Pose()
-        p.orientation = Quaternion()
-        p.orientation.w = 1
+        if self.path_planner.has_joint_map(group):
+            joint_map = self.path_planner.get_joint_map(group)
 
-        self.add_waypoint(None, p, False)
+            for idx in range(len(joint_map.names)) :
 
+                jnt = joint_map.names[idx]
+                lnk = get_joint_child_link(jnt,self.path_planner.get_urdf_model())
+                self.joint_group_map[jnt] = group
 
-    def add_waypoint(self, parent_name=None, offset=Pose(), replace=False, full_controls=False) :
-
-        # add a new waypoint if it's the first
-        if len(self.navigation_markers) == 0:
-            self.insert_waypoint(offset, replace, full_controls)
-            self.server.applyChanges()
-            return True
-        else:
-            if parent_name:
-                node = parent_name
-            else:
-                node = self.navigation_markers[0]
-
-            index = self.navigation_markers.index(node)
-            original_size = len(self.navigation_markers)
-
-            # store any waypoints following the soon to be deleted waypoint
-            if index < original_size:
-                self.push_waypoints_and_resize(index)
-
-            # insert waypoint into vector and server
-            self.insert_waypoint(offset, replace, full_controls)
-
-            # pop any stored waypoints
-            if self.wp_stack:
-                self.pop_waypoints()
-
-            # if len(self.navigation_markers) > 1:
-            #     self.createPaths()
-
-            self.server.applyChanges()
-
-            if len(self.navigation_markers) > original_size:
-                return True
-            else:
-                return False
-
-    def delete_waypoint(self, name):
-        index = self.navigation_markers.index(name)
-        original_size = len(self.navigation_markers)
-
-        # store waypoints
-        if index < original_size:
-            self.push_waypoints_and_resize(index)
-
-        # delete from vector and server
-        if (self.remove_waypoint_from_template(name)):
-            # pop any stored waypoints
-            if self.wp_stack:
-                self.pop_waypoints()
-
-            # if len(self.navigation_markers) > 1:
-            #     self.createPaths()
-
-            self.server.applyChanges()
-
-        if len(self.navigation_markers) == original_size - 1:
-            return True
-        else:
-            return False
-
-    def insert_waypoint(self, offset, replace, full_controls=False) :
-
-        key = "NavigationMarker:" + self.get_next_id()
-
-        # init interactivemarker waypoint and adjust offset
-        waypoint = InteractiveMarker()
-        waypoint.header.frame_id = "/ground"
-        waypoint.name = key
-        waypoint.description = str("NavigationMarker:"+self.get_next_id())
-        waypoint.scale = 0.25
-        waypoint.pose = offset
-
-
-        # print "adding waypoint [", key, "] at offset (replace=", replace, ") --- ", offset
-
-        waypoint_id = len(self.navigation_markers)
-        # unless we're replacing a waypoint, slightly adjust the position so we're not inserting
-        # directly on top of an existing waypoint
-        if not replace:
-            waypoint.pose.position.y += 0.1
-            # slightly raise z to allow easier selection in rviz
-            if waypoint.pose.position.z <= 0.01:
-                waypoint.pose.position.z = 0.01
-
-        # create a control to translate in XY plane and add arrow visualization.
-        # also add rotate Z control
-        translate = CreateNavControl()
-        translate.markers.append(createArrow(waypoint_id))
-        waypoint.controls.append(translate)
-
-        waypoint.controls.append(makeYRotControl())
-
-        if full_controls :
-            waypoint.controls.append(makeXRotControl())
-            waypoint.controls.append(makeZRotControl())
-            waypoint.controls.append(makeYTransControl())
-        
-        self.waypoint_controls[key] = full_controls
-
-        cyl = createCylinder(waypoint_id, height=1.0, radius=0.25)
-        cyl_control = CreateVisualControlFromMarker(cyl)#,interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
-        waypoint.controls.append(cyl_control)
-        # height_control = makeYTransControl()
-        # waypoint.controls.append(height_control)
-
-        # radius = createCylinder(waypoint_id)
-        # cyl_control = CreateVisualControlFromMarker(radius)
-        # waypoint.controls.append(cyl_control)
-
-        self.server.insert(waypoint, self.navigation_marker_callback)
-        
-        self.waypoint_marker_menus[waypoint_id] = MenuHandler()
-
-        for m in self.waypoint_menu_options :
-            self.waypoint_menu_handles[m] = self.waypoint_marker_menus[waypoint_id].insert( m, callback=self.waypoint_menu_callback )
-
-        self.navigation_markers.append(waypoint.name)
-
-        self.waypoint_marker_menus[waypoint_id].apply(self.server, waypoint.name)
+                if self.posture_markers_on[group] :
+                    self.server.erase(self.posture_markers[group][lnk].name)
+                else :
+                    joint = self.path_planner.get_urdf_model().joint_map[jnt]
+                    int_marker = InteractiveMarker()
+                    int_marker.header.frame_id = lnk
+                    int_marker.scale = 0.2
+                    int_marker.name = jnt
+                    int_marker.pose.position.x, int_marker.pose.position.y, int_marker.pose.position.z = 0,0,0# joint.origin.xyz
+                    int_marker.pose.orientation.w = 1
+                    int_marker.pose.orientation.x, int_marker.pose.orientation.y, int_marker.pose.orientation.z = 0,0,0# joint.origin.rpy
+                    control = InteractiveMarkerControl()
+                    control.orientation.x, control.orientation.y, control.orientation.z, control.orientation.w = axis_to_q(joint.axis)
+                    control.name = "rotate"
+                    control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+                    int_marker.controls.append(control)
+                    self.posture_markers[group][lnk] = int_marker
+                    self.server.insert(self.posture_markers[group][lnk], self.posture_feedback)
 
         self.server.applyChanges()
+        self.posture_markers_on[group] = not self.posture_markers_on[group] 
 
-    def toggle_waypoint_controls(self, feedback) :
-
-        name = feedback.marker_name
-        
-        if not self.waypoint_controls[name] :
-            self.delete_waypoint(name)
-            self.add_waypoint(offset=feedback.pose, replace=True, full_controls=True)
-            self.waypoint_controls[name] = True
-        else :
-            self.delete_waypoint(name)
-            self.add_waypoint(offset=feedback.pose, replace=True, full_controls=False)
-            self.waypoint_controls[name] = False
-        
-        self.server.applyChanges()
-
-    def get_next_id(self):
-        id = len(self.navigation_markers)
-        if id < 10:
-            str_id = "0" + str(id)
-        else:
-            str_id = str(id)
-        return str_id
-
-    def get_waypoint_name(self, id):
-        if id < 10:
-            str_id = "0" + str(id)
-        else:
-            str_id = str(id)
-        return str_id
-
-    def remove_waypoint_from_template(self, name):
-        count = len(self.navigation_markers)
-        if name in self.navigation_markers:
-            self.navigation_markers.remove(name)
-
-        self.server.erase(name)
-
-        # return true if a waypoint was deleted
-        if len(self.navigation_markers) < count:
-            return self.server.erase(name)
-        else:
-            return False
-
-    def pop_waypoints(self):
-        # // Now pop each InteractiveMarker from the stack. Grab the pose from the InteractiveMarker
-        # // and call addWaypoint(), passing in the offset to create a new marker. The addWaypoint()
-        # // method will handle naming of the waypoints correctly, and will also add the waypoint to
-        # // the template vector for tracking.
-        while self.wp_stack:
-            waypoint = self.wp_stack.pop()
-            offset = waypoint.pose
-            self.insert_waypoint(offset, True)
-
-    def push_waypoints_and_resize(self, index):
-
-        # TODO: The vector of waypoints helps keep track of added waypoints in the template. It looks as
-        # if only the "name" field of the waypoint (InteractiveMarker) is getting used. If this is the
-        # case, the vector can be a vector of strings containing waypoint names, instead of actual
-        # InteractiveMarker objects.
-        # Get name of waypoint from vector, and use that to get the InteractiveMarker on the server.
-        for i in range(len(self.navigation_markers)-1, index, -1):
-            wp_name = self.navigation_markers[i]
-            interactive_marker = self.server.get(wp_name)
-            # push a copy of the marker onto the stack and delete from the server
-            self.wp_stack.append(interactive_marker)
-            self.server.erase(wp_name)
-
-        # // Now resize vector to the index.
-        # // Because our vector of waypoints are both numbered sequentially and don't skip numbers,
-        # // We can just resize the vector to the index.
-        # // Example:
-        # // for vector {0, 1, 2, 3, 4, 5 ,6 ,7 ,8, 9}
-        # // we delete index 5, and pop remaining into a stack
-        # //   stack {9, 8, 7, 6} <- top
-        # // we want the new vector to be
-        # //   vector {0, 1, 2, 3, 4}
-        # // So we can resize it using the index. This seems dirty. Is this dirty?
-        self.navigation_markers = self.navigation_markers[:index+1]
-
-
-    def request_navigation_plan(self, data) :
-
-        waypoint_name = data.marker_name
-        rospy.loginfo(str("RobotTeleop::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
-        
-        waypoints = []
-
-        for id in self.navigation_markers :
-
-            print " ID: ", id
-            n = self.get_waypoint_name(id)
-            print " NAME: ", n
-            data = self.server.get(n)
-            print " POSE: ",
-            print data.pose
-            # print data
-                  
-            wp = PoseStamped()
-            wp.pose = data.pose
-            wp.header = data.header
-            waypoints.append(wp)
-            
-            if self.get_waypoint_name(id) == waypoint_name: 
-                break        
-
-        plan = self.path_planner.plan_navigation_path(waypoints)
 
     def setup_sub_menus(self, group) :
         for m,c in self.menu_options :
@@ -592,7 +378,6 @@ class RobotTeleop:
         self.joint_data = data
 
     def position_tolerance_callback(self,feedback) :
-        print ""
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
                 self.group_position_tolerance_mode[feedback.marker_name] = "FULL"
@@ -681,24 +466,25 @@ class RobotTeleop:
                     rospy.sleep(3)
                     self.reset_group_marker(feedback.marker_name)
 
-    def navigation_marker_callback(self, data) :
-        # print "nav callback"
-        pass
-
-    def waypoint_menu_callback(self, feedback):
+  
+    def posture_feedback(self, feedback) :
+        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+            js = JointState()
+            js.name.append(feedback.marker_name)
+            q = feedback.pose.orientation.x,feedback.pose.orientation.y,feedback.pose.orientation.z,feedback.pose.orientation.w
+            print rpy
+            print theta
+            js.position.append(theta)
+            group = self.joint_group_map[feedback.marker_name]
+            if self.auto_execute[group] :
+                self.path_planner.create_joint_plan_to_target(group, js)
+                r = self.path_planner.execute(group)
+                # r = self.path_planner.plan_joint_goal_and_execute(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
+                if not r : rospy.logerr(str("RobotTeleop::posture_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name))
+            else :
+                self.path_planner.clear_goal_target(group)
+                self.path_planner.create_joint_plan_to_target(group, js)
         
-        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
-            handle = feedback.menu_entry_id
-            print handle
-            if handle == self.waypoint_menu_handles["Add Waypoint"] :
-                self.add_waypoint(feedback.marker_name, feedback.pose)
-            elif handle == self.waypoint_menu_handles["Delete Waypoint"] :
-                self.delete_waypoint(feedback.marker_name)
-            elif handle == self.waypoint_menu_handles["Request Plan"] :
-                self.request_navigation_plan(feedback)
-            elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
-                self.toggle_waypoint_controls(feedback)
-
     def process_feedback(self, feedback) :
 
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_DOWN:
@@ -721,6 +507,8 @@ class RobotTeleop:
                     else :
                         self.path_planner.clear_goal_target (feedback.marker_name)
                         self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+            self.server.applyChanges()
+            self.server.applyChanges()
 
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.group_names :
@@ -768,6 +556,8 @@ class RobotTeleop:
                     else :
                         self.path_planner.clear_goal_target (feedback.marker_name)
                         self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
+                    self.toggle_posture_control(feedback.marker_name)
 
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
@@ -786,14 +576,14 @@ if __name__=="__main__":
 
     rospy.init_node("RobotTeleop")
 
-    robot = RobotTeleop(args.robot, args.planner_type, args.config, args.manipulator_groups, args.joint_groups)
+    robot = RobotTeleop(args.robot, args.planner_type, args.config, args.manipulator_groups, args.joint_groups, "/ground")
 
     if args.gripper_service :
         rospy.loginfo(str("Setting Gripper Service: " + args.gripper_service[0]))
         robot.set_gripper_service(args.gripper_service[0])
 
     if args.navigation_markers :
-        robot.activate_navigation_markers(True)
+        robot.navigation_controls.activate_navigation_markers(True)
 
     r = rospy.Rate(50.0)
     while not rospy.is_shutdown():

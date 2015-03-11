@@ -1,5 +1,5 @@
 
-import math
+from math import *
 import rospy
 
 import PyKDL as kdl
@@ -157,4 +157,54 @@ def get_mesh_marker_for_link(link_name, urdf) :
     except :
         marker = None
 
-    return marker        
+    return marker       
+
+
+def mag(v):
+    mag2 = sum(n * n for n in v)
+    return sqrt(mag2)
+
+def sign(val):
+    if val > 0:
+        return 1
+    elif val < 0:
+        return -1
+    else:
+        return 0
+
+def normalize(v, tolerance=0.00001):
+    mag2 = sum(n * n for n in v)
+    if abs(mag2 - 1.0) > tolerance:
+        mag = sqrt(mag2)
+        if mag == 0.: return v
+        v = tuple(n / mag for n in v)
+    return v
+
+def axis_to_q(v, roll_offset=0):
+    x, y, z = v
+    roll=pi + roll_offset
+    rad = sqrt(x*x+y*y+z*z)
+    pitch = atan2(-z,sqrt(x*x+y*y)) #acos(sqrt(x*x+y*y)/rad)
+    yaw = atan2(y,x)
+    return rpy_to_q((roll,pitch,yaw))
+
+def rpy_to_q(v):
+    r, p, y = [x/2 for x in v]
+    w = cos(r)*cos(p)*cos(y)+sin(r)*sin(p)*sin(y)
+    x = sin(r)*cos(p)*cos(y)-cos(r)*sin(p)*sin(y)
+    y = cos(r)*sin(p)*cos(y)+sin(r)*cos(p)*sin(y)
+    z = cos(r)*cos(p)*sin(y)-sin(r)*sin(p)*cos(y)
+    return x, y, z, w
+
+def q_to_axisangle(q):
+    w, v = q[0], q[1:]
+    theta = acos(w) * 2.0
+    return normalize(v), theta
+
+def q_to_rpy(q):
+    x,y,z,w = q
+    wx,x = normalize((w,x))
+    wy,y = normalize((w,y))
+    wz,z = normalize((w,z))
+    return sign(x)*2*acos(wx), sign(y)*2*acos(wy), sign(z)*2*acos(wz)
+
