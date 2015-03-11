@@ -17,20 +17,20 @@ from visualization_msgs.msg import Marker
 # helper files
 from nasa_robot_teleop.marker_helper import *
 
-
 class NavigationWaypointControl(object) :
 
     def __init__(self, robot, server, frame="/ground") :
         self.server = server
         self.robot_name = robot
+        self.frame = frame
 
         self.waypoint_marker_menus = {}
         self.waypoint_menu_handles = {}
-        self.navigation_markers_on = False
-        self.navigation_markers = []
-        self.wp_stack = []
+
+        self.waypoint_markers_on = False
+        self.waypoint_markers = []
+        self.waypoint_stack = []
         self.waypoint_controls = {}
-        self.navigation_frame = frame
 
         self.waypoint_menu_options = []
         self.waypoint_menu_options.append("Add Waypoint")
@@ -38,19 +38,19 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Delete Waypoint")
         self.waypoint_menu_options.append("Request Plan")
 
-    def activate_navigation_markers(self, v) :
-        self.navigation_markers_on = v
+        self.waypoint_poses = {}
 
+    def activate_navigation_markers(self, v) :
+        self.waypoint_markers_on = v
         p = geometry_msgs.msg.Pose()
         p.orientation = Quaternion()
         p.orientation.w = 1
-
         self.add_waypoint(None, p, False)
 
     def add_waypoint(self, parent_name=None, offset=Pose(), replace=False, full_controls=False) :
         
         # add a new waypoint if it's the first
-        if len(self.navigation_markers) == 0:
+        if len(self.waypoint_markers) == 0:
             self.insert_waypoint(offset, replace, full_controls)
             self.server.applyChanges()
             return True
@@ -58,37 +58,37 @@ class NavigationWaypointControl(object) :
             if parent_name:
                 node = parent_name
             else:
-                node = self.navigation_markers[0]
+                node = self.waypoint_markers[0]
 
-            index = self.navigation_markers.index(node)
-            original_size = len(self.navigation_markers)
+            index = self.waypoint_markers.index(node)
+            original_size = len(self.waypoint_markers)
 
             # store any waypoints following the soon to be deleted waypoint
-            # if index < original_size:
-            self.push_waypoints_and_resize(index)
+            if index < original_size:
+                self.push_waypoints_and_resize(index)
 
             # insert waypoint into vector and server
-            print "Adding wp at: (", offset.position.x, ", ", offset.position.y, ")"
+            # print "+++++ Adding wp at: (", offset.position.x, ", ", offset.position.y, ")"
             self.insert_waypoint(offset, replace, full_controls)
 
             # pop any stored waypoints
-            if self.wp_stack:
+            if self.waypoint_stack:
                 self.pop_waypoints()
 
-            # if len(self.navigation_markers) > 1:
+            # if len(self.waypoint_markers) > 1:
             #     self.createPaths()
 
             self.server.applyChanges()
 
-            if len(self.navigation_markers) > original_size:
+            if len(self.waypoint_markers) > original_size:
                 return True
             else:
                 return False
 
     def delete_waypoint(self, name):
-        index = self.navigation_markers.index(name)
-        print "deleting waypoint index: ", index
-        original_size = len(self.navigation_markers)
+        index = self.waypoint_markers.index(name)
+        # print "deleting waypoint index: ", index
+        original_size = len(self.waypoint_markers)
 
         # store waypoints
         if index < original_size:
@@ -97,15 +97,15 @@ class NavigationWaypointControl(object) :
         # delete from vector and server
         if (self.remove_waypoint_from_template(name)):
             # pop any stored waypoints
-            if self.wp_stack:
+            if self.waypoint_stack:
                 self.pop_waypoints()
 
-            # if len(self.navigation_markers) > 1:
+            # if len(self.waypoint_markers) > 1:
             #     self.createPaths()
 
             self.server.applyChanges()
 
-        if len(self.navigation_markers) == original_size - 1:
+        if len(self.waypoint_markers) == original_size - 1:
             return True
         else:
             return False
@@ -116,13 +116,13 @@ class NavigationWaypointControl(object) :
 
         # init interactivemarker waypoint and adjust offset
         waypoint = InteractiveMarker()
-        waypoint.header.frame_id = self.navigation_frame
+        waypoint.header.frame_id = self.frame
         waypoint.name = key
         waypoint.description = str("NavigationMarker:"+self.get_next_id())
         waypoint.scale = 0.25
         waypoint.pose = offset
 
-        waypoint_id = len(self.navigation_markers)
+        waypoint_id = len(self.waypoint_markers)
         # print "adding waypoint [", key, "] at offset (replace=", replace, ") --- ", offset
 
         # unless we're replacing a waypoint, slightly adjust the position so we're not inserting
@@ -133,6 +133,7 @@ class NavigationWaypointControl(object) :
             if waypoint.pose.position.z <= 0.01:
                 waypoint.pose.position.z = 0.01
 
+        self.waypoint_poses[key] = waypoint.pose
         # create a control to translate in XY plane and add arrow visualization.
         # also add rotate Z control
         translate = CreateNavControl()
@@ -164,9 +165,9 @@ class NavigationWaypointControl(object) :
         for m in self.waypoint_menu_options :
             self.waypoint_menu_handles[m] = self.waypoint_marker_menus[waypoint_id].insert( m, callback=self.waypoint_menu_callback )
 
-        print "Adding ", waypoint.name, " to storage"
-        self.navigation_markers.append(waypoint.name)
-        print " now : ", self.navigation_markers
+        # print "Adding ", waypoint.name, " to storage"
+        self.waypoint_markers.append(waypoint.name)
+        # print " now : ", self.waypoint_markers
         self.waypoint_marker_menus[waypoint_id].apply(self.server, waypoint.name)
 
         self.server.applyChanges()
@@ -187,7 +188,7 @@ class NavigationWaypointControl(object) :
         self.server.applyChanges()
 
     def get_next_id(self):
-        id = len(self.navigation_markers)
+        id = len(self.waypoint_markers)
         if id < 10:
             str_id = "0" + str(id)
         else:
@@ -203,18 +204,12 @@ class NavigationWaypointControl(object) :
 
     def remove_waypoint_from_template(self, name):
 
-        print " -- keys before: ", self.navigation_markers
-        count = len(self.navigation_markers)
-        if name in self.navigation_markers:
-            self.navigation_markers.remove(name)
-            print "Removing IM: ", name
-
+        count = len(self.waypoint_markers)
+        if name in self.waypoint_markers:
+            self.waypoint_markers.remove(name)
         self.server.erase(name)
-
-        print " -- keys after: ", self.navigation_markers
-
         # return true if a waypoint was deleted
-        if len(self.navigation_markers) < count:
+        if len(self.waypoint_markers) < count:
             return self.server.erase(name)
         else:
             return False
@@ -224,8 +219,8 @@ class NavigationWaypointControl(object) :
         # // and call addWaypoint(), passing in the offset to create a new marker. The addWaypoint()
         # // method will handle naming of the waypoints correctly, and will also add the waypoint to
         # // the template vector for tracking.
-        while self.wp_stack:
-            waypoint = self.wp_stack.pop()
+        while self.waypoint_stack:
+            waypoint = self.waypoint_stack.pop()
             offset = waypoint.pose
             self.insert_waypoint(offset, replace=True) # need to add full_controls flag here
 
@@ -236,22 +231,13 @@ class NavigationWaypointControl(object) :
         # case, the vector can be a vector of strings containing waypoint names, instead of actual
         # InteractiveMarker objects.
         # Get name of waypoint from vector, and use that to get the InteractiveMarker on the server.
-        print "======="
-        for i in range(len(self.navigation_markers)):
-            wp_name = self.navigation_markers[i]
+        for i in range(len(self.waypoint_markers)-1, index, -1):
+            wp_name = self.waypoint_markers[i]
             interactive_marker = self.server.get(wp_name)
-            print "wp[", wp_name, "], position = (", interactive_marker.pose.position.x, ", ", interactive_marker.pose.position.y, ")"
-        print "=======\n"
-
-
-        for i in range(len(self.navigation_markers)-1, index, -1):
-            wp_name = self.navigation_markers[i]
-            interactive_marker = self.server.get(wp_name)
+            p = self.waypoint_poses[wp_name]
             # push a copy of the marker onto the stack and delete from the server
-            self.wp_stack.append(interactive_marker)
+            self.waypoint_stack.append(interactive_marker)
             self.server.erase(wp_name)
-
-            print "pushing wp ", wp_name, " to stack with position.x = ", interactive_marker.pose.position.x
 
         # // Now resize vector to the index.
         # // Because our vector of waypoints are both numbered sequentially and don't skip numbers,
@@ -263,22 +249,8 @@ class NavigationWaypointControl(object) :
         # // we want the new vector to be
         # //   vector {0, 1, 2, 3, 4}
         # // So we can resize it using the index. This seems dirty. Is this dirty?
-        
-        print "index: ", index
-        print "trimming nav markers from "
-        print self.navigation_markers
-        print "to"
-        name = self.navigation_markers[index]
-        self.navigation_markers = self.navigation_markers[:index+1]
-        # self.navigation_markers.remove(name)
-        print self.navigation_markers
-
-        print "======="
-        for i in range(len(self.navigation_markers)):
-            wp_name = self.navigation_markers[i]
-            interactive_marker = self.server.get(wp_name)
-            print "wp[", wp_name, "], position = (", interactive_marker.pose.position.x, ", ", interactive_marker.pose.position.y, ")"
-        print "=======\n"
+        name = self.waypoint_markers[index]
+        self.waypoint_markers = self.waypoint_markers[:index+1]
 
     def request_navigation_plan(self, data) :
 
@@ -287,15 +259,9 @@ class NavigationWaypointControl(object) :
         
         waypoints = []
 
-        for id in self.navigation_markers :
-
-            print " ID: ", id
+        for id in self.waypoint_markers :
             n = self.get_waypoint_name(id)
-            print " NAME: ", n
             data = self.server.get(n)
-            print " POSE: ",
-            print data.pose
-            # print data
                   
             wp = PoseStamped()
             wp.pose = data.pose
@@ -321,30 +287,27 @@ class NavigationWaypointControl(object) :
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
 
-    def navigation_marker_callback(self, data) :
-        # print "nav callback"
-        pass
+    def navigation_marker_callback(self, feedback) :
+        self.waypoint_poses[feedback.marker_name] = feedback.pose
+        print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
+        # if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+        #     print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
 
 
 if __name__=="__main__":
+
     parser = argparse.ArgumentParser(description='Navigation Control')
     parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
     parser.add_argument('-f, --frame', dest='frame', help='e.g. /world')
-    # parser.add_argument('-p, --planner', dest='planner_type', help='e.g. moveit, atlas')
-    # parser.add_argument('-m, --manipulator_groups', nargs="*", dest='manipulator_groups', help='space delimited string e.g. "left_arm left_leg right_arm right_leg"')
-    # parser.add_argument('-j, --joint_groups', nargs="*", dest='joint_groups', help='space limited string e.g. "head waist"')
-    # parser.add_argument('-g, --gripper_service', nargs="*", dest='gripper_service', help='string e.g. "/pr2_gripper_bridge/end_effector_command"')
-    # parser.add_argument('-n, --navigation', dest='navigation_markers', help='True | False')
-    # parser.add_argument('positional', nargs='*')
     args = parser.parse_args()
 
     rospy.init_node("NavigationControl")
 
     server = InteractiveMarkerServer(str(args.robot + "_teleop"))
-    nc = NavigationWaypointControl(args.robot, server, args.frame)
 
+    nc = NavigationWaypointControl(args.robot, server, args.frame)
     nc.activate_navigation_markers(True)
-    
-    r = rospy.Rate(50.0)
+
+    r = rospy.Rate(100.0)
     while not rospy.is_shutdown():
         r.sleep()
