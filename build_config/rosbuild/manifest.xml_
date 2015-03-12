@@ -1,0 +1,15 @@
+<package>
+  <description brief="nasa_robot_teleop">
+
+     nasa_robot_teleop
+
+  </description>
+
+  <depend package="moveit_commander"/>
+  <depend package="visualization_msgs"/>
+  <depend package="geometry_msgs"/>
+  <depend package="sensor_msgs"/>
+  <depend package="trajectory_msgs"/>
+  <depend package="control_msgs"/>
+
+</package>
