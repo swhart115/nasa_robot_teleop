@@ -1,6 +1,5 @@
 joint:
   - head
-  - back
 cartesian:
   - left_arm
   - right_arm

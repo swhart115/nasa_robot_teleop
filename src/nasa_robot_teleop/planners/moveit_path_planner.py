@@ -14,10 +14,7 @@ import trajectory_msgs.msg
 import moveit_msgs.msg
 import actionlib_msgs.msg
 
-# import controller_manager_msgs.srv
-# from nasa_robot_teleop.srv import *
-
-from path_planner import *
+from nasa_robot_teleop.path_planner import *
 
 
 class MoveItPathPlanner(PathPlanner) :
@@ -41,7 +38,6 @@ class MoveItPathPlanner(PathPlanner) :
         self.groups = {}
         
         self.actionlib = False
-        self.use_tolerances = False
 
         # set up obstacle publisher stuff
         self.obstacle_markers = visualization_msgs.msg.MarkerArray()
@@ -199,50 +195,6 @@ class MoveItPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItPathPlanner::get_group_joints() -- group name \'" + str(group_name) + "\' not found"))
             return [] 
 
-    def get_goal_position_tolerances(self, group_name) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.groups[group_name].get_goal_position_tolerances()
-
-    def get_goal_orientation_tolerances(self, group_name) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.groups[group_name].get_goal_orientation_tolerances()
-    
-    def get_goal_joint_tolerance(self, group_name) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::get_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.groups[group_name].get_goal_joint_tolerance()
-
-    def set_goal_tolerance(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            self.groups[group_name].set_goal_tolerance(tol)
-
-    def set_goal_position_tolerances(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            self.groups[group_name].set_goal_position_tolerances(tol)
-
-    def set_goal_orientation_tolerances(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            self.groups[group_name].set_goal_orientation_tolerances(tol)
-
-    def set_goal_joint_tolerance(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::set_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            self.groups[group_name].set_goal_joint_tolerance(tol)
 
     ###################################
     ######## EXECUTION METHODS ########
@@ -428,13 +380,6 @@ class MoveItPathPlanner(PathPlanner) :
         ag.goal.trajectory = jt
         ag.goal.goal_time_tolerance = rospy.Duration(duration)       
         return ag
-
-
-    def set_goal_position_tolerances(self, group_name, tol) :
-        rospy.logwarn("MoveItPathPlanner::set_goal_position_tolerances() not IMPLEMENTED")
-
-    def set_goal_orientation_tolerances(self, group_name, tol) :
-        rospy.logwarn("MoveItPathPlanner::set_goal_orientation_tolerances() not IMPLEMENTED")
 
     def has_joint_map(self, group_name) :
         return False

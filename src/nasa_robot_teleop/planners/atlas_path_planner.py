@@ -15,18 +15,11 @@ import moveit_msgs.msg
 import control_msgs.msg
 import matec_msgs.msg
 
-from path_planner import *
-from tolerances import *
+from nasa_robot_teleop.path_planner import *
 
 from nasa_robot_teleop.msg import *
 from nasa_robot_teleop.srv import *
 
-# 1. use init() to setup and store group information by making GetPlanningServiceConfiguration.srv call
-# 2. deal with execution and planning functions
-
-# - Add a setup_groups(group_names[] function)??
-# - setup groups in init() and just verify in setup_group() that it exists?
-# - joint planning should allow us to use masks and set individual joint goals
 
 class AtlasPathPlanner(PathPlanner) :
 
@@ -38,15 +31,9 @@ class AtlasPathPlanner(PathPlanner) :
         PathPlanner.__init__(self, robot_name, config_package)
         rospy.loginfo(str("============ Setting up Path Planner for: \'" + self.robot_name + "\'"))
         self.planning_frame = "/global"
-        self.use_tolerances = True
         self.groups = {}
         self.joint_names = []
-              
-        self.position_tolerance_modes = {}
-        self.orientation_tolerance_modes = {}
-        self.max_position_tolerance_modes = {}
-        self.max_orientation_tolerance_modes = {}
-        
+                    
         rospy.set_param("/atlas_path_planner/interpolation_type", 1)
         rospy.set_param("/atlas_path_planner/duration", 2.0)
         rospy.set_param("/atlas_path_planner/num_visualizaton_points", 5)
@@ -54,8 +41,6 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("/atlas_path_planner/maintain_hand_pose_offsets", False)
         rospy.set_param("/atlas_path_planner/move_as_far_as_possible", True)
             
-        self.set_tolerance_file(str(RosPack().get_path('nasa_robot_teleop') + "/config/tolerances.yaml"))
-
         # self.load_configurations()       
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 
@@ -96,22 +81,12 @@ class AtlasPathPlanner(PathPlanner) :
             r = False
         return r 
 
-    def setup_group(self, group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
+    def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
         rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))     
-
-        if self.load_group_from_srdf(group_name) : 
-            if self.use_tolerances and (self.group_types[group_name] == "manipulator"):
-                self.position_tolerance_modes[group_name] = "SPHERE"
-                self.orientation_tolerance_modes[group_name] = "SPHERE"
-                
-                m = self.tolerances.get_tolerance_mode('PositionTolerance', [position_tolerance[0],position_tolerance[1],position_tolerance[2]])
-                if m: self.position_tolerance_modes[group_name] = m            
-                
-                m = self.tolerances.get_tolerance_mode('OrientationTolerance', [orientation_tolerance[0],orientation_tolerance[1],orientation_tolerance[2]])
-                if m :self.orientation_tolerance_modes[group_name]
-            return True
-        else : 
-            return False
+        self.position_tolerances[group_name] = position_tolerances
+        self.orientation_tolerances[group_name] = orientation_tolerances
+        self.joint_tolerance[group_name] = joint_tolerance
+        return self.load_group_from_srdf(group_name) 
 
     def load_group_from_srdf(self, group_name) :
 
@@ -143,11 +118,11 @@ class AtlasPathPlanner(PathPlanner) :
         if root == tip == '' :
             joint_list = self.srdf_model.get_group_joints(group_name)
         else :
-            joint_list = self.urdf_model.get_chain(root, tip, joints=True, fixed=True)
+            joint_list = get_chain(self.urdf_model, root, tip, joints=True, fixed=True)
 
         # joint_list = self.srdf_model.get_group_joints(group_name)
-        rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
-        print joint_list
+        # rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
+        # print joint_list
         joint_name_map = JointNameMap() 
         
         for j in joint_list :
@@ -213,79 +188,7 @@ class AtlasPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].joint_map.names
         
-    def get_goal_position_tolerances(self, group_name) :
-        if not group_name in self.position_tolerance_modes.keys() :
-            rospy.logerr(str("AtlasPathPlanner::get_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.tolerances.get_tolerance_vals('PositionTolerance', self.position_tolerance_modes[group_name])
-
-    def get_goal_orientation_tolerances(self, group_name) :
-        if not group_name in self.orientation_tolerance_modes.keys() :
-            rospy.logerr(str("AtlasPathPlanner::get_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-            return 0
-        else :
-            return self.tolerances.get_tolerance_vals('OrientationTolerance', self.orientation_tolerance_modes[group_name])
     
-    def get_goal_joint_tolerance(self, group_name) :
-        rospy.logerr(str("AtlasPathPlanner::get_goal_joint_tolerance() -- not implemented"))
-        
-        # if not group_name in self.groups.keys() :
-        #     rospy.logerr(str("AtlasPathPlanner::get_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        #     return 0
-        # else :
-        #     return self.groups[group_name].get_goal_joint_tolerance() # FIXME
-
-    def set_goal_tolerance(self, group_name, tol) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("AtlasPathPlanner::set_goal_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        else :
-            m = PositionTolerance.get_tolerance_mode(tol,tol,tol)
-            if m: 
-                self.position_tolerance_modes[group_name] = m            
-            else :
-                rospy.logwarn(str("AtlasPathPlanner::set_goal_tolerance() -- NO POSITION TOLERANCE MODE SET"))
-
-            m = self.tolerances.get_tolerance_mode('OrientationTolerance', [tol,tol,tol])
-            if m: 
-                self.orientation_tolerance_modes[group_name] = m            
-            else :
-                rospy.logwarn(str("AtlasPathPlanner::set_goal_tolerance() -- NO ORIENTATION TOLERANCE MODE SET"))
-
-    def set_goal_position_tolerances(self, group_name, tol) :
-        # print "trying to set goal pos tol: ", group_name, " to ", tol
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("AtlasPathPlanner::set_goal_position_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-        elif len(tol) != 3 :
-            rospy.logerr(str("AtlasPathPlanner::set_goal_position_tolerances() -- tol vector not of size 3"))
-        else:
-            m = self.tolerances.get_tolerance_mode('PositionTolerance', [tol[0],tol[1],tol[2]])
-            if m: 
-                self.position_tolerance_modes[group_name] = m            
-            else :
-                rospy.logwarn(str("AtlasPathPlanner::set_goal_position_tolerances() -- NO TOLERANCE MODE SET"))
-
-    def set_goal_orientation_tolerances(self, group_name, tol) :
-        # print "trying to set goal angle tol: ", group_name, " to ", tol
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- group name \'" + str(group_name) + "\' not found"))
-        elif len(tol) != 3 :
-            rospy.logerr(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- tol vector not of size 3"))
-        else:
-            m = self.tolerances.get_tolerance_mode('OrientationTolerance', [tol[0],tol[1],tol[2]])
-            if m :
-                self.orientation_tolerance_modes[group_name] = m
-            else :
-                rospy.logwarn(str("AtlasPathPlanner::set_goal_orientation_tolerances() -- NO TOLERANCE MODE SET"))
-        
-    def set_goal_joint_tolerance(self, group_name, tol) :
-        rospy.logerr(str("AtlasPathPlanner::set_goal_joint_tolerance() -- not implemented"))
-
-        # if not group_name in self.groups.keys() :
-        #     rospy.logerr(str("AtlasPathPlanner::set_goal_joint_tolerance() -- group name \'" + str(group_name) + "\' not found"))
-        # else :
-        #     self.groups[group_name].set_goal_joint_tolerance(tol) # FIXME
-
     ###################################
     ######## EXECUTION METHODS ########
     ###################################
@@ -330,6 +233,11 @@ class AtlasPathPlanner(PathPlanner) :
             
             req.execute_on_plan = self.auto_execute[group_name]
     
+            got = self.get_goal_orientation_tolerances(group_name)
+            gpt = self.get_goal_position_tolerances(group_name)
+            gotv = geometry_msgs.msg.Vector3(got[0],got[1],got[2])
+            gptv = geometry_msgs.msg.Vector3(gpt[0],gpt[1],gpt[2])
+
             spec = CartesianPlanRequestSpecification()
             spec.group_id = self.groups[group_name].group_id
             spec.group_name = self.groups[group_name].group_name
@@ -338,10 +246,10 @@ class AtlasPathPlanner(PathPlanner) :
             spec.waypoints.append(pt)
             spec.duration.append(duration)
             spec.num_visualizaton_points = num_visualizaton_points
-            spec.angle_variance.append(self.orientation_tolerance_modes[group_name]) 
-            spec.maximum_angle_variance.append("") 
-            spec.position_variance.append(self.position_tolerance_modes[group_name]) 
-            spec.maximum_position_variance.append("") 
+            spec.angle_variance.append(gotv) 
+            spec.maximum_angle_variance.append(gotv) 
+            spec.position_variance.append(gptv) 
+            spec.maximum_position_variance.append(gptv) 
             spec.interpolation_type = interpolation_type
             req.group_plan_specs.append(spec)
 
@@ -387,7 +295,7 @@ class AtlasPathPlanner(PathPlanner) :
             for n in js.name :
                 tol = control_msgs.msg.JointTolerance()
                 tol.name = n
-                tol.position = self.joint_tolerance
+                tol.position = self.joint_tolerance[group_name]
                 goal.path_tolerance.append(tol)
                 goal.goal_tolerance.append(tol)
 
@@ -435,12 +343,18 @@ class AtlasPathPlanner(PathPlanner) :
             spec.control_frame = self.groups[group_name].control_frame
         
             for wp in waypoints :
+
+                got = self.get_goal_orientation_tolerances(group_name)
+                gpt = self.get_goal_position_tolerances(group_name)
+                gotv = geometry_msgs.msg.Vector3(got[0],got[1],got[2])
+                gotp = geometry_msgs.msg.Vector3(gpt[0],gpt[1],gpt[2])
+
                 spec.waypoints.append(wp)
                 spec.duration.append(duration)
-                spec.angle_variance.append(self.orientation_tolerance_modes[group_name]) 
-                spec.maximum_angle_variance.append("") 
-                spec.position_variance.append(self.position_tolerance_modes[group_name]) 
-                spec.maximum_position_variance.append("") 
+                spec.angle_variance.append(gotv) 
+                spec.maximum_angle_variance.append(gotv) 
+                spec.position_variance.append(gptv) 
+                spec.maximum_position_variance.append(gptv) 
             
             spec.interpolation_type = interpolation_type
             spec.num_visualizaton_points = num_visualizaton_points
@@ -473,25 +387,24 @@ class AtlasPathPlanner(PathPlanner) :
 
         group_name = "left_arm"
 
-        for wp in waypoints :
-
-            spec = CartesianPlanRequestSpecification()
-            spec.group_name = group_name
-            spec.control_frame = wp.header.frame_id
-        
-            spec.waypoints.append(wp)
-            spec.duration.append(duration)
-            spec.angle_variance.append("") 
-            spec.maximum_angle_variance.append("") 
-            spec.position_variance.append("") 
-            spec.maximum_position_variance.append("") 
+        try :
+            for wp in waypoints :
+                spec = CartesianPlanRequestSpecification()
+                spec.group_name = group_name
+                spec.control_frame = wp.header.frame_id
             
-            spec.interpolation_type = interpolation_type
-            spec.num_visualizaton_points = num_visualizaton_points
-            req.group_plan_specs.append(spec)
-
-        else :
-            rospy.logerr(str("RobotTeleopAtlasPathPlanner::plan_navigation()"))
+                spec.waypoints.append(wp)
+                spec.duration.append(duration)
+                # spec.angle_variance.append(0) 
+                # spec.maximum_angle_variance.append(0) 
+                # spec.position_variance.append(0) 
+                # spec.maximum_position_variance.append(0) 
+            
+                spec.interpolation_type = interpolation_type
+                spec.num_visualizaton_points = num_visualizaton_points
+                req.group_plan_specs.append(spec)
+        except :
+            rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
             return None
 
         rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")

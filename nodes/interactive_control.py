@@ -22,16 +22,17 @@ from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
 
 # helper files
-from nasa_robot_teleop.marker_helper import *
-from nasa_robot_teleop.kdl_posemath import *
+from nasa_robot_teleop.util.marker_helper import *
+from nasa_robot_teleop.util.kinematics_util import *
+
 from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
 from nasa_robot_teleop.tolerances import *
 
 # path planner instances
 from nasa_robot_teleop.path_planner import *
-from nasa_robot_teleop.moveit_path_planner import *
-from nasa_robot_teleop.atlas_path_planner import *
+from nasa_robot_teleop.planners.moveit_path_planner import *
+from nasa_robot_teleop.planners.atlas_path_planner import *
 from nasa_robot_teleop.group_config_parser import *
 from nasa_robot_teleop.group_config import *
 
@@ -39,15 +40,18 @@ from navigation_waypoint_control import *
 
 class InteractiveControl:
 
-    def __init__(self, robot_name, planner_type, navigation_frame, group_config_file, planner_config_file):
+    def __init__(self, robot_name, planner_type, navigation_frame, group_config_file, planner_config_file, tolerance_file):
 
         self.robot_name = robot_name
         self.group_config_file = group_config_file
         self.planner_config_file = planner_config_file
+        self.tolerance_file =  tolerance_file
+        self.navigation_frame = navigation_frame
 
         self.group_map = []
-        
-        self.navigation_frame = navigation_frame
+        self.tolerances = None
+        self.gripper_service = None
+        self.config_parser = None
 
         self.tf_listener = tf.TransformListener()
         self.joint_data = sensor_msgs.msg.JointState()
@@ -72,16 +76,11 @@ class InteractiveControl:
         self.auto_plan = {}
         self.auto_execute = {}
 
-        self.position_tolerance_modes = {}
-        self.orientation_tolerance_modes = {}
-        self.group_position_tolerance_mode = {}
-        self.group_orientation_tolerance_mode = {}
-
-        self.gripper_service = None
-        self.config_parser = None
-        
+        # load in tolerances (if given)
+        self.get_tolerances(self.tolerance_file)
+      
         # interactive marker server
-        self.server = InteractiveMarkerServer(str(self.robot_name + "_teleop"))
+        self.server = InteractiveMarkerServer(str(self.robot_name + "_interactive_control"))
 
         # nav control markers
         self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
@@ -121,8 +120,6 @@ class InteractiveControl:
         for n in self.get_groups() :
             self.control_frames[n] = self.path_planner.get_control_frame(n)
 
-        self.use_tolerances = self.path_planner.uses_tolerances()
-
         # load the urdf
         self.urdf = self.path_planner.get_urdf_model()
 
@@ -131,23 +128,34 @@ class InteractiveControl:
         
         # what do we have?  
         self.path_planner.print_basic_info()
-       
+        self.navigation_controls.set_path_planner(self.path_planner)
+
         # get stored poses from model
         for group in self.get_groups() :
             self.stored_poses[group] = {}
             for state_name in self.path_planner.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
        
-
         # Create EndEffectorHelper objects to help with EE displays
         for n in self.path_planner.get_end_effector_names() :
             self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
             self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.urdf, self.path_planner.get_srdf_model())
 
-        
     def parse_config_file(self, config_file) :
         self.config_parser = GroupConfigParser(config_file)
         return self.config_parser.get_group_map()
+
+    def get_tolerances(self, filename) :
+        self.tolerances = Tolerance(filename)
+
+    def set_tolerances(self, group, tolerance_mode, tolerance) :
+        vals = self.tolerances.get_tolerance_vals(tolerance_mode, tolerance)
+        if tolerance_mode == "Position Tolerance" :
+            self.path_planner.set_goal_position_tolerances(group, vals)
+        elif tolerance_mode == "Angle Tolerance" :
+            self.path_planner.set_goal_orientation_tolerances(group, vals)
+        else :
+            rospy.logerr("InteractiveControl::set_tolerances() -- unknown tolerance mode!")
 
     def get_groups(self, group_type=None) :
         if group_type==None :
@@ -180,7 +188,6 @@ class InteractiveControl:
             return False        
         # create interactive markers for group
         return self.initialize_group_markers(group)
-
 
     def initialize_all_group_markers(self) :
         self.group_menu_handles = {}
@@ -217,6 +224,7 @@ class InteractiveControl:
         # Set up stored pose sub menu
         self.setup_sub_menus(group)
 
+        # set default check states
         self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
         self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Plan On Move")], MenuHandler.UNCHECKED )
         
@@ -235,11 +243,10 @@ class InteractiveControl:
             if ("Joint Mask", False) not in  self.menu_options :
                 self.menu_options.append(("Joint Mask", False))
 
-        if self.use_tolerances :
-            if ("Position Tolerance", False) not in  self.menu_options :
-                self.menu_options.append(("Position Tolerance", False))
-            if ("Angle Tolerance", False) not in  self.menu_options :
-                self.menu_options.append(("Angle Tolerance", False))
+        if self.tolerances :
+            for mode in self.tolerances.get_tolerance_modes() :
+                if (mode, False) not in  self.menu_options :
+                    self.menu_options.append((mode, False))
 
         self.markers[group].controls = make6DOFControls()
         self.markers[group].header.frame_id = self.root_frame
@@ -248,13 +255,7 @@ class InteractiveControl:
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
-        self.markers[group].controls.append(menu_control)
-
-        if self.use_tolerances :
-            self.position_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('PositionTolerance')
-            self.orientation_tolerance_modes[group] = self.path_planner.tolerances.get_tolerance_modes('OrientationTolerance')
-            self.path_planner.set_goal_position_tolerance_mode(group, None)
-            self.path_planner.set_goal_orientation_tolerance_mode(group, None)
+        # self.markers[group].controls.append(menu_control)
 
         # start update threads for cartesian groups
         self.start_pose_update_thread(group)
@@ -268,9 +269,9 @@ class InteractiveControl:
 
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         control_frame = self.path_planner.get_control_frame(group)
-        jg_links = self.urdf.get_all_child_links(control_frame)
+        jg_links = get_all_child_links(self.urdf, control_frame)
         idx = 0
-        for jg_link in jg_links :
+        for jg_link in jg_links :  # TODO set frames of markers to be actual robot link frames 
             try :
                 marker = get_mesh_marker_for_link(jg_link, self.urdf)
                 if marker != None :
@@ -290,7 +291,7 @@ class InteractiveControl:
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
-        self.markers[group].controls.append(menu_control)
+        # self.markers[group].controls.append(menu_control)
  
 
     def initialize_endeffector_group(self, group) : 
@@ -299,14 +300,15 @@ class InteractiveControl:
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
 
         control_frame = self.path_planner.get_control_frame(group)
-        ee_links = self.urdf.get_all_child_links(control_frame)
-        self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
+        ee_links = get_all_child_links(self.urdf, control_frame)
+        # self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
+        self.markers[group].header.frame_id = self.path_planner.get_base_link(group)
 
         idx = 0
         for ee_link in ee_links :
             try :
                 end_effector_marker = get_mesh_marker_for_link(ee_link, self.urdf)
-
+                # TODO set frames of markers to be actual robot link frames
                 if end_effector_marker != None :
                     end_effector_marker.color.r = 1
                     end_effector_marker.color.g = 1
@@ -340,12 +342,14 @@ class InteractiveControl:
         g.control_frame = req.control_frame
         self.setup_group(g)
         resp.id = 0
+        rospy.loginfo(str("InteractiveControl::handle_add_group() -- added " + req.name + " -- id: " + str(resp.id)))
         return resp
 
     def handle_remove_group(self, req) :
         resp = RemoveGroupResponse()
         self.remove_group_markers(req.name)
         resp.success = True
+        rospy.loginfo(str("InteractiveControl::handle_remove_group() -- removed " + req.name + " -- " + str(resp.success)))
         return resp
 
     def set_gripper_service(self, srv) :
@@ -371,19 +375,14 @@ class InteractiveControl:
                     self.server.erase(self.posture_markers[group][lnk].name)
                 else :
                     joint = self.urdf.joint_map[jnt]
-                    int_marker = InteractiveMarker()
-                    int_marker.header.frame_id = lnk
-                    int_marker.scale = 0.2
-                    int_marker.name = jnt
-                    int_marker.pose.position.x, int_marker.pose.position.y, int_marker.pose.position.z = 0,0,0# joint.origin.xyz
-                    int_marker.pose.orientation.w = 1
-                    int_marker.pose.orientation.x, int_marker.pose.orientation.y, int_marker.pose.orientation.z = 0,0,0# joint.origin.rpy
+                    jnt_marker = makeInteractiveMarker(name=jnt, frame_id=lnk, pose=Pose(), scale=0.2) 
+                    jnt_marker.pose.orientation.w = 1
                     control = InteractiveMarkerControl()
                     control.orientation.x, control.orientation.y, control.orientation.z, control.orientation.w = axis_to_q(joint.axis)
                     control.name = "rotate"
                     control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
-                    int_marker.controls.append(control)
-                    self.posture_markers[group][lnk] = int_marker
+                    jnt_marker.controls.append(control)
+                    self.posture_markers[group][lnk] = jnt_marker
                     self.server.insert(self.posture_markers[group][lnk], self.posture_feedback)
 
         self.server.applyChanges()
@@ -396,18 +395,12 @@ class InteractiveControl:
                 sub_menu_handle = self.marker_menus[group].insert(m)
                 for p in self.path_planner.get_stored_state_list(group) :
                     self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
-            elif m == "Position Tolerance" :
+            elif m in self.tolerances.get_tolerance_modes() :
                 if self.get_group_type(group) == "cartesian" :
                     sub_menu_handle = self.marker_menus[group].insert(m)
-                    for p in self.position_tolerance_modes[group] :
-                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.position_tolerance_callback)
+                    for p in self.tolerances.get_tolerances(m) :
+                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.tolerance_callback)
                         self.marker_menus[group].setCheckState(self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
-            elif m == "Angle Tolerance" :
-                if self.get_group_type(group) == "cartesian" :
-                    sub_menu_handle = self.marker_menus[group].insert(m)
-                    for p in self.orientation_tolerance_modes[group] :
-                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.orientation_tolerance_callback)   
-                        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
             elif m == "Joint Mask" :
                 sub_menu_handle = self.marker_menus[group].insert(m) 
                 if self.path_planner.has_joint_mask(group) and self.path_planner.has_joint_map(group):
@@ -430,7 +423,6 @@ class InteractiveControl:
     def start_pose_update_thread(self, group) :
         self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
         try :
-            rospy.logwarn(str("starting pose_update_thread() for group: " + group + " with frame: " + self.control_frames[group]))
             self.pose_update_thread[group] = PoseUpdateThread(group, self.root_frame, self.control_frames[group], self.tf_listener, None)
             self.pose_update_thread[group].start()
         except :
@@ -454,48 +446,25 @@ class InteractiveControl:
     def joint_state_callback(self, data) :
         self.joint_data = data
 
-    def position_tolerance_callback(self,feedback) :
-        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
-            if feedback.marker_name in self.get_groups() :
-                self.group_position_tolerance_mode[feedback.marker_name] = "FULL"
-                self.path_planner.set_goal_position_tolerance_mode(feedback.marker_name, "FULL")
-                handle = feedback.menu_entry_id
-                for p in self.position_tolerance_modes[feedback.marker_name] :
-                    if handle == self.group_menu_handles[(feedback.marker_name,"Position Tolerance", p)] :
-                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                        if state == MenuHandler.CHECKED:
-                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        elif state == MenuHandler.UNCHECKED:
-                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                            self.group_position_tolerance_mode[feedback.marker_name] = p
-                            self.path_planner.set_goal_position_tolerance_mode(feedback.marker_name, p)
-                    else :
-                        h = self.group_menu_handles[(feedback.marker_name,"Position Tolerance", p)]
-                        self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
-        self.marker_menus[feedback.marker_name].reApply( self.server )
-        self.server.applyChanges()
-
-    def orientation_tolerance_callback(self,feedback) :
+    def tolerance_callback(self,feedback) :
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.get_groups() :
                 handle = feedback.menu_entry_id
-                self.group_orientation_tolerance_mode[feedback.marker_name] = "FULL"
-                self.path_planner.set_goal_orientation_tolerance_mode(feedback.marker_name, "FULL")
-                for p in self.orientation_tolerance_modes[feedback.marker_name] :
-                    if handle == self.group_menu_handles[(feedback.marker_name,"Angle Tolerance", p)] :
-                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                        if state == MenuHandler.CHECKED:
-                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        elif state == MenuHandler.UNCHECKED:
-                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                            self.group_orientation_tolerance_mode[feedback.marker_name] = p
-                            self.path_planner.set_goal_orientation_tolerance_mode(feedback.marker_name, p)
-                    else :
-                        h = self.group_menu_handles[(feedback.marker_name,"Angle Tolerance", p)]
-                        self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
+                for m in self.tolerances.get_tolerance_modes() :
+                    for p in self.tolerances.get_tolerances(m) :
+                        if handle == self.group_menu_handles[(feedback.marker_name, m, p)] :
+                            state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                            if state == MenuHandler.CHECKED:
+                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            elif state == MenuHandler.UNCHECKED:
+                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                                self.set_tolerances(feedback.marker_name, m, p)
+                        else :
+                            h = self.group_menu_handles[(feedback.marker_name, m, p)]
+                            self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
-                                 
+                               
     def joint_mask_callback(self, feedback) :
         if self.path_planner.has_joint_mask(feedback.marker_name) and self.path_planner.has_joint_map(feedback.marker_name) :
             joint_map = self.path_planner.get_joint_map(feedback.marker_name)
@@ -606,7 +575,7 @@ class InteractiveControl:
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
                     r = self.path_planner.execute(feedback.marker_name)
                     if not r :
-                        rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                        rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
                     pt = geometry_msgs.msg.PoseStamped()
                     pt.header = feedback.header
@@ -614,7 +583,7 @@ class InteractiveControl:
                     if self.auto_execute[feedback.marker_name] :
                         r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
                         if not r :
-                            rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                            rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                     else :
                         self.path_planner.clear_goal_target (feedback.marker_name)
                         self.path_planner.create_plan_to_target(feedback.marker_name, pt)
@@ -633,11 +602,11 @@ if __name__=="__main__":
     group_config_file = rospy.get_param("~group_config_file")
 
     planner_config_file = rospy.get_param("~planner_config_file", None)   
-    tolerance_config_file = rospy.get_param("~tolerance_config_file", None)   
+    tolerance_file = rospy.get_param("~tolerance_file", None)   
     navigation_frame = rospy.get_param("~navigation_frame", None)
     gripper_service = rospy.get_param("~gripper_service", None)
 
-    control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file)
+    control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
     if gripper_service :
         rospy.loginfo(str("Setting Gripper Service: " + gripper_service))

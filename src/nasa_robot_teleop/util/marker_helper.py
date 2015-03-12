@@ -3,15 +3,14 @@
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import *
+from geometry_msgs.msg import Pose, Vector3
 from random import randint
 
-def makeEmptyMarker( dummyBox=True ):
-    global marker_pos
+def makeInteractiveMarker(name, frame_id="/world", pose=Pose(), scale=1):
     int_marker = InteractiveMarker()
-    int_marker.header.frame_id = "/base_link"
-    int_marker.pose.position.y = -3.0 * marker_pos
-    marker_pos += 1
-    int_marker.scale = 1
+    int_marker.header.frame_id = frame_id
+    int_marker.pose = pose
+    int_marker.scale = scale
     return int_marker
 
 def makeBox( msg ):

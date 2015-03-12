@@ -7,11 +7,7 @@ import PyKDL as kdl
 import geometry_msgs.msg
 import visualization_msgs.msg
 
-# from nasa_robot_teleop.moveit_interface import *
-# from nasa_robot_teleop.kdl_posemath import *
-# from nasa_robot_teleop.pose_update_thread import *
-# from nasa_robot_teleop.end_effector_helper import *
-from nasa_robot_teleop.urdf_parser_py import *
+from nasa_robot_teleop.models.urdf_parser_py import *
 
 def normalize_vector(v) :
     m = math.sqrt(math.fsum([x*x for x in v]))
@@ -160,51 +156,65 @@ def get_mesh_marker_for_link(link_name, urdf) :
     return marker       
 
 
-def mag(v):
-    mag2 = sum(n * n for n in v)
-    return sqrt(mag2)
+def get_chain(urdf, root, tip, joints=True, links=True, fixed=True):
+    chain = []
+    if links:
+        chain.append(tip)
+    link = tip
+    while link != root:
+        if not link in urdf.parent_map : 
+            chain = []
+            break
+        (joint, parent) = urdf.parent_map[link]
+        if joints:
+            if fixed or urdf.joint_map[joint].joint_type != 'fixed':
+                chain.append(joint)
+        if links:
+            chain.append(parent)
+        link = parent
+    chain.reverse()
+    return chain
 
-def sign(val):
-    if val > 0:
-        return 1
-    elif val < 0:
-        return -1
-    else:
-        return 0
+def get_root(urdf):
+    root = None
+    for link in urdf.link_map:
+        if link not in urdf.parent_map:
+            assert root is None, "Multiple roots detected, invalid URDF."
+            root = link
+    assert root is not None, "No roots detected, invalid URDF."
+    return root
 
-def normalize(v, tolerance=0.00001):
-    mag2 = sum(n * n for n in v)
-    if abs(mag2 - 1.0) > tolerance:
-        mag = sqrt(mag2)
-        if mag == 0.: return v
-        v = tuple(n / mag for n in v)
-    return v
+def get_all_tips(urdf) :
+    tips = []
+    for link in urdf.link_map.keys():
+        found_as_parent = False
+        for joint in urdf.joint_map:
+            if urdf.joint_map[joint].parent == link : 
+                found_as_parent = True
+                break
+        if not found_as_parent : tips.append(link)
+    return tips
 
-def axis_to_q(v, roll_offset=0):
-    x, y, z = v
-    roll=pi + roll_offset
-    rad = sqrt(x*x+y*y+z*z)
-    pitch = atan2(-z,sqrt(x*x+y*y)) #acos(sqrt(x*x+y*y)/rad)
-    yaw = atan2(y,x)
-    return rpy_to_q((roll,pitch,yaw))
 
-def rpy_to_q(v):
-    r, p, y = [x/2 for x in v]
-    w = cos(r)*cos(p)*cos(y)+sin(r)*sin(p)*sin(y)
-    x = sin(r)*cos(p)*cos(y)-cos(r)*sin(p)*sin(y)
-    y = cos(r)*sin(p)*cos(y)+sin(r)*cos(p)*sin(y)
-    z = cos(r)*cos(p)*sin(y)-sin(r)*sin(p)*cos(y)
-    return x, y, z, w
+def get_all_child_links(urdf, root_frame) :
 
-def q_to_axisangle(q):
-    w, v = q[0], q[1:]
-    theta = acos(w) * 2.0
-    return normalize(v), theta
+    root_link = urdf.link_map[root_frame]
 
-def q_to_rpy(q):
-    x,y,z,w = q
-    wx,x = normalize((w,x))
-    wy,y = normalize((w,y))
-    wz,z = normalize((w,z))
-    return sign(x)*2*acos(wx), sign(y)*2*acos(wy), sign(z)*2*acos(wz)
+    j = get_link_joint(root_link, urdf)
+
+    tips = get_all_tips(urdf)
+    links = []
+    for tip in tips :
+        # print "  checking tip: ", tip
+        chain = get_chain(urdf, root=root_link.name, tip=tip, joints=False, links=True)
+        # print "  found chain: ", chain, "\n"
+        for c in chain :
+            if c != links: links.append(c)
+
+    # print "all links: "
+    r = list(set(links))
+    # print "-----\n"
+    # print "final set: ", c
+    # print "-----"
+    return r
 

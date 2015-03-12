@@ -8,11 +8,15 @@ import sensor_msgs.msg
 
 class SRDFModel :
 
-    def __init__(self, robot) :
+    def __init__(self, robot, urdf=None) :
         self.srdf_file = None
         self.srdf = None
+        self.urdf = urdf
         self.robot_name = robot
         self.reset_model()
+
+    def set_urdf(self, urdf) :
+        self.urdf = urdf
 
     def reset_model(self) :
 
@@ -58,7 +62,7 @@ class SRDFModel :
         for elem in root.getchildren() :
             if elem.tag == "group" :
                 group_name = elem.attrib["name"]
-                print "SRDFModel::parse_srdf() -- found group: ", group_name
+                rospy.loginfo(str("SRDFModel::parse_srdf() -- found group: " + group_name))
                 self.groups.append(group_name)
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []
@@ -103,6 +107,7 @@ class SRDFModel :
                 self.end_effectors[ee].name = ee
                 self.end_effectors[ee].group = elem.attrib["group"]
                 self.end_effectors[ee].parent_link = elem.attrib["parent_link"]
+                self.base_links[elem.attrib["group"]] = elem.attrib["parent_link"]
                 if "parent_group" in elem.attrib:
                     self.end_effectors[ee].parent_group = elem.attrib["parent_group"]
                 else :

@@ -10,9 +10,9 @@ from visualization_msgs.msg import MarkerArray, Marker
 import threading
 import PyKDL as kdl
 
-from nasa_robot_teleop.kdl_posemath import *
-from nasa_robot_teleop.urdf_helper import *
-from nasa_robot_teleop.urdf_parser_py import *
+from nasa_robot_teleop.util.kinematics_util import *
+from nasa_robot_teleop.models.urdf_helper import *
+from nasa_robot_teleop.models.urdf_parser_py import *
 from nasa_robot_teleop.pose_update_thread import *
 
 class EndEffectorHelper :

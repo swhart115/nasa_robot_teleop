@@ -21,50 +21,54 @@ import control_msgs.msg
 from nasa_robot_teleop.srv import *
 from nasa_robot_teleop.group_config import *
 
-from srdf_model import SRDFModel
-from kdl_posemath import *
-import urdf_parser_py as urdf
-from urdf_helper import *
-import end_effector_helper as end_effector
+from models.srdf_parser_py import *
+from models.urdf_helper import *
+import models.urdf_parser_py as urdf
 
-from tolerances import *
+from util.kinematics_util import *
+import end_effector_helper as end_effector
 
 class PathPlanner(object):
 
     def __init__(self, robot_name, config_file):
-        self.robot_name = robot_name
-        self.config_file = config_file
-        self.use_tolerances = False
 
         self.robot_name = robot_name
+        self.config_file = config_file
+
         self.group_types = {}
         self.group_controllers = {}
+
         self.base_frames = {}
         self.control_frames = {}
         self.control_meshes = {}
+
         self.control_offset = {}
         self.group_id_offset = {}
-        self.end_effector_map = {}
-        self.display_modes = {}
+
         self.trajectory_poses = {}
         self.trajectory_display_markers = {}
+
         self.end_effector_display = {}
+        self.end_effector_map = {}
+
+        self.display_modes = {}
         self.plan_generated = {}
-        self.marker_store = {}
         self.stored_plans = {}
-        self.command_topics = {}
-        self.gripper_service = None
-        self.bridge_topic_map = {}
-        self.actionlib = False
-
         self.auto_execute = {}
-
+        self.marker_store = {}
+        self.command_topics = {}
+        self.actionlib = False
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
 
-        self.tolerances = None
-        self.joint_tolerance = 0.01
-        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/move_group/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
+        self.gripper_service = None
+        self.bridge_topic_map = {}
+
+        self.joint_tolerance = {}
+        self.position_tolerances = {}
+        self.orientation_tolerances = {}
+
+        self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
       
         self.tf_listener = tf.TransformListener()
@@ -73,115 +77,20 @@ class PathPlanner(object):
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
         
-    def set_tolerance_file(self, filename) :
-        self.use_tolerances = True
-        self.tolerances = Tolerance(filename)
-
     def get_group_names(self) :
         return self.group_types.keys()
 
     def has_group(self, group_name) :
         return group_name in self.get_group_names()
 
-    def uses_tolerances(self) :
-        return self.use_tolerances
-
     def set_gripper_service(self, srv) :
-        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ")")
+        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
         rospy.wait_for_service(srv)
+        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
         self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
        
     def clear_gripper_service(self) :
         self.gripper_service = None    
-
-    def create_models(self, config_file) :
-
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
-        self.urdf_model = urdf.Robot.from_parameter_server()
-        if self.urdf_model == None : return False
-
-        self.urdf_model.get_all_tips()
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
-        self.srdf_model = SRDFModel(self.robot_name)
-
-        try :
-            rospy.loginfo(str("PathPlanner::create_models() -- PathPlanner config package: " + config_file))
-            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
-            if self.srdf_model.parse_from_file(config_file) :
-                rospy.loginfo("PathPlanner::create_models() ================================================")
-            return True
-        except :
-            rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
-            return False
-
-
-    # probably can clean this up, it's messy FIXME
-    def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerance=[.005]*3, orientation_tolerance=[.02]*3) :
-
-        rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
-
-        self.plan_generated[group_name] = False
-        self.stored_plans[group_name] = None
-        self.display_modes[group_name] = "all_points"
-        self.auto_execute[group_name] = False
-
-        self.group_types[group_name] = group_type
-        self.control_frames[group_name] = ""
-        self.control_meshes[group_name] = ""
-        self.auto_execute[group_name] = False
-        self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
-        
-        if not self.setup_group(group_name, joint_tolerance, position_tolerance, orientation_tolerance) :
-            return False
-
-        try :           
-
-            # generate a random group_id
-            id_found = False
-            while not id_found :
-                r = int(random.random()*10000000)
-                if not r in self.group_id_offset.values() :
-                    self.group_id_offset[group_name] = r
-                    id_found = True
-
-            # check to see if the group has an associated end effector, and add it if so
-            if self.has_end_effector_link(group_name) :
-                self.control_frames[group_name] = self.get_end_effector_link(group_name)
-                ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
-                try :
-                    # self.control_meshes[group_name] = ee_link.visual.geometry.filename
-                    self.control_meshes[group_name] = self.get_child_mesh(ee_link)
-                except :
-                    rospy.logwarn("no mesh found")
-                for ee in self.srdf_model.end_effectors.keys() :
-                    if self.srdf_model.end_effectors[ee].parent_group == group_name :
-                        self.end_effector_map[group_name] = ee
-                        self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=joint_tolerance, position_tolerance=position_tolerance, orientation_tolerance=orientation_tolerance)
-            elif self.srdf_model.has_tip_link(group_name) :
-                self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
-                ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
-                self.control_meshes[group_name] = ee_link.visual.geometry.filename
-            elif self.group_types[group_name] == "endeffector" :
-                self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
-                ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
-                try :
-                    self.control_meshes[group_name] = ee_link.visual.geometry.filename
-                except :
-                    self.control_meshes[group_name] = ""
-                    rospy.logwarn("no mesh found")              
-                self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
-                self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-            
-            return True
-
-        except :
-            rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
-            return False
-
-   
-    def remove_planning_group(self, group) :
-        pass
 
     def get_ee_parent_group(self, ee) :
         if ee in self.srdf_model.end_effectors :
@@ -198,35 +107,6 @@ class PathPlanner(object):
                 return self.get_child_mesh(self.urdf_model.link_map[ee_link.name].child)
             except :
                 return ""
-
-    def print_group_info(self, group_name) :
-        if self.has_group(group_name) :
-            rospy.loginfo(str("============================================================"))
-            rospy.loginfo(str("============ Robot Name: " + self.robot_name))
-            rospy.loginfo(str("============ Group: " + group_name))
-           
-            if group_name in self.get_group_names() :
-                rospy.loginfo(str("============ Type: " + str(self.group_types[group_name])))
-                rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_group_planning_frame(group_name))))
-                # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerances(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerances(group_name)))
-                rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
-                rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
-            rospy.loginfo("============================================================")
-
-    def print_basic_info(self) :
-        rospy.loginfo(str("============================================================"))
-        rospy.loginfo(str("============ Robot Name: " + self.robot_name))
-        rospy.loginfo(str("============ Group Names: "))
-        for g in self.get_group_names() :
-            rospy.loginfo(str("===============: " + g))
-        rospy.loginfo(str("============ Planning frame: " + self.get_robot_planning_frame() ))
-        rospy.loginfo(str("============================================================"))
-        for g in self.get_group_names() :
-            self.print_group_info(g)
 
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
@@ -261,6 +141,93 @@ class PathPlanner(object):
 
     def get_control_mesh(self, group_name) :
         return self.control_meshes[group_name]
+
+    def create_models(self, config_file) :
+
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
+        self.urdf_model = urdf.Robot.from_parameter_server()
+        if self.urdf_model == None : return False
+
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
+        self.srdf_model = SRDFModel(self.robot_name)
+        if self.srdf_model == None : return False
+
+        get_all_tips(self.urdf_model)
+
+        try :
+            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
+            if self.srdf_model.parse_from_file(config_file) :
+                rospy.loginfo("PathPlanner::create_models() ================================================")
+            return True
+        except :
+            rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
+            return False
+
+
+    # probably can clean this up, it's messy FIXME
+    def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.005]*3, orientation_tolerances=[.02]*3) :
+
+        # rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
+
+        self.plan_generated[group_name] = False
+        self.stored_plans[group_name] = None
+        self.display_modes[group_name] = "all_points"
+        self.auto_execute[group_name] = False
+
+        self.group_types[group_name] = group_type
+        self.control_frames[group_name] = ""
+        self.control_meshes[group_name] = ""
+        self.auto_execute[group_name] = False
+        self.marker_store[group_name] = visualization_msgs.msg.MarkerArray()
+        
+        if not self.setup_group(group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
+            return False
+
+        try :           
+
+            # generate a random group_id
+            id_found = False
+            while not id_found :
+                r = int(random.random()*10000000)
+                if not r in self.group_id_offset.values() :
+                    self.group_id_offset[group_name] = r
+                    id_found = True
+
+            # check to see if the group has an associated end effector, and add it if so
+            if self.has_end_effector_link(group_name) :
+                self.control_frames[group_name] = self.get_end_effector_link(group_name)
+                ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+                try :
+                    # self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                    self.control_meshes[group_name] = self.get_child_mesh(ee_link)
+                except :
+                    rospy.logwarn("no mesh found")
+                for ee in self.srdf_model.end_effectors.keys() :
+                    if self.srdf_model.end_effectors[ee].parent_group == group_name :
+                        self.end_effector_map[group_name] = ee
+                        self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
+                            joint_tolerance=joint_tolerance, position_tolerances=position_tolerances, orientation_tolerances=orientation_tolerances)
+            elif self.srdf_model.has_tip_link(group_name) :
+                self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
+                ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
+                self.control_meshes[group_name] = ee_link.visual.geometry.filename
+            elif self.group_types[group_name] == "endeffector" :
+                self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
+                ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
+                try :
+                    self.control_meshes[group_name] = ee_link.visual.geometry.filename
+                except :
+                    self.control_meshes[group_name] = ""
+                    rospy.logwarn("no mesh found")              
+                self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
+                self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
+            
+            return True
+
+        except :
+            rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
+            return False
+   
 
     def get_control_mesh_pose_offset(self, group_name) :
         p = geometry_msgs.msg.Pose()
@@ -654,14 +621,6 @@ class PathPlanner(object):
         return self.plan_generated[group_name]
 
 
-    def set_goal_position_tolerance_mode(self, group_name, mode) :
-        if self.use_tolerances :
-            self.set_goal_position_tolerances(group_name, self.tolerances.get_tolerance_vals('PositionTolerance', mode))
-
-    def set_goal_orientation_tolerance_mode(self, group_name, mode) :
-        if self.use_tolerances :
-            self.set_goal_orientation_tolerances(group_name, self.tolerances.get_tolerance_vals('OrientationTolerance',mode))
-
     def plan_joint_goal_and_execute(self, group_name, js) :
         self.auto_execute[group_name] = True
         self.plan_to_joint_goal(group_name,js)
@@ -669,6 +628,73 @@ class PathPlanner(object):
     def plan_cartesian_goal_and_execute(self, group_name, pt) :
         self.auto_execute[group_name] = True
         return self.plan_to_cartesian_goal(group_name,pt)
+
+
+    ##########################
+    ##### print methods ######
+    ##########################
+
+    def print_group_info(self, group_name) :
+        if self.has_group(group_name) :
+            rospy.loginfo(str("============================================================"))
+            rospy.loginfo(str("============ Robot Name: " + self.robot_name))
+            rospy.loginfo(str("============ Group: " + group_name))
+           
+            if group_name in self.get_group_names() :
+                rospy.loginfo(str("============ Type: " + str(self.group_types[group_name])))
+                rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_group_planning_frame(group_name))))
+                # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerances(group_name)))
+                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerances(group_name)))
+                rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
+                rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
+            rospy.loginfo("============================================================")
+
+    def print_basic_info(self) :
+        rospy.loginfo(str("============================================================"))
+        rospy.loginfo(str("============ Robot Name: " + self.robot_name))
+        rospy.loginfo(str("============ Group Names: "))
+        for g in self.get_group_names() :
+            rospy.loginfo(str("===============: " + g))
+        rospy.loginfo(str("============ Planning frame: " + self.get_robot_planning_frame() ))
+        rospy.loginfo(str("============================================================"))
+        for g in self.get_group_names() :
+            self.print_group_info(g)
+
+
+    ##############################
+    ##### tolerance methods ######
+    ##############################
+
+    def get_goal_position_tolerances(self, group_name) :
+        if not group_name in self.position_tolerances :
+            rospy.logwarn(str("PathPlanner::get_goal_position_tolerances(" + group_name +"), group not found!"))
+            return [0]*3
+        return self.position_tolerances[group_name]
+ 
+    def get_goal_orientation_tolerances(self, group_name) :
+        if not group_name in self.orientation_tolerances :
+            rospy.logwarn(str("PathPlanner::get_goal_orientation_tolerances(" + group_name +"), group not found!"))
+            return [0]*3
+        return self.orientation_tolerances[group_name]
+
+    def get_goal_joint_tolerance(self, group_name) :
+        if not group_name in self.joint_tolerance :
+            rospy.logwarn(str("PathPlanner::get_goal_joint_tolerance(" + group_name +"), group not found!"))
+            return [0]*3
+        return self.joint_tolerance[group_name]
+
+    def set_goal_position_tolerances(self, group_name, tol) :
+        self.position_tolerances[group_name] = tol
+
+    def set_goal_orientation_tolerances(self, group_name, tol) :
+        self.orientation_tolerances[group_name] = tol
+
+    def set_goal_joint_tolerance(self, group_name, tol) :
+        self.joint_tolerance[group_name] = tol
+
 
     ############################
     ##### virtual methods ######
@@ -723,35 +749,6 @@ class PathPlanner(object):
         rospy.logwarn("PathPlanner::set_joint_mask() -- not implemented")
         raise NotImplementedError
     
-
-    def get_goal_position_tolerances(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_position_tolerances() -- not implemented")
-        raise NotImplementedError
-
-    def get_goal_joint_tolerance(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_joint_tolerance() -- not implemented")
-        raise NotImplementedError
-
-    def get_goal_orientation_tolerances(self, group_name) :
-        rospy.logerror("PathPlanner::get_goal_orientation_tolerances() -- not implemented")
-        raise NotImplementedError
-
-    def set_goal_tolerance(self, group_name) :
-        rospy.logerror("PathPlanner::set_goal_tolerance() -- not implemented")
-        raise NotImplementedError
-
-    def set_goal_position_tolerances(self, group_name, tol) :
-        rospy.logerror("PathPlanner::set_goal_position_tolerances() -- not implemented")
-        raise NotImplementedError
-
-    def set_goal_orientation_tolerances(self, group_name, tol) :
-        rospy.logerror("PathPlanner::set_goal_orientation_tolerances() -- not implemented")
-        raise NotImplementedError
-
-    def set_goal_joint_tolerance(self, group_name, tol) :
-        rospy.logerror("PathPlanner::set_goal_joint_tolerance() -- not implemented")
-        raise NotImplementedError
-
 
     ### planing and execution methods
     def plan_to_cartesian_goal(self, group_name, pt) :

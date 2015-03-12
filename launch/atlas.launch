@@ -6,6 +6,6 @@
 		<param name="navigation_frame" value="/ground"/>
 		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/atlas.yaml"/>
 		<param name="planner_config_file" value="$(find atlas_moveit_config)/config/atlas.srdf"/>
-		<param name="tolerance_config_file" value="$(find nasa_robot_teleop)/config/tolerance.yaml"/>
+		<param name="tolerance_file" value="$(find nasa_robot_teleop)/config/tolerances.yaml"/>
     </node>
 </launch>

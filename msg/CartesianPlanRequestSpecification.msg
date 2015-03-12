@@ -20,12 +20,12 @@ float32[] duration
 int16 num_visualizaton_points
 
 # angle tolerance mode
-string[] angle_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
-string[] maximum_angle_variance  #set to "" to copy angle_variance
+geometry_msgs/Vector3[] angle_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
+geometry_msgs/Vector3[] maximum_angle_variance  #set to "" to copy angle_variance
 
 # position tolerance mode
-string[] position_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
-string[] maximum_position_variance  #set to "" to copy angle_variance
+geometry_msgs/Vector3[] position_variance  #predefined sets of 6-dof tolerances, tool frames, and interpolation methods. Will probably add more later
+geometry_msgs/Vector3[] maximum_position_variance  #set to "" to copy angle_variance
 
 # interpolcation type
 int8 interpolation_type

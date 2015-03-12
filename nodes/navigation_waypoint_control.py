@@ -15,7 +15,8 @@ from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
 
 # helper files
-from nasa_robot_teleop.marker_helper import *
+from nasa_robot_teleop.path_planner import *
+from nasa_robot_teleop.util.marker_helper import *
 
 class NavigationWaypointControl(object) :
 
@@ -40,12 +41,20 @@ class NavigationWaypointControl(object) :
 
         self.waypoint_poses = {}
 
+        self.path_planner = None
+
     def activate_navigation_markers(self, v) :
         self.waypoint_markers_on = v
         p = geometry_msgs.msg.Pose()
         p.orientation = Quaternion()
         p.orientation.w = 1
         self.add_waypoint(None, p, False)
+
+    def set_path_planner(self, path_planner) :
+        if not isinstance(path_planner, PathPlanner) :
+            rospy.logerr("NavigationWaypointControl::set_path_planner() planner not of appropriate type!") 
+        else :
+            self.path_planner = path_planner
 
     def add_waypoint(self, parent_name=None, offset=Pose(), replace=False, full_controls=False) :
         
@@ -255,7 +264,7 @@ class NavigationWaypointControl(object) :
     def request_navigation_plan(self, data) :
 
         waypoint_name = data.marker_name
-        rospy.loginfo(str("RobotTeleop::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
+        rospy.loginfo(str("NavigationWaypointControl::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
         
         waypoints = []
 
@@ -271,8 +280,10 @@ class NavigationWaypointControl(object) :
             if self.get_waypoint_name(id) == waypoint_name: 
                 break        
 
-        plan = self.path_planner.plan_navigation_path(waypoints)
-
+        if self.path_planner :
+            plan = self.path_planner.plan_navigation_path(waypoints)
+        else :
+            rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
     def waypoint_menu_callback(self, feedback):
         
