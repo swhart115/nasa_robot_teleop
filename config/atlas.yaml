@@ -3,4 +3,6 @@ joint:
 cartesian:
   - left_arm
   - right_arm
+  - left_leg
+  - right_leg
 endeffector:
