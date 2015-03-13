@@ -25,7 +25,6 @@ from visualization_msgs.msg import Marker
 from nasa_robot_teleop.util.marker_helper import *
 from nasa_robot_teleop.util.kinematics_util import *
 
-from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
 from nasa_robot_teleop.tolerances import *
 
@@ -67,11 +66,9 @@ class InteractiveControl:
         self.group_pose_data = {}
         self.control_frames = {}
 
-        self.stored_poses = {}
-
         self.end_effector_link_data = {}
-        self.pose_store = {}
-        self.pose_update_thread = {}
+
+        self.stored_poses = {}
 
         self.auto_plan = {}
         self.auto_execute = {}
@@ -215,7 +212,6 @@ class InteractiveControl:
 
         # insert marker and menus
         self.server.insert(self.markers[group], self.process_feedback)
-        self.auto_execute[group] = True
 
         # posture stuff
         self.posture_markers[group] = {}
@@ -249,16 +245,15 @@ class InteractiveControl:
                     self.menu_options.append((mode, False))
 
         self.markers[group].controls = make6DOFControls()
-        self.markers[group].header.frame_id = self.root_frame
+        self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         self.markers[group].scale = 0.2
 
+        
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
         # self.markers[group].controls.append(menu_control)
 
-        # start update threads for cartesian groups
-        self.start_pose_update_thread(group)
         self.reset_group_marker(group)
         
  
@@ -420,28 +415,9 @@ class InteractiveControl:
                 if c : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m)], MenuHandler.UNCHECKED )
 
 
-    def start_pose_update_thread(self, group) :
-        self.group_pose_data[group] = geometry_msgs.msg.PoseStamped()
-        try :
-            self.pose_update_thread[group] = PoseUpdateThread(group, self.root_frame, self.control_frames[group], self.tf_listener, None)
-            self.pose_update_thread[group].start()
-        except :
-            rospy.logerr("InteractiveControl::start_pose_update_thread() -- unable to start group update thread")
-
-
-    def reset_group_marker(self, group) :
-        _marker_valid = False
-        while not _marker_valid:
-            if self.pose_update_thread[group].is_valid:
-                self.group_pose_data[group] = copy.deepcopy(self.pose_update_thread[group].get_pose_data())
-                self.server.setPose(self.markers[group].name, self.group_pose_data[group])
-                self.server.applyChanges()
-                # What?! do it again? Why? Huh?!
-                self.server.setPose(self.markers[group].name, self.group_pose_data[group])
-                self.server.applyChanges()
-                _marker_valid = True
-            rospy.sleep(0.1)
-
+    def reset_group_marker(self, group, delay=0) :
+        rospy.sleep(delay)
+        self.server.setPose(self.markers[group].name, Pose())
 
     def joint_state_callback(self, data) :
         self.joint_data = data
@@ -500,7 +476,6 @@ class InteractiveControl:
                     self.path_planner.clear_goal_target(feedback.marker_name)
                     self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
                 if self.path_planner.get_group_type(feedback.marker_name) == "cartesian" :
-                    rospy.sleep(3)
                     self.reset_group_marker(feedback.marker_name)
 
     def posture_feedback(self, feedback) :
@@ -522,11 +497,7 @@ class InteractiveControl:
         
     def process_feedback(self, feedback) :
         
-        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_DOWN:
-            if feedback.marker_name in self.get_groups('cartesian') :
-                self.pose_store[feedback.marker_name] = feedback.pose
-        
-        elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.get_groups('cartesian') :
                 if self.auto_plan[feedback.marker_name] :
                     pt = geometry_msgs.msg.PoseStamped()
@@ -534,6 +505,7 @@ class InteractiveControl:
                     pt.pose = feedback.pose
                     if self.auto_execute[feedback.marker_name] :
                         r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                        self.reset_group_marker(feedback.marker_name)
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                     else :
@@ -573,7 +545,9 @@ class InteractiveControl:
                         self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
                         self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                    r = self.path_planner.execute(feedback.marker_name)
+                    print "Executing"
+                    r = self.path_planner.execute(feedback.marker_name, from_stored=True)
+                    self.reset_group_marker(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
@@ -581,14 +555,18 @@ class InteractiveControl:
                     pt.header = feedback.header
                     pt.pose = feedback.pose
                     if self.auto_execute[feedback.marker_name] :
+                        print "planning and executing"
                         r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                        self.reset_group_marker(feedback.marker_name)
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                     else :
+                        print "just planning"
                         self.path_planner.clear_goal_target (feedback.marker_name)
                         self.path_planner.create_plan_to_target(feedback.marker_name, pt)
                 if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
                     self.toggle_posture_control(feedback.marker_name)
+        
         
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
