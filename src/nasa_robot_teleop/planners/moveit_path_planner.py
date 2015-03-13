@@ -254,7 +254,7 @@ class MoveItPathPlanner(PathPlanner) :
                     self.stored_plans[group_name] = plan.joint_trajectory
                     self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
                     self.publish_path_data(self.stored_plans[group_name], group_name)
-                    self.execute(group_name,from_stored=True)
+                    self.execute(group_name, from_stored=True)
                 return plan.joint_trajectory
             except :
                 rospy.logwarn(str("MoveItPathPlanner::plan_to_cartesian_point(" + group_name + ") -- failed"))

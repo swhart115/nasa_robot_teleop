@@ -545,7 +545,7 @@ class InteractiveControl:
                         self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
                     print "Executing"
-                    r = self.path_planner.execute(feedback.marker_name, from_stored=True)
+                    r = self.path_planner.execute(feedback.marker_name)
                     self.reset_group_marker(feedback.marker_name)
                     if not r :
                         rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))

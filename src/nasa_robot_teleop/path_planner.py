@@ -626,12 +626,12 @@ class PathPlanner(object):
         self.auto_execute[group_name] = True
         return self.plan_to_cartesian_goal(group_name,pt)
 
-    def execute(self, group_name, wait) :
+    def execute(self, group_name, from_stored=True, wait=False) :
         if self.group_types[group_name] == "endeffector" and self.gripper_service:
             rospy.loginf("PathPlanner::execute() -- using gripper service")
             return self.execute_gripper_service(group_name)
         else :
-            return self.execute_plan(group_name, wait)
+            return self.execute_plan(group_name, from_stored, wait)
 
 
     ##########################
@@ -771,7 +771,7 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plan() -- not implemented")
         raise NotImplementedError
 
-    def execute_plan(self, group_name, wait) :
+    def execute_plan(self, group_name, from_stored, wait) :
         rospy.logerror("PathPlanner::execute_plan() -- not implemented")
         raise NotImplementedError
 
@@ -801,7 +801,7 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plans() -- not implemented")
         raise NotImplementedError
 
-    def multigroup_execute_plan(self, group_names, wait) :
+    def multigroup_execute_plan(self, group_names, from_stored, wait) :
         rospy.logerror("PathPlanner::multigroup_execute_plan() -- not implemented")
         raise NotImplementedError
 
