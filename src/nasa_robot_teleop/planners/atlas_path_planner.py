@@ -197,24 +197,24 @@ class AtlasPathPlanner(PathPlanner) :
     ######## EXECUTION METHODS ########
     ###################################
     
-    def execute(self, group_name, from_stored=False, wait=True) :
-        rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name+ ")"))
+    def execute_plan(self, group_name, from_stored=False, wait=True) :
+        rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name+ ")"))
         rospy.wait_for_service("/interactive_controls_bridge/execute_command")
         try :
             executor = rospy.ServiceProxy("/interactive_controls_bridge/execute_command", ExecuteCommand)
             resp = executor()
             for p in resp.progress :
-                rospy.loginfo(str("AtlasPathPlanner::execute(" + group_name + ") progress: " + str(p)))
+                rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
             return True
         except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::execute(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
+            rospy.logerr(str("AtlasPathPlanner::execute_plan(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
             return False
 
 
-    def multigroup_execute(self, group_names, from_stored=False, wait=True) :
+    def multigroup_execute_plan(self, group_names, from_stored=False, wait=True) :
         r = []
         for g in group_names:
-            r.append(self.execute(g,from_stored,wait))
+            r.append(self.execute_plan(g,from_stored,wait))
         return r
 
 

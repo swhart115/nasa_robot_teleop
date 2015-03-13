@@ -204,27 +204,20 @@ class MoveItPathPlanner(PathPlanner) :
     # This will only return True if the plan has been previously (successfully) generated.
     # It will allow the goal to be published using actionlib (which doesnt work for commanding multiple groups at once cause the pything moveit api blocks)
     # or directly to a goal topic (which makes it kind of open loop).
-    # If we are using the gripper service to command end-effectors (rather then directly publishing JT msgs), it will do so accordingly here 
-    def execute(self, group_name, from_stored=False, wait=True) :
+    def execute_plan(self, group_name, from_stored=False, wait=True) :
         r = False
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
             rospy.loginfo(str("MoveItPathPlanner::execute_plan() -- executing plan for group: " + group_name))
-            if self.group_types[group_name] != "endeffector" or not self.gripper_service:
-                if self.actionlib :
-                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
-                    r = self.go(group_name, wait)
-                else :
-                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- publishing to topic")
-
-                    jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])
-                    
-                    N = len(jt.goal.trajectory.points)
-                    rospy.logwarn(str("executing path of " + str(N) + " points"))
-
-                    self.command_topics[group_name].publish(jt)
-                    r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+            if self.actionlib :
+                rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
+                r = self.go(group_name, wait)
             else :
-                self.execute_gripper_service(group_name)
+                rospy.logdebug("MoveItPathPlanner::execute_plan() -- publishing to topic")
+                jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
+                N = len(jt.goal.trajectory.points)
+                rospy.logwarn(str("executing path of " + str(N) + " points"))
+                self.command_topics[group_name].publish(jt)
+                r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
         else :
             rospy.logerr(str("MoveItPathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
             r = False

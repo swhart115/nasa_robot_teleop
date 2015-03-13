@@ -57,7 +57,6 @@ class PathPlanner(object):
         self.auto_execute = {}
         self.marker_store = {}
         self.command_topics = {}
-        self.actionlib = False
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 2
 
@@ -479,8 +478,6 @@ class PathPlanner(object):
                 markers.append(marker)
 
         return markers, T_acc, child_link.name
-
-
    
 
     def lookup_bridge_topic_name(self, controller_name) :
@@ -629,6 +626,13 @@ class PathPlanner(object):
         self.auto_execute[group_name] = True
         return self.plan_to_cartesian_goal(group_name,pt)
 
+    def execute(self, group_name, wait) :
+        if self.group_types[group_name] == "endeffector" and self.gripper_service:
+            rospy.loginf("PathPlanner::execute() -- using gripper service")
+            return self.execute_gripper_service(group_name)
+        else :
+            return self.execute_plan(group_name, wait)
+
 
     ##########################
     ##### print methods ######
@@ -767,8 +771,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plan() -- not implemented")
         raise NotImplementedError
 
-    def execute(self, group_name, wait) :
-        rospy.logerror("PathPlanner::execute() -- not implemented")
+    def execute_plan(self, group_name, wait) :
+        rospy.logerror("PathPlanner::execute_plan() -- not implemented")
         raise NotImplementedError
 
     def clear_goal_target(self, group_name) :
@@ -797,8 +801,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::create_path_plans() -- not implemented")
         raise NotImplementedError
 
-    def multigroup_execute(self, group_names, wait) :
-        rospy.logerror("PathPlanner::multigroup_execute() -- not implemented")
+    def multigroup_execute_plan(self, group_names, wait) :
+        rospy.logerror("PathPlanner::multigroup_execute_plan() -- not implemented")
         raise NotImplementedError
 
     def clear_goal_targets(self, group_names) :

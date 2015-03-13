@@ -248,7 +248,6 @@ class InteractiveControl:
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         self.markers[group].scale = 0.2
 
-        
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
