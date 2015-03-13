@@ -97,6 +97,10 @@ class AtlasPathPlanner(PathPlanner) :
         self.groups[group_name].joint_map = self.lookup_joint_map(group_name)
         
         N = len(self.groups[group_name].joint_map.names)
+
+        if N==0 :
+            rospy.logerr("AtlasPathPlanner::load_group_from_srdf() -- no joint names found in the map!")
+            return False
         last_joint = self.groups[group_name].joint_map.names[N-1]
 
         self.groups[group_name].group_name = group_name
