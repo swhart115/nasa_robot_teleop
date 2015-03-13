@@ -76,20 +76,32 @@ class PathPlanner(object):
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
         
+    def create_models(self, config_file) :
+
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
+        self.urdf_model = urdf.Robot.from_parameter_server()
+        if self.urdf_model == None : return False
+
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
+        self.srdf_model = SRDFModel(self.robot_name)
+        if self.srdf_model == None : return False
+
+        get_all_tips(self.urdf_model)
+
+        try :
+            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
+            if self.srdf_model.parse_from_file(config_file) :
+                rospy.loginfo("PathPlanner::create_models() ================================================")
+            return True
+        except :
+            rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
+            return False
+
     def get_group_names(self) :
         return self.group_types.keys()
 
     def has_group(self, group_name) :
         return group_name in self.get_group_names()
-
-    def set_gripper_service(self, srv) :
-        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
-        rospy.wait_for_service(srv)
-        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
-        self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
-       
-    def clear_gripper_service(self) :
-        self.gripper_service = None    
 
     def get_ee_parent_group(self, ee) :
         if ee in self.srdf_model.end_effectors :
@@ -141,26 +153,7 @@ class PathPlanner(object):
     def get_control_mesh(self, group_name) :
         return self.control_meshes[group_name]
 
-    def create_models(self, config_file) :
-
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
-        self.urdf_model = urdf.Robot.from_parameter_server()
-        if self.urdf_model == None : return False
-
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
-        self.srdf_model = SRDFModel(self.robot_name)
-        if self.srdf_model == None : return False
-
-        get_all_tips(self.urdf_model)
-
-        try :
-            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
-            if self.srdf_model.parse_from_file(config_file) :
-                rospy.loginfo("PathPlanner::create_models() ================================================")
-            return True
-        except :
-            rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
-            return False
+    
 
 
     # probably can clean this up, it's messy FIXME
@@ -308,31 +301,29 @@ class PathPlanner(object):
             rospy.loginfo(str("PathPlanner::check_valid_plan() -- Plan Found, size: " + str(len(plan))))
         else :
             rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
-        return r
+        return r   
 
-    def execute_gripper_service(self, group_name, from_stored=False, wait=True) :
-        r = False
-        rospy.loginfo(str("PathPlanner::execute_gripper_service() -- executing plan for group: " + group_name))                
-        if self.plan_generated[group_name] and self.stored_plans[group_name] :
-            if self.group_types[group_name] == "endeffector" and self.gripper_service:
-                r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name])
-        else :
-            rospy.logerr(str("PathPlanner::execute_gripper_service() -- no plan for group" + group_name + " yet generated."))
-            r = False
-        rospy.logdebug(str("PathPlanner::execute_gripper_service() -- plan execution: " + str(r)))
-        return r
+    def get_joint_chain(self, first_link, last_link) :
+        joints = []
+        link = last_link
+        while link != first_link :
+            for j in self.urdf_model.joint_map.keys() :
+                if self.urdf_model.joint_map[j].child == link : 
+                    joints.append(self.urdf_model.joint_map[j].name)
+                    link = self.urdf_model.joint_map[j].parent
+                    break
+        joints.reverse()
+        return joints
 
-    # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
-    # to send a service call to any custom node that will interpret the JT as whatever is necessary
-    def publish_to_gripper_service(self, group, traj) :
-        try:
-            rospy.loginfo("PathPlanner::publish_to_gripper_service() -- calling gripper service")
-            resp = self.gripper_service(traj, group, "end_effector_pose") # did i hardcode this? FIXME!! should be something like "Left Hand Close"
-            return resp.result
-        except rospy.ServiceException, e:
-            rospy.logerr("PathPlanner::publish_to_gripper_service() -- gripper service call failed")
-            return False
 
+    def lookup_bridge_topic_name(self, controller_name) :
+        bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
+        return bridge_topic_name
+
+
+    ###############################
+    ##### conversion methods ######
+    ###############################
 
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
@@ -396,20 +387,8 @@ class PathPlanner(object):
 
         return markers
 
-
-    def get_joint_chain(self, first_link, last_link) :
-        joints = []
-        link = last_link
-        while link != first_link :
-            for j in self.urdf_model.joint_map.keys() :
-                if self.urdf_model.joint_map[j].child == link : 
-                    joints.append(self.urdf_model.joint_map[j].name)
-                    link = self.urdf_model.joint_map[j].parent
-                    break
-        joints.reverse()
-        return joints
-
     def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
+
         markers = []
         T_acc = kdl.Frame()
         T_kin = kdl.Frame()
@@ -478,16 +457,10 @@ class PathPlanner(object):
                 markers.append(marker)
 
         return markers, T_acc, child_link.name
-   
 
-    def lookup_bridge_topic_name(self, controller_name) :
-        bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
-        return bridge_topic_name
-
-    def tear_down(self) :
-        for k in self.end_effector_display.keys() :
-            self.end_effector_display[k].stop_offset_update_thread()
-        
+    #########################################
+    ##### planning & execution methods ######
+    #########################################
 
     def create_plan_to_target(self, group_name, pt) :
 
@@ -617,7 +590,6 @@ class PathPlanner(object):
 
         return self.plan_generated[group_name]
 
-
     def plan_joint_goal_and_execute(self, group_name, js) :
         self.auto_execute[group_name] = True
         self.plan_to_joint_goal(group_name,js)
@@ -668,6 +640,43 @@ class PathPlanner(object):
             self.print_group_info(g)
 
 
+    ####################################
+    ##### gripper service methods ######
+    ####################################
+
+    def set_gripper_service(self, srv) :
+        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
+        rospy.wait_for_service(srv)
+        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
+        self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
+       
+    def clear_gripper_service(self) :
+        self.gripper_service = None   
+
+    def execute_gripper_service(self, group_name, from_stored=False, wait=True) :
+        r = False
+        rospy.loginfo(str("PathPlanner::execute_gripper_service() -- executing plan for group: " + group_name))                
+        if self.plan_generated[group_name] and self.stored_plans[group_name] :
+            if self.group_types[group_name] == "endeffector" and self.gripper_service:
+                r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name])
+        else :
+            rospy.logerr(str("PathPlanner::execute_gripper_service() -- no plan for group" + group_name + " yet generated."))
+            r = False
+        rospy.logdebug(str("PathPlanner::execute_gripper_service() -- plan execution: " + str(r)))
+        return r
+
+    # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
+    # to send a service call to any custom node that will interpret the JT as whatever is necessary
+    def publish_to_gripper_service(self, group, traj) :
+        try:
+            rospy.loginfo("PathPlanner::publish_to_gripper_service() -- calling gripper service")
+            resp = self.gripper_service(traj, group, "end_effector_pose") # did i hardcode this? FIXME!! should be something like "Left Hand Close"
+            return resp.result
+        except rospy.ServiceException, e:
+            rospy.logerr("PathPlanner::publish_to_gripper_service() -- gripper service call failed")
+            return False
+ 
+
     ##############################
     ##### tolerance methods ######
     ##############################
@@ -698,6 +707,15 @@ class PathPlanner(object):
 
     def set_goal_joint_tolerance(self, group_name, tol) :
         self.joint_tolerance[group_name] = tol
+
+    
+    ############################
+    ##### cleanup methods ######
+    ############################
+
+    def tear_down(self) :
+        for k in self.end_effector_display.keys() :
+            self.end_effector_display[k].stop_offset_update_thread()
 
 
     ############################
