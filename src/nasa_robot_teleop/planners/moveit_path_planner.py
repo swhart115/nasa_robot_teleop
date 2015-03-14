@@ -41,7 +41,7 @@ class MoveItPathPlanner(PathPlanner) :
 
         # set up obstacle publisher stuff
         self.obstacle_markers = visualization_msgs.msg.MarkerArray()
-        self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray,queue_size=10)
+        self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray, queue_size=10)
         
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\' finished"))
         
@@ -104,9 +104,7 @@ class MoveItPathPlanner(PathPlanner) :
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
                 rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
-
             joint_list = self.get_group_joints(group_name)
-            print joint_list
             jn = joint_list[0]
             for j in joint_list:
                 if j in self.urdf_model.joint_map :
@@ -168,7 +166,6 @@ class MoveItPathPlanner(PathPlanner) :
             return self.groups[group_name].get_planning_frame()
 
     def has_end_effector_link(self, group_name) :
-        # print self.groups.keys()
         if not group_name in self.groups.keys() :
             rospy.logerr(str("MoveItPathPlanner::has_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
             return False
@@ -217,9 +214,10 @@ class MoveItPathPlanner(PathPlanner) :
                 N = len(jt.goal.trajectory.points)
                 rospy.logwarn(str("executing path of " + str(N) + " points"))
                 self.command_topics[group_name].publish(jt)
+                self.plan_generated[group_name] = False
                 r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
         else :
-            rospy.logerr(str("MoveItPathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
+            rospy.logwarn(str("MoveItPathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
             r = False
         rospy.logdebug(str("MoveItPathPlanner::execute_plan() -- plan execution: " + str(r)))
         return r
@@ -377,5 +375,3 @@ class MoveItPathPlanner(PathPlanner) :
     def has_joint_map(self, group_name) :
         return False
 
-    def has_joint_mask(self, group_name) :
-        return False

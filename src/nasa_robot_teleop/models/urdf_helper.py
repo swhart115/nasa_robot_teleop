@@ -107,6 +107,11 @@ def get_joint_child_link(joint, urdf) :
     if joint in urdf.joint_map :
         return urdf.joint_map[joint].child
     return None
+
+def get_joint_parent_link(joint, urdf) :
+    if joint in urdf.joint_map :
+        return urdf.joint_map[joint].parent
+    return None
     
 def get_mesh_marker_for_link(link_name, urdf) :
     
@@ -157,6 +162,7 @@ def get_mesh_marker_for_link(link_name, urdf) :
 
 
 def get_chain(urdf, root, tip, joints=True, links=True, fixed=True):
+    # print "getting chain from ", root, " to ", tip
     chain = []
     if links:
         chain.append(tip)
@@ -184,6 +190,26 @@ def get_root(urdf):
     assert root is not None, "No roots detected, invalid URDF."
     return root
 
+def is_parent(urdf, child_link, parent_link):
+    if not (child_link in urdf.link_map) or not (parent_link in urdf.link_map) :
+        return False 
+    if urdf.parent_map[child_link][1] == parent_link :
+        return True
+    else :
+        return is_parent(urdf, urdf.parent_map[child_link][1], parent_link)
+
+def is_chain(urdf, child_link, parent_link) :
+    # print "is chain?"
+    chain = get_chain(urdf, parent_link, child_link, joints=False, links=True)
+    # print "chain: ", chain
+    return not len(chain)==0 
+
+def is_joint_chain(urdf, joints) :
+    print "what?"
+    links = [l for j in get_joint_child_link(j, urdf)]
+    chain = get_chain(urdf, links[len(links)-1], links[0], joints=False, links=True)
+    return not len(chain)==0 
+
 def get_all_tips(urdf) :
     tips = []
     for link in urdf.link_map.keys():
@@ -197,24 +223,24 @@ def get_all_tips(urdf) :
 
 
 def get_all_child_links(urdf, root_frame) :
-
     root_link = urdf.link_map[root_frame]
-
     j = get_link_joint(root_link, urdf)
-
     tips = get_all_tips(urdf)
     links = []
     for tip in tips :
-        # print "  checking tip: ", tip
         chain = get_chain(urdf, root=root_link.name, tip=tip, joints=False, links=True)
-        # print "  found chain: ", chain, "\n"
         for c in chain :
             if c != links: links.append(c)
-
-    # print "all links: "
     r = list(set(links))
-    # print "-----\n"
-    # print "final set: ", c
-    # print "-----"
     return r
 
+def get_child_mesh(urdf, ee_link) :
+    mesh_name = ""
+    try :
+        mesh_name = ee_link.visual.geometry.filename
+        return mesh_name
+    except :
+        try :
+            return get_child_mesh(urdf.link_map[ee_link.name].child)
+        except :
+            return ""

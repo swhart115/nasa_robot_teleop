@@ -42,7 +42,7 @@ class PathPlanner(object):
         self.control_frames = {}
         self.control_meshes = {}
 
-        self.control_offset = {}
+        # self.control_offset = {}
         self.group_id_offset = {}
 
         self.trajectory_poses = {}
@@ -75,7 +75,7 @@ class PathPlanner(object):
         if not self.create_models(config_file) :
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
             return
-        
+
     def create_models(self, config_file) :
 
         rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
@@ -87,43 +87,40 @@ class PathPlanner(object):
         if self.srdf_model == None : return False
 
         get_all_tips(self.urdf_model)
+        self.srdf_model.set_urdf(self.urdf_model)
 
         try :
             rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
             if self.srdf_model.parse_from_file(config_file) :
-                rospy.loginfo("PathPlanner::create_models() ================================================")
+                rospy.loginfo("PathPlanner::create_models() -- SRDF created")
+            # self.srdf_model.print_groups()
             return True
         except :
             rospy.logerr("PathPlanner()::create_models() -- error parsing SRDF from file")
             return False
 
-    def get_group_names(self) :
-        return self.group_types.keys()
-
     def has_group(self, group_name) :
         return group_name in self.get_group_names()
 
-    def get_ee_parent_group(self, ee) :
-        if ee in self.srdf_model.end_effectors :
-            return self.srdf_model.end_effectors[ee].group
-        return ""
-
-    def get_child_mesh(self, ee_link) :
-        mesh_name = ""
-        try :
-            mesh_name = ee_link.visual.geometry.filename
-            return mesh_name
-        except :
-            try :
-                return self.get_child_mesh(self.urdf_model.link_map[ee_link.name].child)
-            except :
-                return ""
+    def get_group_names(self) :
+        return self.group_types.keys()
 
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
             return self.group_types[group_name]
         else :
             return ""
+
+    def get_all_group_joints(self, group_name) :
+        if group_name in self.srdf_model.full_group_joints :
+            return self.srdf_model.full_group_joints[group_name]
+        return []
+
+    def get_urdf_model(self) :
+        return self.urdf_model
+
+    def get_srdf_model(self) :
+        return self.srdf_model
 
     def get_end_effector_names(self) :
         ee_list = []
@@ -134,8 +131,6 @@ class PathPlanner(object):
     def get_control_frame(self, group_name) :
         if self.srdf_model.has_tip_link(group_name) :
             return self.srdf_model.get_tip_link(group_name)
-        elif self.has_end_effector_link(group_name) :
-            return self.get_end_effector_link(group_name)
         elif self.group_types[group_name] == "endeffector" :
             if group_name in self.srdf_model.group_end_effectors :
                 return self.srdf_model.group_end_effectors[group_name].parent_link
@@ -152,9 +147,6 @@ class PathPlanner(object):
 
     def get_control_mesh(self, group_name) :
         return self.control_meshes[group_name]
-
-    
-
 
     # probably can clean this up, it's messy FIXME
     def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.005]*3, orientation_tolerances=[.02]*3) :
@@ -191,7 +183,7 @@ class PathPlanner(object):
                 ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
                 try :
                     # self.control_meshes[group_name] = ee_link.visual.geometry.filename
-                    self.control_meshes[group_name] = self.get_child_mesh(ee_link)
+                    self.control_meshes[group_name] = get_child_mesh(self.urdf_model, ee_link)
                 except :
                     rospy.logwarn("no mesh found")
                 for ee in self.srdf_model.end_effectors.keys() :
@@ -221,36 +213,30 @@ class PathPlanner(object):
             return False
    
 
-    def get_control_mesh_pose_offset(self, group_name) :
-        p = geometry_msgs.msg.Pose()
-        p.orientation.w = 1
-        link_name = self.control_frames[group_name]
-        if link_name in self.urdf_model.link_map:
-            link = self.urdf_model.link_map[link_name]
-            p = link_origin_to_pose(link)
-        return p
+    # def get_control_mesh_pose_offset(urdf, frame) :
+    #     p = geometry_msgs.msg.Pose()
+    #     p.orientation.w = 1
+    #     link_name = self.control_frames[group_name]
+    #     if link_name in self.urdf_model.link_map:
+    #         link = self.urdf_model.link_map[link_name]
+    #         p = link_origin_to_pose(link)
+    #     return p
 
-    def get_control_mesh_scale(self, group_name) :
-        s = [1]*3
-        link_name = self.control_frames[group_name]
-        if link_name in self.urdf_model.link_map:
-            link = self.urdf_model.link_map[link_name]
-            s = link.visual.geometry.scale
+    # def get_control_mesh_scale(urdf, frame) :
+    #     s = [1]*3
+    #     link_name = self.control_frames[group_name]
+    #     if link_name in self.urdf_model.link_map:
+    #         link = self.urdf_model.link_map[link_name]
+    #         s = link.visual.geometry.scale
            
-        if s == None: s = [1]*3
-        return s
+    #     if s == None: s = [1]*3
+    #     return s
 
     def get_group_links(self, group) :
         return self.srdf_model.get_group_links(group)
 
     def get_group_joints(self, group) :
         return self.srdf_model.get_group_joints(group)
-
-    def get_urdf_model(self) :
-        return self.urdf_model
-
-    def get_srdf_model(self) :
-        return self.srdf_model
 
     def get_trajectory_display_markers(self, group) :
         if group in self.trajectory_display_markers : return self.trajectory_display_markers[group]
@@ -263,15 +249,47 @@ class PathPlanner(object):
     def set_base_frame(self, group, base_frame) :
         self.base_frames[group] = base_frame
 
-    def set_control_offset(self, group, offset) :
-        self.control_offset[group] = offset
+    def get_joint_mask(self, group) :
+        return self.srdf_model.get_joint_mask(group)
+
+    def set_joint_mask(self, group, mask) :
+        self.srdf_model.set_joint_mask(group, mask)
+
+    # def set_control_offset(self, group, offset) :
+    #     self.control_offset[group] = offset
 
     def set_display_mode(self, group, mode) :
         self.display_modes[group] = mode
 
-    def joint_state_callback(self, data):
-        self.currentState = data
+    def check_valid_plan(self, plan) :
+        r = len(plan) > 0 
+        if r :
+            rospy.loginfo(str("PathPlanner::check_valid_plan() -- Plan Found, size: " + str(len(plan))))
+        else :
+            rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
+        return r   
 
+    # def get_joint_chain(self, first_link, last_link) :
+    #     joints = []
+    #     link = last_link
+    #     while link != first_link :
+    #         for j in self.urdf_model.joint_map.keys() :
+    #             if self.urdf_model.joint_map[j].child == link : 
+    #                 joints.append(self.urdf_model.joint_map[j].name)
+    #                 link = self.urdf_model.joint_map[j].parent
+    #                 break
+    #     joints.reverse()
+    #     return joints
+
+
+    def lookup_bridge_topic_name(self, controller_name) :
+        bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
+        return bridge_topic_name
+
+
+    #############################
+    ##### path pub methods ######
+    #############################
 
     # publish path plan to the visualization topic (a MarkerArray you can view in RViz)
     def publish_path_data(self, jt, group) :
@@ -295,31 +313,6 @@ class PathPlanner(object):
             markers.markers.append(marker)
         self.path_visualization.publish(markers)
 
-    def check_valid_plan(self, plan) :
-        r = len(plan) > 0 
-        if r :
-            rospy.loginfo(str("PathPlanner::check_valid_plan() -- Plan Found, size: " + str(len(plan))))
-        else :
-            rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
-        return r   
-
-    def get_joint_chain(self, first_link, last_link) :
-        joints = []
-        link = last_link
-        while link != first_link :
-            for j in self.urdf_model.joint_map.keys() :
-                if self.urdf_model.joint_map[j].child == link : 
-                    joints.append(self.urdf_model.joint_map[j].name)
-                    link = self.urdf_model.joint_map[j].parent
-                    break
-        joints.reverse()
-        return joints
-
-
-    def lookup_bridge_topic_name(self, controller_name) :
-        bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
-        return bridge_topic_name
-
 
     ###############################
     ##### conversion methods ######
@@ -338,49 +331,52 @@ class PathPlanner(object):
         ee_offset = toPose((0,0,0), (0,0,0,1))
 
         if display_mode == "all_points" :
-
-            for point in joint_trajectory.points[1:num_points:self.path_increment] :
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
-                idx += self.group_id_offset[group]
-                idx += len(waypoint_markers)
-                for m in waypoint_markers: markers.markers.append(m)
-
-                if self.has_end_effector_link(group) and self.group_types[group] == "manipulator":
-                    ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
-                    ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-                    if last_link != ee_root_frame :
-                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
-                        (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                        rot = normalize_vector(rot)
-                        ee_offset = toPose(trans, rot)
-                        
-                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
-                    for m in end_effector_markers.markers: markers.markers.append(m)
-                    idx += len(end_effector_markers.markers)
-
+            r = joint_trajectory.points[1:num_points:self.path_increment]
         elif display_mode == "last_point" :
+            r = joint_trajectory.points[num_points-1]
 
-            if num_points > 0 :
-                points = joint_trajectory.points[num_points-1]
-                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
-                for m in waypoint_markers: markers.markers.append(m)
-                idx += self.group_id_offset[group]
-                idx += len(waypoint_markers)
+        for point in r :
+            waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
+            idx += self.group_id_offset[group]
+            idx += len(waypoint_markers)
+            for m in waypoint_markers: markers.markers.append(m)
 
-                if self.has_end_effector_link(group) and self.group_types[group] == "manipulator":
-                    ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
-                    ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-                    if last_link != ee_root_frame :
-                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
-                        (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                        rot = normalize_vector(rot)
-                        ee_offset = toPose(trans, rot)
+            if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
+                ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
+                ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
+                if last_link != ee_root_frame :
+                    self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
+                    (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+                    rot = normalize_vector(rot)
+                    ee_offset = toPose(trans, rot)
+                    
+                offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
+                for m in end_effector_markers.markers: markers.markers.append(m)
+                idx += len(end_effector_markers.markers)
 
-                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
-                    for m in end_effector_markers.markers: markers.markers.append(m)
-                    idx += len(end_effector_markers.markers)
+        # elif display_mode == "last_point" :
+
+        #     if num_points > 0 :
+        #         points = joint_trajectory.points[num_points-1]
+        #         waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
+        #         for m in waypoint_markers: markers.markers.append(m)
+        #         idx += self.group_id_offset[group]
+        #         idx += len(waypoint_markers)
+
+        #         if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
+        #             ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
+        #             ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
+        #             if last_link != ee_root_frame :
+        #                 self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
+        #                 (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+        #                 rot = normalize_vector(rot)
+        #                 ee_offset = toPose(trans, rot)
+
+        #             offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+        #             end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
+        #             for m in end_effector_markers.markers: markers.markers.append(m)
+        #             idx += len(end_effector_markers.markers)
 
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
@@ -402,7 +398,8 @@ class PathPlanner(object):
      
         parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[first_joint_name].parent]
         last_link = self.urdf_model.link_map[self.get_control_frame(group)]
-        full_names = self.get_joint_chain(parent_link.name, last_link.name)
+        # full_names = self.get_joint_chain(parent_link.name, last_link.name)
+        full_names = get_chain(self.urdf_model, parent_link.name, last_link.name, joints=True, links=False, fixed=True)
 
         for joint in full_names :
 
@@ -596,6 +593,14 @@ class PathPlanner(object):
 
     def plan_cartesian_goal_and_execute(self, group_name, pt) :
         self.auto_execute[group_name] = True
+        
+        # transform the goal to the robot/group planning frame 
+        if pt.header.frame_id != self.get_group_planning_frame(group_name) :
+            self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
+            pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), pt)
+        pt.header.stamp = rospy.Time.now()
+        pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb PathPlanner thing)
+
         return self.plan_to_cartesian_goal(group_name,pt)
 
     def execute(self, group_name, from_stored=True, wait=False) :
@@ -708,7 +713,15 @@ class PathPlanner(object):
     def set_goal_joint_tolerance(self, group_name, tol) :
         self.joint_tolerance[group_name] = tol
 
-    
+
+    #############################
+    ##### callback methods ######
+    #############################
+
+    def joint_state_callback(self, data):
+        self.currentState = data
+
+
     ############################
     ##### cleanup methods ######
     ############################
@@ -758,19 +771,7 @@ class PathPlanner(object):
     def get_joint_map(self, group_name) :
         rospy.logwarn("PathPlanner::get_joint_map() -- not implemented")
         raise NotImplementedError
-
-    def has_joint_mask(self, group_name) :
-        rospy.logwarn("PathPlanner::has_joint_mask() -- not implemented")
-        raise NotImplementedError
-
-    def get_joint_mask(self, group_name) :
-        rospy.logwarn("PathPlanner::get_joint_mask() -- not implemented")
-        raise NotImplementedError
-
-    def set_joint_mask(self, group_name, mask) :
-        rospy.logwarn("PathPlanner::set_joint_mask() -- not implemented")
-        raise NotImplementedError
-    
+  
 
     ### planing and execution methods
     def plan_to_cartesian_goal(self, group_name, pt) :

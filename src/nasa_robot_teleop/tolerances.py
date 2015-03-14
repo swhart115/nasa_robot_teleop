@@ -8,7 +8,7 @@ class Tolerance(object) :
     def __init__(self, filename) :
     
         if not filename :
-            print "No Tolerance File given!!"
+            rospy.logwarn("No Tolerance File given!!")
             return
 
         try :
@@ -19,6 +19,8 @@ class Tolerance(object) :
         except :
             self.tolerances = None
             print "bad tolerance file!"
+
+        return None
   
 
     def get_tolerance_mode(self, mode, vals) :

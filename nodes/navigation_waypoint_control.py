@@ -158,7 +158,7 @@ class NavigationWaypointControl(object) :
         self.waypoint_controls[key] = full_controls
 
         cyl = createCylinder(waypoint_id, height=1.0, radius=0.25)
-        cyl_control = CreateVisualControlFromMarker(cyl)#,interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
+        cyl_control = CreateVisualControlFromMarker(cyl, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
         waypoint.controls.append(cyl_control)
         # height_control = makeYTransControl()
         # waypoint.controls.append(height_control)

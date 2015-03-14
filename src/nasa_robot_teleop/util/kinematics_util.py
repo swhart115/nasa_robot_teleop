@@ -1,6 +1,6 @@
 
 import numpy
-import math
+from math import pi, sqrt, cos, sin, atan2, acos, asin, fsum
 import tf
 
 import rospy
@@ -12,7 +12,7 @@ from PyKDL import *
 
 
 def normalize_vector(v) :
-  m = math.sqrt(math.fsum([x*x for x in v]))
+  m = sqrt(fsum([x*x for x in v]))
   return [x/m for x in v]
 
 def fromTf(tf):
@@ -125,69 +125,69 @@ def q_to_rpy(q):
     return sign(x)*2*acos(wx), sign(y)*2*acos(wy), sign(z)*2*acos(wz)
 
 
-class PoseMath(object):
+# class PoseMath(object):
 
-    def __init__(self, msg):
-        self.msg = msg
+#     def __init__(self, msg):
+#         self.msg = msg
 
-    @staticmethod
-    def fromMatrix(m):
-        (x, y, z) = (m[0, 3], m[1, 3], m[2, 3])
-        q = transformations.quaternion_from_matrix(m)
-        return PoseMath(Pose(Point(x, y, z), Quaternion(*q)))
+#     @staticmethod
+#     def fromMatrix(m):
+#         (x, y, z) = (m[0, 3], m[1, 3], m[2, 3])
+#         q = transformations.quaternion_from_matrix(m)
+#         return PoseMath(Pose(Point(x, y, z), Quaternion(*q)))
 
-    @staticmethod
-    def fromTf(tf):
-        position, quaternion = tf
-        return PoseMath(Pose(Point(*position), Quaternion(*quaternion)))
+#     @staticmethod
+#     def fromTf(tf):
+#         position, quaternion = tf
+#         return PoseMath(Pose(Point(*position), Quaternion(*quaternion)))
 
-    @staticmethod
-    def fromEuler(x, y, z, Rx, Ry, Rz):
-        q = transformations.quaternion_from_euler(Rx, Ry, Rz)
-        return PoseMath(Pose(Point(x, y, z), Quaternion(*q)))
+#     @staticmethod
+#     def fromEuler(x, y, z, Rx, Ry, Rz):
+#         q = transformations.quaternion_from_euler(Rx, Ry, Rz)
+#         return PoseMath(Pose(Point(x, y, z), Quaternion(*q)))
 
-    @staticmethod
-    def fromCameraParams(self, cv, rvec, tvec):
-        m = numpy.array([ [ 0, 0, 0, tvec[0,0] ],
-                          [ 0, 0, 0, tvec[1,0] ],
-                          [ 0, 0, 0, tvec[2,0] ],
-                          [ 0, 0, 0, 1.0       ] ], dtype = numpy.float32)
-        cv.Rodrigues2(rvec, m[:3,:3])
-        return self.fromMatrix(m)
+#     @staticmethod
+#     def fromCameraParams(self, cv, rvec, tvec):
+#         m = numpy.array([ [ 0, 0, 0, tvec[0,0] ],
+#                           [ 0, 0, 0, tvec[1,0] ],
+#                           [ 0, 0, 0, tvec[2,0] ],
+#                           [ 0, 0, 0, 1.0       ] ], dtype = numpy.float32)
+#         cv.Rodrigues2(rvec, m[:3,:3])
+#         return self.fromMatrix(m)
 
-    # Operators
+#     # Operators
 
-    def __mul__(self, other):
-        m = numpy.dot(self.asMatrix(), other.asMatrix())
-        return PoseMath.fromMatrix(m)
+#     def __mul__(self, other):
+#         m = numpy.dot(self.asMatrix(), other.asMatrix())
+#         return PoseMath.fromMatrix(m)
 
-    def __invert__(self):
-        inv = numpy.linalg.inv(self.asMatrix())
-        return PoseMath.fromMatrix(inv)
+#     def __invert__(self):
+#         inv = numpy.linalg.inv(self.asMatrix())
+#         return PoseMath.fromMatrix(inv)
 
-    # Representations
+#     # Representations
 
-    def __repr__(self):
-        return repr(self.msg)
+#     def __repr__(self):
+#         return repr(self.msg)
 
-    def asMessage(self):
-        """ Return the pose as a ROS ``Pose`` message """
-        return self.msg
+#     def asMessage(self):
+#         """ Return the pose as a ROS ``Pose`` message """
+#         return self.msg
 
-    def asMatrix(self):
-        """ Return a numpy 4x4 array for the pose. """
-        translation = (self.msg.position.x, self.msg.position.y, self.msg.position.z)
-        rotation = (self.msg.orientation.x, self.msg.orientation.y, self.msg.orientation.z, self.msg.orientation.w)
-        return numpy.dot(transformations.translation_matrix(translation), transformations.quaternion_matrix(rotation))
+#     def asMatrix(self):
+#         """ Return a numpy 4x4 array for the pose. """
+#         translation = (self.msg.position.x, self.msg.position.y, self.msg.position.z)
+#         rotation = (self.msg.orientation.x, self.msg.orientation.y, self.msg.orientation.z, self.msg.orientation.w)
+#         return numpy.dot(transformations.translation_matrix(translation), transformations.quaternion_matrix(rotation))
 
-    def asEuler(self):
-        """ Return a tuple (x, y, z, Rx, Ry, Rz) for the pose. """
-        tmp = transformations.euler_from_quaternion((self.msg.orientation.x, self.msg.orientation.y, self.msg.orientation.z, self.msg.orientation.w))
-        return (self.msg.position.x, self.msg.position.y, self.msg.position.z, tmp[0], tmp[1], tmp[2])
+#     def asEuler(self):
+#         """ Return a tuple (x, y, z, Rx, Ry, Rz) for the pose. """
+#         tmp = transformations.euler_from_quaternion((self.msg.orientation.x, self.msg.orientation.y, self.msg.orientation.z, self.msg.orientation.w))
+#         return (self.msg.position.x, self.msg.position.y, self.msg.position.z, tmp[0], tmp[1], tmp[2])
 
-    def asTf(self):
-        """ Return a tuple (position, quaternion) for the pose. """
-        p = self.msg.position
-        q = self.msg.orientation
-        return ((p.x, p.y, p.z), (q.x, q.y, q.z, q.w))
+#     def asTf(self):
+#         """ Return a tuple (position, quaternion) for the pose. """
+#         p = self.msg.position
+#         q = self.msg.orientation
+#         return ((p.x, p.y, p.z), (q.x, q.y, q.z, q.w))
 

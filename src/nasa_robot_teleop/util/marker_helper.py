@@ -208,6 +208,8 @@ def CreateVisualControlFromMarker(marker, always_visible=True, interaction_mode=
     control.name = "visual"
     control.always_visible = always_visible
     control.interaction_mode = interaction_mode
+    control.orientation.w = 1
+    control.orientation.y = 1
     control.markers.append(marker)
     return control
 

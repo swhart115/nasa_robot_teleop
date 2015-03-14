@@ -1,4 +1,4 @@
-OrientationTolerance:
+Angle Tolerance:
   - FULL_CYL :  [3.1416, 0.0349, 0.0349]
   - HALF_CYL: [1.5708, 0.0349, 0.0349]
   - QUARTER_CYL: [0.7854, 0.0349, 0.0349]
@@ -17,7 +17,7 @@ OrientationTolerance:
   - DUAL_ARM: [0.0174, 0.0174, 0.0174]
   - DUAL_ARM_MAX: [0.0698, 0.0698, 0.0698]
 
-PositionTolerance:
+Position Tolerance:
   - MILLIMETER : [0.001, 0.001, 0.001]
   - CENTIMETER : [0.01, 0.01, 0.01]
   - DECIMETER :  [0.1, 0.1, 0.1]

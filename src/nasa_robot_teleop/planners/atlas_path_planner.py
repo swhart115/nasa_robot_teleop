@@ -108,8 +108,7 @@ class AtlasPathPlanner(PathPlanner) :
         self.groups[group_name].control_frame = self.srdf_model.get_tip_link(group_name)
         self.groups[group_name].planning_frame = self.planning_frame
 
-        self.groups[group_name].joint_mask = JointMask()
-        self.groups[group_name].joint_mask.mask = [True]*len(self.groups[group_name].joint_map.names)
+        self.groups[group_name].joint_mask.mask = self.srdf_model.get_joint_mask(group_name)
 
         return True
 
@@ -468,14 +467,12 @@ class AtlasPathPlanner(PathPlanner) :
     def get_joint_map(self, group_name) :
         return self.groups[group_name].joint_map
 
-    def has_joint_mask(self, group_name) :
-        return True
-
     def get_joint_mask(self, group_name) :
         return self.groups[group_name].joint_mask.mask
         
     def set_joint_mask(self, group_name, mask) :
         self.groups[group_name].joint_mask.mask = mask
+        self.srdf_model.set_joint_mask[group_name, mask]
 
 if __name__=="__main__":
 

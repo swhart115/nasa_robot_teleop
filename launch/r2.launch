@@ -1,9 +1,9 @@
 <?xml version="1.0" ?>
 <launch>
-    <arg name="robot"              default="r2" />
-    <arg name="planner"            default="moveit" />
-    <arg name="config"             default="r2_moveit_config" />
-    <arg name="manipulator_groups" default="left_arm right_arm" />
-    <arg name="joint_groups"       default="head waist" />
-    <node pkg="nasa_robot_teleop" type="robot_teleop.py" name="robot_teleop" args="-r $(arg robot) -p $(arg planner) -m $(arg manipulator_groups) -j $(arg joint_groups) -c $(arg config)" output="screen" />
+    <node pkg="nasa_robot_teleop" type="interactive_control.py" name="interactive_control" output="screen"> 
+		<param name="robot" value="r2"/>
+		<param name="planner_type" value="moveit"/>
+		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/r2.yaml"/>
+		<param name="planner_config_file" value="$(find r2_moveit_config)/config/r2.srdf"/>
+    </node>
 </launch>

@@ -10,6 +10,8 @@ import tf
 import argparse
 import PyKDL as kdl
 
+from sys import exit
+
 # ros messages
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Pose
@@ -46,7 +48,7 @@ class InteractiveControl:
         self.planner_config_file = planner_config_file
         self.tolerance_file =  tolerance_file
         self.navigation_frame = navigation_frame
-
+        
         self.group_map = []
         self.tolerances = None
         self.gripper_service = None
@@ -80,7 +82,9 @@ class InteractiveControl:
         self.server = InteractiveMarkerServer(str(self.robot_name + "_interactive_control"))
 
         # nav control markers
-        self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
+        if self.navigation_frame :
+            rospy.loginfo("InteractiveControl::init() -- setting up NavigationWaypointControl")
+            self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
 
         # joint state sub
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
@@ -90,19 +94,36 @@ class InteractiveControl:
         self.remove_group_srv = rospy.Service('/interactive_control/remove_group', RemoveGroup, self.handle_remove_group)
 
         # set up menu info
-        self.menu_options = []
-        self.menu_options.append(("Plan", False))
-        self.menu_options.append(("Execute", False))
-        self.menu_options.append(("Plan On Move", True))
-        self.menu_options.append(("Execute On Plan", True))
-        self.menu_options.append(("Show Path", True))       
-        self.menu_options.append(("Toggle Joint Control", False))
-        self.menu_options.append(("Sync To Actual", False))
-        self.menu_options.append(("Stored Poses", False))       
+        self.joint_menu_options = []
+        self.joint_menu_options.append(("Execute", False))
+        self.joint_menu_options.append(("Execute On Plan", True))
+        self.joint_menu_options.append(("Show Path", True))       
+        self.joint_menu_options.append(("Toggle Joint Control", False))
+        self.joint_menu_options.append(("Stored Poses", False))       
+        self.joint_menu_options.append(("Joint Mask", False))
 
+        self.cartesian_menu_options = []
+        self.cartesian_menu_options.append(("Plan", False))
+        self.cartesian_menu_options.append(("Execute", False))
+        self.cartesian_menu_options.append(("Plan On Move", True))
+        self.cartesian_menu_options.append(("Execute On Plan", True))
+        self.cartesian_menu_options.append(("Show Path", True))       
+        self.cartesian_menu_options.append(("Toggle Joint Control", False))
+        self.cartesian_menu_options.append(("Stored Poses", False))       
+        self.cartesian_menu_options.append(("Sync To Actual", False))
+        self.cartesian_menu_options.append(("Joint Mask", False))
+        if self.tolerances :
+            for mode in self.tolerances.get_tolerance_modes() :
+                self.cartesian_menu_options.append((mode, False))
+
+        self.endeffector_menu_options = []
+        self.endeffector_menu_options.append(("Stored Poses", False))       
+
+        self.menu_options = self.joint_menu_options + self.cartesian_menu_options + self.endeffector_menu_options
+        
         # get the groups from the config file
         self.group_map = self.parse_config_file(self.group_config_file)
-
+       
         # planner instantiatation
         if planner_type == "moveit" :
             self.path_planner = MoveItPathPlanner(self.robot_name, self.planner_config_file)
@@ -114,18 +135,24 @@ class InteractiveControl:
 
         self.root_frame = self.path_planner.get_robot_planning_frame()
         # set the control frames for all types of groups
-        for n in self.get_groups() :
-            self.control_frames[n] = self.path_planner.get_control_frame(n)
 
         # load the urdf
         self.urdf = self.path_planner.get_urdf_model()
 
         # setup the groups
         self.setup_groups()       
+
+
+        for n in self.get_groups() :
+            self.control_frames[n] = self.path_planner.get_control_frame(n)
         
         # what do we have?  
         self.path_planner.print_basic_info()
-        self.navigation_controls.set_path_planner(self.path_planner)
+
+        # start up nav stuff
+        if self.navigation_frame :
+            self.navigation_controls.set_path_planner(self.path_planner)
+            self.navigation_controls.activate_navigation_markers(True)
 
         # get stored poses from model
         for group in self.get_groups() :
@@ -143,7 +170,8 @@ class InteractiveControl:
         return self.config_parser.get_group_map()
 
     def get_tolerances(self, filename) :
-        self.tolerances = Tolerance(filename)
+        if filename :
+            self.tolerances = Tolerance(filename)
 
     def set_tolerances(self, group, tolerance_mode, tolerance) :
         vals = self.tolerances.get_tolerance_vals(tolerance_mode, tolerance)
@@ -153,6 +181,7 @@ class InteractiveControl:
             self.path_planner.set_goal_orientation_tolerances(group, vals)
         else :
             rospy.logerr("InteractiveControl::set_tolerances() -- unknown tolerance mode!")
+
 
     def get_groups(self, group_type=None) :
         if group_type==None :
@@ -200,7 +229,7 @@ class InteractiveControl:
         self.markers[group].name = group
         self.markers[group].description = group
         self.marker_menus[group] = MenuHandler()
-        
+       
         group_type = self.get_group_type(group)
 
         if group_type == "cartesian" :
@@ -217,13 +246,6 @@ class InteractiveControl:
         self.posture_markers[group] = {}
         self.posture_markers_on[group] = False
         
-        # Set up stored pose sub menu
-        self.setup_sub_menus(group)
-
-        # set default check states
-        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
-        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Plan On Move")], MenuHandler.UNCHECKED )
-        
         # add menus to server
         self.marker_menus[group].apply( self.server, group )
         
@@ -232,17 +254,10 @@ class InteractiveControl:
 
     def initialize_cartesian_group(self, group) : 
     
+        self.setup_cartesian_menus(group)
+
         menu_control = InteractiveMarkerControl()
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
-
-        if self.path_planner.has_joint_mask(group) :
-            if ("Joint Mask", False) not in  self.menu_options :
-                self.menu_options.append(("Joint Mask", False))
-
-        if self.tolerances :
-            for mode in self.tolerances.get_tolerance_modes() :
-                if (mode, False) not in  self.menu_options :
-                    self.menu_options.append((mode, False))
 
         self.markers[group].controls = make6DOFControls()
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
@@ -257,6 +272,8 @@ class InteractiveControl:
         
  
     def initialize_joint_group(self, group) :    
+
+        self.setup_joint_menus(group)
 
         menu_control = InteractiveMarkerControl()
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
@@ -290,13 +307,15 @@ class InteractiveControl:
 
     def initialize_endeffector_group(self, group) : 
 
+        self.setup_endeffector_menus(group)
+
         menu_control = InteractiveMarkerControl()
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
 
         control_frame = self.path_planner.get_control_frame(group)
         ee_links = get_all_child_links(self.urdf, control_frame)
         # self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
-        self.markers[group].header.frame_id = self.path_planner.get_base_link(group)
+        self.markers[group].header.frame_id = self.path_planner.srdf_model.get_base_link(group)
 
         idx = 0
         for ee_link in ee_links :
@@ -314,8 +333,7 @@ class InteractiveControl:
             except :
                 pass
 
-        if self.path_planner.get_group_type(group) == "endeffector" :
-            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Plan")], MenuHandler.CHECKED )
+        # self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Plan")], MenuHandler.CHECKED )
 
         self.markers[group].controls.append(menu_control)
  
@@ -355,68 +373,107 @@ class InteractiveControl:
         self.path_planner.clear_gripper_service()
 
     def toggle_posture_control(self, group) :
-
-        if self.path_planner.has_joint_map(group):
-            joint_map = self.path_planner.get_joint_map(group)
-
-            for idx in range(len(joint_map.names)) :
-
-                jnt = joint_map.names[idx]
-                lnk = get_joint_child_link(jnt,self.urdf)
-                self.joint_group_map[jnt] = group
-
-                if self.posture_markers_on[group] :
-                    self.server.erase(self.posture_markers[group][lnk].name)
-                else :
-                    joint = self.urdf.joint_map[jnt]
-                    jnt_marker = makeInteractiveMarker(name=jnt, frame_id=lnk, pose=Pose(), scale=0.2) 
-                    jnt_marker.pose.orientation.w = 1
-                    control = InteractiveMarkerControl()
-                    control.orientation.x, control.orientation.y, control.orientation.z, control.orientation.w = axis_to_q(joint.axis)
-                    control.name = "rotate"
-                    control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
-                    jnt_marker.controls.append(control)
-                    self.posture_markers[group][lnk] = jnt_marker
-                    self.server.insert(self.posture_markers[group][lnk], self.posture_feedback)
+        joint_names = self.path_planner.get_all_group_joints(group)
+        for idx in range(len(joint_names)) :
+            jnt = joint_names[idx]
+            lnk = get_joint_child_link(jnt,self.urdf)
+            self.joint_group_map[jnt] = group
+            if self.posture_markers_on[group] :
+                self.server.erase(self.posture_markers[group][lnk].name)
+            else :
+                joint = self.urdf.joint_map[jnt]
+                jnt_marker = makeInteractiveMarker(name=jnt, frame_id=lnk, pose=Pose(), scale=0.2) 
+                jnt_marker.name = jnt
+                jnt_marker.description = jnt
+                jnt_marker.pose.orientation.w = 1
+                control = InteractiveMarkerControl()
+                control.orientation.x, control.orientation.y, control.orientation.z, control.orientation.w = axis_to_q(joint.axis)
+                control.name = "rotate"
+                control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+                jnt_marker.controls.append(control)
+                self.posture_markers[group][lnk] = jnt_marker
+                self.server.insert(self.posture_markers[group][lnk], self.posture_feedback)
 
         self.server.applyChanges()
         self.posture_markers_on[group] = not self.posture_markers_on[group] 
 
-
-    def setup_sub_menus(self, group) :
-        for m,c in self.menu_options :
+    def setup_joint_menus(self, group) :
+        for m,c in self.joint_menu_options :
             if m == "Stored Poses" :
-                sub_menu_handle = self.marker_menus[group].insert(m)
-                for p in self.path_planner.get_stored_state_list(group) :
-                    self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
-            elif m in self.tolerances.get_tolerance_modes() :
-                if self.get_group_type(group) == "cartesian" :
-                    sub_menu_handle = self.marker_menus[group].insert(m)
-                    for p in self.tolerances.get_tolerances(m) :
-                        self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.tolerance_callback)
-                        self.marker_menus[group].setCheckState(self.group_menu_handles[(group,m,p)], MenuHandler.UNCHECKED )
+                self.setup_stored_pose_menu(group)
             elif m == "Joint Mask" :
-                sub_menu_handle = self.marker_menus[group].insert(m) 
-                if self.path_planner.has_joint_mask(group) and self.path_planner.has_joint_map(group):
-                    joint_map = self.path_planner.get_joint_map(group)
-                    joint_mask = self.path_planner.get_joint_mask(group)
-                    for idx in range(len(joint_map.names)) :
-                        jnt = joint_map.names[idx]
-                        jnt_id = joint_map.ids[idx]
-                        mask_val = joint_mask[idx]
-                        self.group_menu_handles[(group,m,jnt)] = self.marker_menus[group].insert(jnt,parent=sub_menu_handle,callback=self.joint_mask_callback)   
-                        if mask_val :
-                            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.CHECKED )        
-                        else :
-                            self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.UNCHECKED )        
+                self.setup_joint_mask_menu(group)
             else :
-                self.group_menu_handles[(group,m)] = self.marker_menus[group].insert( m, callback=self.process_feedback )
-                if c : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m)], MenuHandler.UNCHECKED )
+                self.setup_simple_menu_item(group, m, c)
+        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
 
+    def setup_endeffector_menus(self, group) :
+        for m,c in self.endeffector_menu_options :
+            if m == "Stored Poses" :
+                self.setup_stored_pose_menu(group)
+            else :
+                self.setup_simple_menu_item(group, m, c)
+
+    def setup_cartesian_menus(self, group) :
+
+        tolerance_modes = []
+        if self.tolerances :
+            tolerance_modes = self.tolerances.get_tolerance_modes()
+
+        for m,c in self.cartesian_menu_options :
+            if m == "Stored Poses" :
+                self.setup_stored_pose_menu(group)
+            elif m == "Joint Mask" :
+                self.setup_joint_mask_menu(group)
+            elif m in tolerance_modes :
+                self.setup_tolerance_menu(group, m)
+            else :
+                self.setup_simple_menu_item(group, m, c)
+
+        self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Show Path")], MenuHandler.CHECKED )
+
+
+    def setup_simple_menu_item(self, group, item, checkbox=False) :
+        self.group_menu_handles[(group,item)] = self.marker_menus[group].insert( item, callback=self.process_feedback )
+        if checkbox : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,item)], MenuHandler.UNCHECKED )      
+
+    def setup_stored_pose_menu(self, group) :
+        m = "Stored Poses"
+        sub_menu_handle = self.marker_menus[group].insert(m)
+        for p in self.path_planner.get_stored_state_list(group) :
+            self.group_menu_handles[(group,m,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.stored_pose_callback)
+
+    def setup_joint_mask_menu(self, group) :
+        m = "Joint Mask"
+        sub_menu_handle = self.marker_menus[group].insert(m) 
+        joint_mask = self.path_planner.get_joint_mask(group)
+        joint_names = self.path_planner.get_all_group_joints(group)
+        for idx in range(len(joint_names)) :
+            jnt = joint_names[idx]
+            mask_val = joint_mask[idx]
+            self.group_menu_handles[(group,m,jnt)] = self.marker_menus[group].insert(jnt,parent=sub_menu_handle,callback=self.joint_mask_callback)   
+            if mask_val :
+                self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.CHECKED )        
+            else :
+                self.marker_menus[group].setCheckState( self.group_menu_handles[(group,m,jnt)], MenuHandler.UNCHECKED )
+
+    def setup_tolerance_menu(self, group, mode) :
+        sub_menu_handle = self.marker_menus[group].insert(mode)
+        for p in self.tolerances.get_tolerances(mode) :
+            self.group_menu_handles[(group,mode,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.tolerance_callback)
+            self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.UNCHECKED )
 
     def reset_group_marker(self, group, delay=0) :
         rospy.sleep(delay)
         self.server.setPose(self.markers[group].name, Pose())
+
+    def get_current_jpos(self, jnt) :
+        if jnt in self.joint_data.name :
+            idx = self.joint_data.name.index(jnt)
+            jpos = self.joint_data.position[idx]
+            return jpos
+        else :
+            return 0
 
     def joint_state_callback(self, data) :
         self.joint_data = data
@@ -441,32 +498,31 @@ class InteractiveControl:
         self.server.applyChanges()
                                
     def joint_mask_callback(self, feedback) :
-        if self.path_planner.has_joint_mask(feedback.marker_name) and self.path_planner.has_joint_map(feedback.marker_name) :
-            joint_map = self.path_planner.get_joint_map(feedback.marker_name)
-            joint_mask = self.path_planner.get_joint_mask(feedback.marker_name)
-            if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
-                if feedback.marker_name in self.get_groups() :
-                    handle = feedback.menu_entry_id
-                    for idx in range(len(joint_map.names)) :
-                        jnt = joint_map.names[idx]
-                        jnt_id = joint_map.ids[idx]
-                        if handle == self.group_menu_handles[(feedback.marker_name,"Joint Mask", jnt)] :
-                            state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                            if state == MenuHandler.CHECKED:
-                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                                joint_mask[jnt_id] = False
-                                self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
-                            else:
-                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )                                                      
-                                joint_mask[jnt_id] = True
-                                self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
-            self.marker_menus[feedback.marker_name].reApply( self.server )
-            self.server.applyChanges()
+        joint_mask = self.path_planner.get_joint_mask(feedback.marker_name)
+        joint_names = self.path_planner.get_all_group_joints(feedback.marker_name)
+        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+            if feedback.marker_name in self.get_groups() :
+                handle = feedback.menu_entry_id
+                for idx in range(len(joint_names)) :
+                    jnt = joint_names[idx]
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Joint Mask", jnt)] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            joint_mask[idx] = False
+                            self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
+                        else:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )                                                      
+                            joint_mask[idx] = True
+                            self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
+        self.marker_menus[feedback.marker_name].reApply( self.server )
+        self.server.applyChanges()
 
     def stored_pose_callback(self, feedback) :
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
             if self.group_menu_handles[(feedback.marker_name,"Stored Poses",p)] == feedback.menu_entry_id :
-                if self.auto_execute[feedback.marker_name] :
+                if True:
+                # if self.auto_execute[feedback.marker_name] or self.path_planner.get_group_type(feedback.marker_name) == "endeffector" :
                     self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
                     r = self.path_planner.execute(feedback.marker_name)
                     # r = self.path_planner.plan_joint_goal_and_execute(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
@@ -479,13 +535,29 @@ class InteractiveControl:
 
     def posture_feedback(self, feedback) :
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+            if feedback.marker_name in self.joint_data.name :
+                jpos = self.get_current_jpos(feedback.marker_name)
+            else :
+                rospy.logwarn(str("InteractiveControl::posture_feedback() joint[" + feedback.marker_name + "] not found!"))
+                return          
             js = JointState()
-            js.name.append(feedback.marker_name)
-            q = feedback.pose.orientation.x,feedback.pose.orientation.y,feedback.pose.orientation.z,feedback.pose.orientation.w
-            print rpy
-            print theta
-            js.position.append(theta)
             group = self.joint_group_map[feedback.marker_name]
+            for j in self.path_planner.get_all_group_joints(group) :
+                js.name.append(j)
+                if j == feedback.marker_name :
+                    q = feedback.pose.orientation.x,feedback.pose.orientation.y,feedback.pose.orientation.z,feedback.pose.orientation.w
+                    jnt_axis = self.urdf.joint_map[feedback.marker_name].axis
+                    rpy = q_to_rpy(q)
+                    if jnt_axis[0] == 1:
+                        theta = rpy[0]
+                    elif jnt_axis[1] == 1:
+                        theta = rpy[1]
+                    elif jnt_axis[2] == 1:
+                        theta = rpy[2]
+                    jgoal = jpos + theta
+                    js.position.append(jgoal)   
+                else :
+                    js.position.append(self.get_current_jpos(j))
             if self.auto_execute[group] :
                 self.path_planner.create_joint_plan_to_target(group, js)
                 r = self.path_planner.execute(group)
@@ -495,7 +567,7 @@ class InteractiveControl:
                 self.path_planner.create_joint_plan_to_target(group, js)
         
     def process_feedback(self, feedback) :
-        
+
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.get_groups('cartesian') :
                 if self.auto_plan[feedback.marker_name] :
@@ -508,64 +580,68 @@ class InteractiveControl:
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                     else :
-                        self.path_planner.clear_goal_target (feedback.marker_name)
+                        self.path_planner.clear_goal_target(feedback.marker_name)
                         self.path_planner.create_plan_to_target(feedback.marker_name, pt)
             self.server.applyChanges()
         
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             if feedback.marker_name in self.get_groups() :
                 handle = feedback.menu_entry_id
-                if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
-                    self.reset_group_marker(feedback.marker_name)
-                if handle == self.group_menu_handles[(feedback.marker_name,"Execute On Plan")] :
-                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                    if state == MenuHandler.CHECKED:
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        self.auto_execute[feedback.marker_name] = False
-                        self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
-                    else :
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                        self.auto_execute[feedback.marker_name] = True
-                        self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
-                if handle == self.group_menu_handles[(feedback.marker_name,"Plan On Move")] :
-                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                    if state == MenuHandler.CHECKED:
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        self.auto_plan[feedback.marker_name] = False
-                    else :
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                        self.auto_plan[feedback.marker_name] = True
-                if handle == self.group_menu_handles[(feedback.marker_name,"Show Path")] :
-                    state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                    if state == MenuHandler.CHECKED:
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                        self.path_planner.set_display_mode(feedback.marker_name, "last_point")
-                    else :
-                        self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
-                        self.path_planner.set_display_mode(feedback.marker_name, "all_points")
-                if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                    print "Executing"
-                    r = self.path_planner.execute(feedback.marker_name)
-                    self.reset_group_marker(feedback.marker_name)
-                    if not r :
-                        rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
-                if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
-                    pt = geometry_msgs.msg.PoseStamped()
-                    pt.header = feedback.header
-                    pt.pose = feedback.pose
-                    if self.auto_execute[feedback.marker_name] :
-                        print "planning and executing"
-                        r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                if (feedback.marker_name,"Sync To Actual") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Sync To Actual")] :
+                        self.reset_group_marker(feedback.marker_name)
+                if (feedback.marker_name,"Execute On Plan") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Execute On Plan")] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            self.auto_execute[feedback.marker_name] = False
+                            self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
+                        else :
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                            self.auto_execute[feedback.marker_name] = True
+                            self.path_planner.auto_execute[feedback.marker_name] = self.auto_execute[feedback.marker_name]
+                if (feedback.marker_name,"Plan On Move") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Plan On Move")] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            self.auto_plan[feedback.marker_name] = False
+                        else :
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                            self.auto_plan[feedback.marker_name] = True
+                if (feedback.marker_name,"Show Path") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Show Path")] :
+                        state = self.marker_menus[feedback.marker_name].getCheckState( handle )
+                        if state == MenuHandler.CHECKED:
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
+                            self.path_planner.set_display_mode(feedback.marker_name, "last_point")
+                        else :
+                            self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                            self.path_planner.set_display_mode(feedback.marker_name, "all_points")
+                if (feedback.marker_name,"Execute") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
+                        r = self.path_planner.execute(feedback.marker_name)
                         self.reset_group_marker(feedback.marker_name)
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
-                    else :
-                        print "just planning"
-                        self.path_planner.clear_goal_target (feedback.marker_name)
-                        self.path_planner.create_plan_to_target(feedback.marker_name, pt)
-                if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
-                    self.toggle_posture_control(feedback.marker_name)
-        
+                if (feedback.marker_name,"Plan") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
+                        pt = geometry_msgs.msg.PoseStamped()
+                        pt.header = feedback.header
+                        pt.pose = feedback.pose
+                        if self.auto_execute[feedback.marker_name] :
+                            r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                            self.reset_group_marker(feedback.marker_name)
+                            if not r :
+                                rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
+                        else :
+                            self.path_planner.clear_goal_target (feedback.marker_name)
+                            self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                if (feedback.marker_name,"Toggle Joint Control") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
+                        self.toggle_posture_control(feedback.marker_name)
+            
         
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
@@ -589,8 +665,8 @@ if __name__=="__main__":
         rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
         control.set_gripper_service(gripper_service)
 
-    if navigation_frame :
-        control.navigation_controls.activate_navigation_markers(True)
+    # if navigation_frame :
+    #     control.navigation_controls.activate_navigation_markers(True)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
