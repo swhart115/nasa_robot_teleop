@@ -20,7 +20,7 @@ from nasa_robot_teleop.util.marker_helper import *
 
 class NavigationWaypointControl(object) :
 
-    def __init__(self, robot, server, frame="/ground") :
+    def __init__(self, robot, server, frame="/global") :
 
         self.server = server
         self.robot_name = robot
