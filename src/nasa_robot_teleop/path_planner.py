@@ -736,6 +736,10 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::execute_plan() -- not implemented")
         raise NotImplementedError
 
+    def execute_navigation_plan(self, footsteps) :
+        rospy.logerror("PathPlanner::execute_navigation_plan() -- not implemented")
+        raise NotImplementedError
+
     def clear_goal_target(self, group_name) :
         rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
         raise NotImplementedError

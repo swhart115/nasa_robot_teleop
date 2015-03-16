@@ -196,7 +196,48 @@ class AtlasPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].joint_map.names
         
-    
+    def publish_footsteps(self, steps) :
+
+        footsteps = visualization_msgs.msg.MarkerArray()
+        path = nav_msgs.msg.Path()
+        path.header.frame_id = self.planning_frame
+        path.header.stamp = rospy.Time.now()
+
+        last_point = geometry_msgs.msg.PoseStamped()
+        for id in range(len(steps)) :
+
+            footstep = visualization_msgs.msg.Marker()
+            footstep.header.stamp = rospy.Time.now()
+            footstep.header.seq = id
+            footstep.header.frame_id = self.planning_frame
+            footstep.id = id
+            footstep.action = 0
+            p = steps[id]
+            footstep.ns = "footstep"
+            footstep.pose = p
+            footsteps.markers.append(footstep)
+
+            if id%2 == 0 :
+                p.position.y = foot_width
+                footstep.text = "left/" + str(id/2)
+                last_point = p
+            else :
+                p.position.y =  -foot_width
+                footstep.text = "right/" + str(id/2)
+
+            pp = geometry_msgs.msg.PoseStamped()
+            pp.header.frame_id = self.planning_frame
+            pp.header.seq = id/2
+            pp.header.stamp = rospy.Time.now()
+            pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
+            pp.pose.position.y = (p.position.y + last_point.position.y)/2.0
+            pp.pose.position.z = (p.position.z + last_point.position.z)/2.0
+            path.poses.append(pp)
+
+            self.footstep_pub.publish(footsteps)
+            # self.footstep_pub.publish(footsteps)
+
+
     ###################################
     ######## EXECUTION METHODS ########
     ###################################
@@ -214,6 +255,48 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::execute_plan(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
             return False
 
+    def execute_navigation_plan(self, footsteps) :
+
+        req = CartesianPlanCommandRequest()
+
+        interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
+        duration = rospy.get_param("/atlas_path_planner/duration")
+        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
+
+        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
+        req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
+        req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
+
+        group_name = "left_leg"
+
+        try :
+            for foot in footsteps :
+                spec = CartesianPlanRequestSpecification()
+                spec.group_name = group_name
+                spec.control_frame = foot.header.frame_id
+            
+                spec.waypoints.append(foot)
+                spec.duration.append(duration)
+                # spec.angle_variance.append(0) 
+                # spec.maximum_angle_variance.append(0) 
+                # spec.position_variance.append(0) 
+                # spec.maximum_position_variance.append(0) 
+            
+                spec.interpolation_type = interpolation_type
+                spec.num_visualizaton_points = num_visualizaton_points
+                req.group_plan_specs.append(spec)
+        except :
+            rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
+            return None
+
+        rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
+        try :
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
+            resp = planner(req)
+            return resp.result
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan()" + str(e)))
+            return None
 
     def multigroup_execute_plan(self, group_names, from_stored=False, wait=True) :
         r = []
@@ -403,90 +486,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         self.publish_footsteps(resp.steps)
 
-    def publish_footsteps(self, steps) :
-
-        footsteps = visualization_msgs.msg.MarkerArray()
-        path = nav_msgs.msg.Path()
-        path.header.frame_id = self.planning_frame
-        path.header.stamp = rospy.Time.now()
-
-        last_point = geometry_msgs.msg.PoseStamped()
-        for id in range(len(steps)) :
-
-            footstep = visualization_msgs.msg.Marker()
-            footstep.header.stamp = rospy.Time.now()
-            footstep.header.seq = id
-            footstep.header.frame_id = self.planning_frame
-            footstep.id = id
-            footstep.action = 0
-            p = steps[id]
-            footstep.ns = "footstep"
-            footstep.pose = p
-            footsteps.markers.append(footstep)
-
-            if id%2 == 0 :
-                p.position.y = foot_width
-                footstep.text = "left/" + str(id/2)
-                last_point = p
-            else :
-                p.position.y =  -foot_width
-                footstep.text = "right/" + str(id/2)
-
-            pp = geometry_msgs.msg.PoseStamped()
-            pp.header.frame_id = self.planning_frame
-            pp.header.seq = id/2
-            pp.header.stamp = rospy.Time.now()
-            pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
-            pp.pose.position.y = (p.position.y + last_point.position.y)/2.0
-            pp.pose.position.z = (p.position.z + last_point.position.z)/2.0
-            path.poses.append(pp)
-
-            self.footstep_pub.publish(footsteps)
-            # self.footstep_pub.publish(footsteps) 
-
-
-    def execute_navigation_path(self, footsteps) :
-
-        req = CartesianPlanCommandRequest()
-
-        interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
-        duration = rospy.get_param("/atlas_path_planner/duration")
-        num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
-
-        req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
-        req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
-        req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
-
-        group_name = "left_leg"
-
-        try :
-            for foot in footsteps :
-                spec = CartesianPlanRequestSpecification()
-                spec.group_name = group_name
-                spec.control_frame = foot.header.frame_id
-            
-                spec.waypoints.append(foot)
-                spec.duration.append(duration)
-                # spec.angle_variance.append(0) 
-                # spec.maximum_angle_variance.append(0) 
-                # spec.position_variance.append(0) 
-                # spec.maximum_position_variance.append(0) 
-            
-                spec.interpolation_type = interpolation_type
-                spec.num_visualizaton_points = num_visualizaton_points
-                req.group_plan_specs.append(spec)
-        except :
-            rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
-            return None
-
-        rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
-        try :
-            planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
-            resp = planner(req)
-            return resp.result
-        except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::plan_navigation()" + str(e)))
-            return None
 
     ### multigroup functions
     def plan_to_cartesian_goals(self, group_names, pts) :
