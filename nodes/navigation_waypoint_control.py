@@ -5,14 +5,14 @@ import roslib; roslib.load_manifest("nasa_robot_teleop")
 
 import math
 import argparse
+from copy import deepcopy
 
 # ros messages
-from geometry_msgs.msg import Pose
-from geometry_msgs.msg import Quaternion
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Pose, PoseStamped, Quaternion
+from visualization_msgs.msg import Marker, MarkerArray
+from nav_msgs.msg import Path
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
-from visualization_msgs.msg import Marker
 
 # helper files
 from nasa_robot_teleop.path_planner import *
@@ -21,9 +21,12 @@ from nasa_robot_teleop.util.marker_helper import *
 class NavigationWaypointControl(object) :
 
     def __init__(self, robot, server, frame="/ground") :
+
         self.server = server
         self.robot_name = robot
         self.frame = frame
+
+        self.path_planner = None
 
         self.waypoint_marker_menus = {}
         self.waypoint_menu_handles = {}
@@ -32,6 +35,14 @@ class NavigationWaypointControl(object) :
         self.waypoint_markers = []
         self.waypoint_stack = []
         self.waypoint_controls = {}
+        self.waypoint_poses = {}
+
+        self.footstep_marker_menus = {}
+        self.footstep_menu_handles = {}
+
+        self.footstep_markers = {}
+        self.footstep_height_controls = {}
+        self.footstep_poses = {}
 
         self.waypoint_menu_options = []
         self.waypoint_menu_options.append("Add Waypoint")
@@ -39,9 +50,14 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Delete Waypoint")
         self.waypoint_menu_options.append("Request Plan")
 
-        self.waypoint_poses = {}
-
-        self.path_planner = None
+        self.footstep_menu_options = []
+        self.footstep_menu_options.append("Toggle Full Controls")
+        self.footstep_menu_options.append("Publish")
+        
+        self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
+        self.footstep_pub = rospy.Publisher("/planner/footsteps_out", MarkerArray)
+        self.path_pub = rospy.Publisher("/planner/path", Path)      
+        
 
     def activate_navigation_markers(self, v) :
         self.waypoint_markers_on = v
@@ -265,6 +281,9 @@ class NavigationWaypointControl(object) :
 
         waypoint_name = data.marker_name
         rospy.loginfo(str("NavigationWaypointControl::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
+
+        # clear old feet
+        self.clear_footsteps()
         
         waypoints = []
 
@@ -281,9 +300,12 @@ class NavigationWaypointControl(object) :
                 break        
 
         if self.path_planner :
-            plan = self.path_planner.plan_navigation_path(waypoints)
+            # plan = self.path_planner.plan_navigation_path(waypoints)
+            rospy.logwarn("NavigationWaypointControl::request_navigation_plan() -- Turned off request for debuggingg!!")
+            pass
         else :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
+
 
     def waypoint_menu_callback(self, feedback):
         
@@ -300,9 +322,119 @@ class NavigationWaypointControl(object) :
 
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
-        print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
-        # if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
-        #     print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
+        #print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
+
+    def footstep_callback(self, feedback) :
+        self.footstep_array = feedback
+        self.translate_feet_to_markers()
+
+    def translate_feet_to_markers(self) :
+
+        marker_names = []
+
+        for m in self.footstep_array.markers :
+            if str(m.id) in self.footstep_markers :
+                current_marker = self.server.get(str(m.id))
+                self.footstep_poses[str(m.id)] = current_marker.pose
+                self.server.erase(str(m.id))
+            else :
+                self.footstep_poses[str(m.id)] = m.pose
+
+            footstep_marker = InteractiveMarker()
+            footstep_marker.header.frame_id = deepcopy(m.header.frame_id)
+            footstep_marker.header.seq = m.header.seq
+            footstep_marker.header.stamp = m.header.stamp
+
+            footstep_marker.name = str(m.id)
+            footstep_marker.pose = self.footstep_poses[str(m.id)]
+            footstep_marker.scale = 0.25
+
+            foot = Marker()
+            foot.type = Marker.CUBE
+            foot.scale.x = 0.25
+            foot.scale.y = 0.15
+            foot.scale.z = 0.08
+
+            if "left" in m.text :
+                foot.color.r = 0.5
+                foot.color.g = 0.5
+                foot.color.b = 0.75
+                foot.color.a = 1.0
+            else :
+                foot.color.r = 0.5
+                foot.color.g = 0.5
+                foot.color.b = 0.25
+                foot.color.a = 1.0
+
+            foot_control = CreateVisualControlFromMarker(foot, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
+            
+            footstep_marker.controls.append(foot_control)
+
+            # if m.id%2 == 1:
+            #     m.mesh_resource = self.left_foot_mesh
+            # else :
+            #     m.mesh_resource = self.right_foot_mesh
+
+            # m.type = m.MESH_RESOURCE
+
+            foot_control.markers.append(foot)
+            footstep_marker.controls.append(foot_control)
+            footstep_marker.controls.append(makeYRotControl())
+
+            if str(m.id) in self.footstep_height_controls.keys() :
+                if self.footstep_height_controls[str(m.id)] :
+                    print "adding height controls to ", str(m.id)
+                    footstep_marker.controls.append(makeYTransControl())
+
+            self.footstep_markers[footstep_marker.name] = footstep_marker # deepcopy here?
+
+            self.server.insert(footstep_marker, self.footstep_marker_callback)
+            
+            self.footstep_marker_menus[footstep_marker.name] = MenuHandler()
+            for menu_opt in self.footstep_menu_options :
+                self.footstep_menu_handles[menu_opt] = self.footstep_marker_menus[footstep_marker.name].insert( menu_opt, callback=self.footstep_marker_callback )
+
+            self.footstep_marker_menus[footstep_marker.name].apply(self.server, footstep_marker.name)
+            marker_names.append(footstep_marker.name)
+
+
+        for n in self.footstep_markers.keys() :
+            if n not in marker_names :
+                self.server.erase(n)
+                del self.footstep_poses[n]
+                del self.footstep_markers[n]
+                if n in self.footstep_height_controls.keys() :
+                    del self.footstep_height_controls[n]
+
+                
+        self.server.applyChanges()
+
+    def footstep_marker_callback(self, feedback) :
+        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+            handle = feedback.menu_entry_id
+            if handle == self.footstep_menu_handles["Toggle Full Controls"] :
+                print "adding height controls for foot: ", feedback.marker_name
+                self.add_foot_controls(feedback)
+                self.translate_feet_to_markers()
+            if handle == self.footstep_menu_handles["Publish"] :
+                print "publishing updated feet"
+                self.footstep_pub.publish(self.footstep_markers)
+
+    def add_foot_controls(self, feedback) :
+        sid = str(feedback.marker_name)
+        if sid in self.footstep_height_controls :
+            self.footstep_height_controls[sid] = not self.footstep_height_controls[sid]
+        else :
+            self.footstep_height_controls[sid] = True
+
+    def clear_footsteps(self) :
+        print "clearing feet"
+        for m in self.footstep_markers.keys():
+            #print "erasing marker ", m, " from server"
+            self.server.erase(m)
+        self.footstep_markers = {}
+        self.footstep_height_controls = {}
+        self.server.applyChanges()
 
 
 if __name__=="__main__":
