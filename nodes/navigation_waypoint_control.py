@@ -286,7 +286,7 @@ class NavigationWaypointControl(object) :
 
         if self.path_planner :
             plan = self.path_planner.plan_navigation_path(waypoints)
-            # rospy.logwarn("NavigationWaypointControl::request_navigation_plan() -- Turned off request for debuggingg!!")
+            # alternatively, could ask path planner for footsteps now, rather then listening to a seperate topic
         else :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
