@@ -429,10 +429,13 @@ class NavigationWaypointControl(object) :
 
     def get_foot_poses(self, markers) :
         pose_array = []
-        for m in markers:
+
+        print "MARKER KEYS:", markers.keys()
+        for id in range(len(markers.keys())):
+            im = markers[str(id)]
             p = PoseStamped()
-            p.header = m.header
-            p.pose = m.pose
+            p.header = im.header
+            p.pose = im.pose
             pose_array.append(p)
         return pose_array
 
@@ -444,9 +447,7 @@ class NavigationWaypointControl(object) :
             self.footstep_height_controls[sid] = True
 
     def clear_footsteps(self) :
-        print "clearing feet"
         for m in self.footstep_markers.keys():
-            #print "erasing marker ", m, " from server"
             self.server.erase(m)
         self.footstep_markers = {}
         self.footstep_height_controls = {}
@@ -456,8 +457,13 @@ class NavigationWaypointControl(object) :
         print "publishing updated feet"
         # self.footstep_pub.publish(self.footstep_markers)
         if len(self.footstep_markers)>0 and self.footstep_plan_valid :
+
+            # print "==== FOOTSTEP MARKERS ==="
+            # print self.footstep_markers[]
+            # print "======="
+
             step_poses = self.get_foot_poses(self.footstep_markers)
-            self.path_planner.execute_navigation_path()
+            self.path_planner.execute_navigation_plan(step_poses)
             self.footstep_plan_valid = False
 
 
