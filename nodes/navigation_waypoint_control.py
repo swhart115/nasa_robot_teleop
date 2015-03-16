@@ -55,7 +55,7 @@ class NavigationWaypointControl(object) :
         self.footstep_menu_options.append("Publish")
         
         self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
-        self.footstep_pub = rospy.Publisher("/planner/footsteps_out", MarkerArray)
+        # self.footstep_pub = rospy.Publisher("/planner/footsteps_out", MarkerArray)
         self.path_pub = rospy.Publisher("/planner/path", Path)      
         
 
@@ -93,15 +93,11 @@ class NavigationWaypointControl(object) :
                 self.push_waypoints_and_resize(index)
 
             # insert waypoint into vector and server
-            # print "+++++ Adding wp at: (", offset.position.x, ", ", offset.position.y, ")"
             self.insert_waypoint(offset, replace, full_controls)
 
             # pop any stored waypoints
             if self.waypoint_stack:
                 self.pop_waypoints()
-
-            # if len(self.waypoint_markers) > 1:
-            #     self.createPaths()
 
             self.server.applyChanges()
 
@@ -112,7 +108,6 @@ class NavigationWaypointControl(object) :
 
     def delete_waypoint(self, name):
         index = self.waypoint_markers.index(name)
-        # print "deleting waypoint index: ", index
         original_size = len(self.waypoint_markers)
 
         # store waypoints
@@ -124,9 +119,6 @@ class NavigationWaypointControl(object) :
             # pop any stored waypoints
             if self.waypoint_stack:
                 self.pop_waypoints()
-
-            # if len(self.waypoint_markers) > 1:
-            #     self.createPaths()
 
             self.server.applyChanges()
 
@@ -176,12 +168,6 @@ class NavigationWaypointControl(object) :
         cyl = createCylinder(waypoint_id, height=1.0, radius=0.25)
         cyl_control = CreateVisualControlFromMarker(cyl, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
         waypoint.controls.append(cyl_control)
-        # height_control = makeYTransControl()
-        # waypoint.controls.append(height_control)
-
-        # radius = createCylinder(waypoint_id)
-        # cyl_control = CreateVisualControlFromMarker(radius)
-        # waypoint.controls.append(cyl_control)
 
         self.server.insert(waypoint, self.navigation_marker_callback)
         
@@ -190,11 +176,8 @@ class NavigationWaypointControl(object) :
         for m in self.waypoint_menu_options :
             self.waypoint_menu_handles[m] = self.waypoint_marker_menus[waypoint_id].insert( m, callback=self.waypoint_menu_callback )
 
-        # print "Adding ", waypoint.name, " to storage"
         self.waypoint_markers.append(waypoint.name)
-        # print " now : ", self.waypoint_markers
         self.waypoint_marker_menus[waypoint_id].apply(self.server, waypoint.name)
-
         self.server.applyChanges()
 
     def toggle_waypoint_controls(self, feedback) :
@@ -300,9 +283,8 @@ class NavigationWaypointControl(object) :
                 break        
 
         if self.path_planner :
-            # plan = self.path_planner.plan_navigation_path(waypoints)
-            rospy.logwarn("NavigationWaypointControl::request_navigation_plan() -- Turned off request for debuggingg!!")
-            pass
+            plan = self.path_planner.plan_navigation_path(waypoints)
+            # rospy.logwarn("NavigationWaypointControl::request_navigation_plan() -- Turned off request for debuggingg!!")
         else :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
@@ -322,8 +304,7 @@ class NavigationWaypointControl(object) :
 
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
-        #print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
-
+        
     def footstep_callback(self, feedback) :
         self.clear_footsteps()
         self.footstep_array = feedback
@@ -428,7 +409,6 @@ class NavigationWaypointControl(object) :
                 del self.footstep_markers[n]
                 if n in self.footstep_height_controls.keys() :
                     del self.footstep_height_controls[n]
-
                 
         self.server.applyChanges()
 
@@ -439,9 +419,20 @@ class NavigationWaypointControl(object) :
                 print "adding height controls for foot: ", feedback.marker_name
                 self.add_foot_controls(feedback)
                 self.translate_feet_to_markers()
-            if handle == self.footstep_menu_handles["Publish"] :
+            if handle == self.footstep_menu_handles["Execute"] :
                 print "publishing updated feet"
-                self.footstep_pub.publish(self.footstep_markers)
+                # self.footstep_pub.publish(self.footstep_markers)
+                step_poses = self.get_foot_poses(self.footstep_markers)
+                self.path_planner.execute_navigation_path()
+
+    def get_foot_poses(self, markers) :
+        pose_array = []
+        for m in markers:
+            p = PoseStamped()
+            p.header = m.header
+            p.pose = m.pose
+            pose_array.append(p)
+        return pose_array
 
     def add_foot_controls(self, feedback) :
         sid = str(feedback.marker_name)

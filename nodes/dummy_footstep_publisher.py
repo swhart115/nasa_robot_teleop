@@ -43,11 +43,11 @@ if __name__=="__main__":
         p.position.x = foot_dist*id
         
         if id%2 == 0 :
-            p.position.y = -foot_width
+            p.position.y = foot_width
             footstep.text = "left/" + str(id/2)
             last_point = p
         else :
-            p.position.y =  foot_width
+            p.position.y =  -foot_width
             footstep.text = "right/" + str(id/2)
 
             pp = PoseStamped()

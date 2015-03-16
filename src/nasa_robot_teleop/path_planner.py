@@ -212,26 +212,6 @@ class PathPlanner(object):
             rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
             return False
    
-
-    # def get_control_mesh_pose_offset(urdf, frame) :
-    #     p = geometry_msgs.msg.Pose()
-    #     p.orientation.w = 1
-    #     link_name = self.control_frames[group_name]
-    #     if link_name in self.urdf_model.link_map:
-    #         link = self.urdf_model.link_map[link_name]
-    #         p = link_origin_to_pose(link)
-    #     return p
-
-    # def get_control_mesh_scale(urdf, frame) :
-    #     s = [1]*3
-    #     link_name = self.control_frames[group_name]
-    #     if link_name in self.urdf_model.link_map:
-    #         link = self.urdf_model.link_map[link_name]
-    #         s = link.visual.geometry.scale
-           
-    #     if s == None: s = [1]*3
-    #     return s
-
     def get_group_links(self, group) :
         return self.srdf_model.get_group_links(group)
 
@@ -255,9 +235,6 @@ class PathPlanner(object):
     def set_joint_mask(self, group, mask) :
         self.srdf_model.set_joint_mask(group, mask)
 
-    # def set_control_offset(self, group, offset) :
-    #     self.control_offset[group] = offset
-
     def set_display_mode(self, group, mode) :
         self.display_modes[group] = mode
 
@@ -268,19 +245,6 @@ class PathPlanner(object):
         else :
             rospy.logwarn(str("PathPlanner::check_valid_plan() -- No Plan Found"))
         return r   
-
-    # def get_joint_chain(self, first_link, last_link) :
-    #     joints = []
-    #     link = last_link
-    #     while link != first_link :
-    #         for j in self.urdf_model.joint_map.keys() :
-    #             if self.urdf_model.joint_map[j].child == link : 
-    #                 joints.append(self.urdf_model.joint_map[j].name)
-    #                 link = self.urdf_model.joint_map[j].parent
-    #                 break
-    #     joints.reverse()
-    #     return joints
-
 
     def lookup_bridge_topic_name(self, controller_name) :
         bridge_topic_name = rospy.get_param(str(controller_name + "/bridge_topic"), "")
@@ -355,28 +319,6 @@ class PathPlanner(object):
                 for m in end_effector_markers.markers: markers.markers.append(m)
                 idx += len(end_effector_markers.markers)
 
-        # elif display_mode == "last_point" :
-
-        #     if num_points > 0 :
-        #         points = joint_trajectory.points[num_points-1]
-        #         waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group,joint_trajectory.joint_names, points.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
-        #         for m in waypoint_markers: markers.markers.append(m)
-        #         idx += self.group_id_offset[group]
-        #         idx += len(waypoint_markers)
-
-        #         if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
-        #             ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
-        #             ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-        #             if last_link != ee_root_frame :
-        #                 self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
-        #                 (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-        #                 rot = normalize_vector(rot)
-        #                 ee_offset = toPose(trans, rot)
-
-        #             offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-        #             end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
-        #             for m in end_effector_markers.markers: markers.markers.append(m)
-        #             idx += len(end_effector_markers.markers)
 
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)

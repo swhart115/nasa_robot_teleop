@@ -6,6 +6,7 @@ import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
 
 roslib.load_manifest('matec_msgs')
+roslib.load_manifest('step_finder')
 
 import geometry_msgs.msg
 import visualization_msgs.msg
@@ -14,6 +15,8 @@ import trajectory_msgs.msg
 import moveit_msgs.msg
 import control_msgs.msg
 import matec_msgs.msg
+
+from step_finder.srv import *
 
 from nasa_robot_teleop.path_planner import *
 
@@ -30,7 +33,7 @@ class AtlasPathPlanner(PathPlanner) :
     def __init__(self, robot_name, config_package):
         PathPlanner.__init__(self, robot_name, config_package)
         rospy.loginfo(str("============ Setting up Path Planner for: \'" + self.robot_name + "\'"))
-        self.planning_frame = "/global"
+        self.planning_frame = rospy.get_param("/interactive_control/navigation_frame", "/global")
         self.groups = {}
         self.joint_names = []
                     
@@ -44,7 +47,9 @@ class AtlasPathPlanner(PathPlanner) :
         # self.load_configurations()       
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 
-        joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback) 
+        self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback) 
+        self.footstep_pub = rospy.Publisher("/planner/footsteps_in", visualization_msgs.msg.MarkerArray)
+
         rospy.sleep(2)
 
     ##############################
@@ -378,6 +383,66 @@ class AtlasPathPlanner(PathPlanner) :
 
     def plan_navigation_path(self, waypoints) :
 
+        req = PlanStepsRequest()
+
+        req.target = waypoints[0]
+        req.plan_through_unknown_cells = True
+        req.solver_timeout = 10.0
+
+        rospy.wait_for_service("/plan_steps")
+        try :
+            rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- requesting plan!")
+            step_planner = rospy.ServiceProxy("/plan_steps", PlanSteps)
+            resp = step_planner(req)
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::plan_navigation_path() -- " + str(e)))
+            return None
+
+        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
+        print resp.steps
+
+        footsteps = visualization_msgs.msg.MarkerArray()
+        path = nav_msgs.msg.Path()
+        path.header.frame_id = self.planning_frame
+        path.header.stamp = rospy.Time.now()
+
+        last_point = geometry_msgs.msg.PoseStamped()
+        for id in range(len(resp.steps)) :
+
+            footstep = visualization_msgs.msg.Marker()
+            footstep.header.stamp = rospy.Time.now()
+            footstep.header.seq = id
+            footstep.header.frame_id = self.planning_frame
+            footstep.id = id
+            footstep.action = 0
+            p = resp.steps[id]
+            footstep.ns = "footstep"
+            footstep.pose = p
+            footsteps.markers.append(footstep)
+
+            if id%2 == 0 :
+                p.position.y = foot_width
+                footstep.text = "left/" + str(id/2)
+                last_point = p
+            else :
+                p.position.y =  -foot_width
+                footstep.text = "right/" + str(id/2)
+
+            pp = geometry_msgs.msg.PoseStamped()
+            pp.header.frame_id = self.planning_frame
+            pp.header.seq = id/2
+            pp.header.stamp = rospy.Time.now()
+            pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
+            pp.pose.position.y = (p.position.y + last_point.position.y)/2.0
+            pp.pose.position.z = (p.position.z + last_point.position.z)/2.0
+            path.poses.append(pp)
+
+            self.footstep_pub.publish(footsteps)
+            self.footstep_pub.publish(footsteps)
+
+
+    def execute_navigation_path(self, footsteps) :
+
         req = CartesianPlanCommandRequest()
 
         interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
@@ -388,15 +453,15 @@ class AtlasPathPlanner(PathPlanner) :
         req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
         req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
 
-        group_name = "left_arm"
+        group_name = "left_leg"
 
         try :
-            for wp in waypoints :
+            for foot in footsteps :
                 spec = CartesianPlanRequestSpecification()
                 spec.group_name = group_name
-                spec.control_frame = wp.header.frame_id
+                spec.control_frame = foot.header.frame_id
             
-                spec.waypoints.append(wp)
+                spec.waypoints.append(foot)
                 spec.duration.append(duration)
                 # spec.angle_variance.append(0) 
                 # spec.maximum_angle_variance.append(0) 
