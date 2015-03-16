@@ -49,11 +49,13 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Toggle Full Control")
         self.waypoint_menu_options.append("Delete Waypoint")
         self.waypoint_menu_options.append("Request Plan")
-
+        self.waypoint_menu_options.append("Execute")
+        
         self.footstep_menu_options = []
         self.footstep_menu_options.append("Toggle Full Controls")
-        self.footstep_menu_options.append("Publish")
         
+        self.footstep_plan_valid = False
+
         self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
         # self.footstep_pub = rospy.Publisher("/planner/footsteps_out", MarkerArray)
         self.path_pub = rospy.Publisher("/planner/path", Path)      
@@ -301,6 +303,9 @@ class NavigationWaypointControl(object) :
                 self.request_navigation_plan(feedback)
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
+            elif handle == self.waypoint_menu_handles["Execute"] :
+                self.execute_footstep_path()
+
 
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
@@ -410,6 +415,7 @@ class NavigationWaypointControl(object) :
                 if n in self.footstep_height_controls.keys() :
                     del self.footstep_height_controls[n]
                 
+        self.footstep_plan_valid = True
         self.server.applyChanges()
 
     def footstep_marker_callback(self, feedback) :
@@ -419,11 +425,7 @@ class NavigationWaypointControl(object) :
                 print "adding height controls for foot: ", feedback.marker_name
                 self.add_foot_controls(feedback)
                 self.translate_feet_to_markers()
-            if handle == self.footstep_menu_handles["Execute"] :
-                print "publishing updated feet"
-                # self.footstep_pub.publish(self.footstep_markers)
-                step_poses = self.get_foot_poses(self.footstep_markers)
-                self.path_planner.execute_navigation_path()
+            
 
     def get_foot_poses(self, markers) :
         pose_array = []
@@ -449,6 +451,14 @@ class NavigationWaypointControl(object) :
         self.footstep_markers = {}
         self.footstep_height_controls = {}
         self.server.applyChanges()
+
+    def execute_footstep_path(self) :
+        print "publishing updated feet"
+        # self.footstep_pub.publish(self.footstep_markers)
+        if len(self.footstep_markers)>0 and self.footstep_plan_valid :
+            step_poses = self.get_foot_poses(self.footstep_markers)
+            self.path_planner.execute_navigation_path()
+            self.footstep_plan_valid = False
 
 
 if __name__=="__main__":
