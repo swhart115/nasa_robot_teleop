@@ -325,6 +325,7 @@ class NavigationWaypointControl(object) :
         #print "placing waypoint[" , feedback.marker_name, "] at (", feedback.pose.position.x, ",", feedback.pose.position.y, ")"
 
     def footstep_callback(self, feedback) :
+        self.clear_footsteps()
         self.footstep_array = feedback
         self.translate_feet_to_markers()
 
@@ -348,12 +349,13 @@ class NavigationWaypointControl(object) :
             footstep_marker.name = str(m.id)
             footstep_marker.pose = self.footstep_poses[str(m.id)]
             footstep_marker.scale = 0.25
+            footstep_marker.description = m.text
 
             foot = Marker()
             foot.type = Marker.CUBE
-            foot.scale.x = 0.25
-            foot.scale.y = 0.15
-            foot.scale.z = 0.08
+            foot.scale.x = 0.2
+            foot.scale.y = 0.13
+            foot.scale.z = 0.05
 
             if "left" in m.text :
                 foot.color.r = 0.5
@@ -365,10 +367,28 @@ class NavigationWaypointControl(object) :
                 foot.color.g = 0.5
                 foot.color.b = 0.25
                 foot.color.a = 1.0
-
             foot_control = CreateVisualControlFromMarker(foot, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
+
+            toe = Marker()
+            toe.type = Marker.CUBE
+            toe.pose.position.x = foot.scale.x/2.0
+            toe.pose.position.y = foot.pose.position.y
+            toe.pose.position.z = -(foot.scale.z)/4.0
+            toe.scale.x = foot.scale.x/2.0
+            toe.scale.y = foot.scale.y/2.0
+            toe.scale.z = foot.scale.z/2.0
+
+            if "left" in m.text :
+                toe.color.r = 0.5
+                toe.color.g = 0.5
+                toe.color.b = 0.75
+                toe.color.a = 1.0
+            else :
+                toe.color.r = 0.5
+                toe.color.g = 0.5
+                toe.color.b = 0.25
+                toe.color.a = 1.0
             
-            footstep_marker.controls.append(foot_control)
 
             # if m.id%2 == 1:
             #     m.mesh_resource = self.left_foot_mesh
@@ -378,6 +398,7 @@ class NavigationWaypointControl(object) :
             # m.type = m.MESH_RESOURCE
 
             foot_control.markers.append(foot)
+            foot_control.markers.append(toe)
             footstep_marker.controls.append(foot_control)
             footstep_marker.controls.append(makeYRotControl())
 
@@ -385,6 +406,8 @@ class NavigationWaypointControl(object) :
                 if self.footstep_height_controls[str(m.id)] :
                     print "adding height controls to ", str(m.id)
                     footstep_marker.controls.append(makeYTransControl())
+                    footstep_marker.controls.append(makeXRotControl())
+                    footstep_marker.controls.append(makeZRotControl())
 
             self.footstep_markers[footstep_marker.name] = footstep_marker # deepcopy here?
 

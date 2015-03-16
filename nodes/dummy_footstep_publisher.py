@@ -21,8 +21,10 @@ if __name__=="__main__":
         
     footsteps = MarkerArray()
 
-    foot_width = 0.1
+    foot_width = 0.125
     foot_dist = 0.25
+
+    angle = 0.1
 
     path = Path()
     path.header.frame_id = "/ground"
@@ -39,7 +41,7 @@ if __name__=="__main__":
         footstep.action = 0
         p = Pose()
         p.position.x = foot_dist*id
-
+        
         if id%2 == 0 :
             p.position.y = -foot_width
             footstep.text = "left/" + str(id/2)
@@ -55,12 +57,12 @@ if __name__=="__main__":
             pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
             pp.pose.position.y = (p.position.y + last_point.position.y)/2.0
             pp.pose.position.z = (p.position.z + last_point.position.z)/2.0
-            pp.pose.orientation.w = 1
+
 
             path.poses.append(pp)
         footstep.ns = "footstep"
         p.position.z = 0
-        p.orientation.w = 1
+        p.orientation.w = 1.0
 
         footstep.pose = p
         footsteps.markers.append(footstep)
