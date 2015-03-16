@@ -27,7 +27,7 @@ from nasa_robot_teleop.srv import *
 class AtlasPathPlanner(PathPlanner) :
 
     ############################
-    ####### CONSTRUCTOR ########   
+    ####### CONSTRUCTOR ########
     ############################
 
     def __init__(self, robot_name, config_package):
@@ -36,24 +36,24 @@ class AtlasPathPlanner(PathPlanner) :
         self.planning_frame = rospy.get_param("/interactive_control/navigation_frame", "/global")
         self.groups = {}
         self.joint_names = []
-                    
+
         rospy.set_param("/atlas_path_planner/interpolation_type", 1)
         rospy.set_param("/atlas_path_planner/duration", 2.0)
         rospy.set_param("/atlas_path_planner/num_visualizaton_points", 5)
         rospy.set_param("/atlas_path_planner/visualize_path", True)
         rospy.set_param("/atlas_path_planner/maintain_hand_pose_offsets", False)
         rospy.set_param("/atlas_path_planner/move_as_far_as_possible", True)
-            
-        # self.load_configurations()       
+
+        # self.load_configurations()
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 
-        self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback) 
+        self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback)
         self.footstep_pub = rospy.Publisher("/planner/footsteps_in", visualization_msgs.msg.MarkerArray)
 
         rospy.sleep(2)
 
     ##############################
-    ####### SETUP METHODS ########   
+    ####### SETUP METHODS ########
     ##############################
 
     def load_configurations(self) :
@@ -69,7 +69,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def configure_group(self, group_name) :
         r = True
-        rospy.loginfo(str("AtlasPathPlanner::configure_group() -- " + group_name))     
+        rospy.loginfo(str("AtlasPathPlanner::configure_group() -- " + group_name))
         if not group_name in self.groups :
             rospy.logerr(str("AtlasPathPlanner::configure_group(" + group_name + ") -- group not found"))
             return False
@@ -84,14 +84,14 @@ class AtlasPathPlanner(PathPlanner) :
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::configure_group() -- Service call failed: " + str(e)))
             r = False
-        return r 
+        return r
 
     def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
-        rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))     
+        rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))
         self.position_tolerances[group_name] = position_tolerances
         self.orientation_tolerances[group_name] = orientation_tolerances
         self.joint_tolerance[group_name] = joint_tolerance
-        return self.load_group_from_srdf(group_name) 
+        return self.load_group_from_srdf(group_name)
 
     def load_group_from_srdf(self, group_name) :
 
@@ -100,7 +100,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         self.groups[group_name] = PlanGroupConfiguration()
         self.groups[group_name].joint_map = self.lookup_joint_map(group_name)
-        
+
         N = len(self.groups[group_name].joint_map.names)
 
         if N==0 :
@@ -121,7 +121,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         root = self.srdf_model.get_base_link(group_name)
         tip = self.srdf_model.get_tip_link(group_name)
-        joint_list = [] 
+        joint_list = []
 
         if root == tip == '' :
             joint_list = self.srdf_model.get_group_joints(group_name)
@@ -131,8 +131,8 @@ class AtlasPathPlanner(PathPlanner) :
         # joint_list = self.srdf_model.get_group_joints(group_name)
         # rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
         # print joint_list
-        joint_name_map = JointNameMap() 
-        
+        joint_name_map = JointNameMap()
+
         for j in joint_list :
             if not j in self.joint_names :
                 # rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- joint " + str(j) + " not found in joint names!!"))
@@ -149,17 +149,17 @@ class AtlasPathPlanner(PathPlanner) :
 
 
     #################################
-    ####### OBSTACLE METHODS ########   
+    ####### OBSTACLE METHODS ########
     #################################
 
     def add_obstacle(self, p, s, n) :
         rospy.logerr("AtlasPathPlanner::add_obstacle() -- obstacle avoidance not supported")
-       
+
 
     ################################
     ######## HELPER METHODS ########
     ################################
-    
+
     def get_robot_planning_frame(self) :
         return self.planning_frame
 
@@ -195,7 +195,7 @@ class AtlasPathPlanner(PathPlanner) :
             return []
         else :
             return self.groups[group_name].joint_map.names
-        
+
     def publish_footsteps(self, steps) :
 
         footsteps = visualization_msgs.msg.MarkerArray()
@@ -209,29 +209,33 @@ class AtlasPathPlanner(PathPlanner) :
             footstep = visualization_msgs.msg.Marker()
             footstep.header.stamp = rospy.Time.now()
             footstep.header.seq = id
-            footstep.header.frame_id = self.planning_frame
             footstep.id = id
             footstep.action = 0
             p = steps[id]
             footstep.ns = "footstep"
-            footstep.pose = p
+            footstep.header.frame_id = p.header.frame_id
+
+            # print "p: "
+            # print p
+
+            # print "footstep.pose: "
+            # print footstep.pose
+            footstep.pose = p.pose
             footsteps.markers.append(footstep)
 
             if id%2 == 0 :
-                p.position.y = foot_width
                 footstep.text = "left/" + str(id/2)
                 last_point = p
             else :
-                p.position.y =  -foot_width
                 footstep.text = "right/" + str(id/2)
 
             pp = geometry_msgs.msg.PoseStamped()
             pp.header.frame_id = self.planning_frame
             pp.header.seq = id/2
             pp.header.stamp = rospy.Time.now()
-            pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
-            pp.pose.position.y = (p.position.y + last_point.position.y)/2.0
-            pp.pose.position.z = (p.position.z + last_point.position.z)/2.0
+            pp.pose.position.x = (p.pose.position.x + last_point.pose.position.x)/2.0
+            pp.pose.position.y = (p.pose.position.y + last_point.pose.position.y)/2.0
+            pp.pose.position.z = (p.pose.position.z + last_point.pose.position.z)/2.0
             path.poses.append(pp)
 
             self.footstep_pub.publish(footsteps)
@@ -241,7 +245,7 @@ class AtlasPathPlanner(PathPlanner) :
     ###################################
     ######## EXECUTION METHODS ########
     ###################################
-    
+
     def execute_plan(self, group_name, from_stored=False, wait=True) :
         rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name+ ")"))
         rospy.wait_for_service("/interactive_controls_bridge/execute_command")
@@ -274,14 +278,14 @@ class AtlasPathPlanner(PathPlanner) :
                 spec = CartesianPlanRequestSpecification()
                 spec.group_name = group_name
                 spec.control_frame = foot.header.frame_id
-            
+
                 spec.waypoints.append(foot)
                 spec.duration.append(duration)
-                # spec.angle_variance.append(0) 
-                # spec.maximum_angle_variance.append(0) 
-                # spec.position_variance.append(0) 
-                # spec.maximum_position_variance.append(0) 
-            
+                # spec.angle_variance.append(0)
+                # spec.maximum_angle_variance.append(0)
+                # spec.position_variance.append(0)
+                # spec.maximum_position_variance.append(0)
+
                 spec.interpolation_type = interpolation_type
                 spec.num_visualizaton_points = num_visualizaton_points
                 req.group_plan_specs.append(spec)
@@ -289,6 +293,11 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
             return None
 
+        print "==================================================="
+        print "Footstep plan:"
+        print req
+        print "==================================================="
+        
         rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
         try :
             planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
@@ -307,11 +316,11 @@ class AtlasPathPlanner(PathPlanner) :
 
     ##################################
     ######## PLANNING METHODS ########
-    ##################################    
-    
+    ##################################
+
     def plan_to_cartesian_goal(self, group_name, pt) :
         req = CartesianPlanCommandRequest()
-        
+
         interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
         duration = rospy.get_param("/atlas_path_planner/duration")
         num_visualizaton_points = rospy.get_param("/atlas_path_planner/num_visualizaton_points")
@@ -321,9 +330,9 @@ class AtlasPathPlanner(PathPlanner) :
         req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
 
         if group_name in self.groups.keys() :
-            
+
             req.execute_on_plan = self.auto_execute[group_name]
-    
+
             got = self.get_goal_orientation_tolerances(group_name)
             gpt = self.get_goal_position_tolerances(group_name)
             gotv = geometry_msgs.msg.Vector3(got[0],got[1],got[2])
@@ -337,17 +346,17 @@ class AtlasPathPlanner(PathPlanner) :
             spec.waypoints.append(pt)
             spec.duration.append(duration)
             spec.num_visualizaton_points = num_visualizaton_points
-            spec.angle_variance.append(gotv) 
-            spec.maximum_angle_variance.append(gotv) 
-            spec.position_variance.append(gptv) 
-            spec.maximum_position_variance.append(gptv) 
+            spec.angle_variance.append(gotv)
+            spec.maximum_angle_variance.append(gotv)
+            spec.position_variance.append(gptv)
+            spec.maximum_position_variance.append(gptv)
             spec.interpolation_type = interpolation_type
             req.group_plan_specs.append(spec)
 
         else :
             rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
             return None
-       
+
         rospy.wait_for_service("/interactive_controls_bridge/cartesian_plan_command")
         try :
             planner = rospy.ServiceProxy("/interactive_controls_bridge/cartesian_plan_command", CartesianPlanCommand)
@@ -366,12 +375,12 @@ class AtlasPathPlanner(PathPlanner) :
 
         req.return_trajectories = rospy.get_param("/atlas_path_planner/visualize_path")
 
-        if group_name in self.groups.keys() :           
+        if group_name in self.groups.keys() :
             req.execute_on_plan = self.auto_execute[group_name]
 
             spec = JointPlanRequestSpecification()
             spec.num_visualizaton_points = num_visualizaton_points
-            
+
             goal = control_msgs.msg.FollowJointTrajectoryGoal()
             goal.trajectory = trajectory_msgs.msg.JointTrajectory()
             goal.trajectory.header = js.header
@@ -432,7 +441,7 @@ class AtlasPathPlanner(PathPlanner) :
             spec.group_name = self.groups[group_name].group_name
             spec.joint_mask = self.groups[group_name].joint_mask
             spec.control_frame = self.groups[group_name].control_frame
-        
+
             for wp in waypoints :
 
                 got = self.get_goal_orientation_tolerances(group_name)
@@ -442,11 +451,11 @@ class AtlasPathPlanner(PathPlanner) :
 
                 spec.waypoints.append(wp)
                 spec.duration.append(duration)
-                spec.angle_variance.append(gotv) 
-                spec.maximum_angle_variance.append(gotv) 
-                spec.position_variance.append(gptv) 
-                spec.maximum_position_variance.append(gptv) 
-            
+                spec.angle_variance.append(gotv)
+                spec.maximum_angle_variance.append(gotv)
+                spec.position_variance.append(gptv)
+                spec.maximum_position_variance.append(gptv)
+
             spec.interpolation_type = interpolation_type
             spec.num_visualizaton_points = num_visualizaton_points
             req.group_plan_specs.append(spec)
@@ -482,9 +491,9 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
-        print resp.steps
+        # print resp.steps
 
-        self.publish_footsteps(resp.steps)
+        self.publish_footsteps(resp.steps, resp.left_foot_start)
 
 
     ### multigroup functions
@@ -507,13 +516,13 @@ class AtlasPathPlanner(PathPlanner) :
             for i in len(group_names) :
                 r.append(self.plan_to_joint_goal(group_names[i], jss[i]))
         return r
-        
+
     def plan_to_random_goals(self, group_names) :
         r = []
         for i in len(group_names) :
             r.append(self.plan_to_random_goal(group_names[i]))
         return r
-        
+
     def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
         r = []
         if not len(group_names) == len(pt_lists) == len(frame_ids):
@@ -523,12 +532,12 @@ class AtlasPathPlanner(PathPlanner) :
             for i in len(group_names) :
                 r.append(self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i]))
         return r
-    
+
 
     def clear_goal_targets(self, group_names) :
         for g in group_names :
             self.clear_goal_target(g)
-    
+
     def has_joint_map(self, group_name) :
         return True
 
@@ -537,7 +546,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def get_joint_mask(self, group_name) :
         return self.groups[group_name].joint_mask.mask
-        
+
     def set_joint_mask(self, group_name, mask) :
         self.groups[group_name].joint_mask.mask = mask
         self.srdf_model.set_joint_mask[group_name, mask]
@@ -545,5 +554,5 @@ class AtlasPathPlanner(PathPlanner) :
 if __name__=="__main__":
 
     rospy.init_node("atlas_planner_client")
-    pp = AtlasPathPlanner("atlas", "atlas_moveit_config")   
+    pp = AtlasPathPlanner("atlas", "atlas_moveit_config")
     rospy.spin()
