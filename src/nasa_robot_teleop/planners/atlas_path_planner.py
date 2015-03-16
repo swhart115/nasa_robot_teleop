@@ -401,13 +401,17 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
         print resp.steps
 
+        self.publish_footsteps(resp.steps)
+
+    def publish_footsteps(self, steps) :
+
         footsteps = visualization_msgs.msg.MarkerArray()
         path = nav_msgs.msg.Path()
         path.header.frame_id = self.planning_frame
         path.header.stamp = rospy.Time.now()
 
         last_point = geometry_msgs.msg.PoseStamped()
-        for id in range(len(resp.steps)) :
+        for id in range(len(steps)) :
 
             footstep = visualization_msgs.msg.Marker()
             footstep.header.stamp = rospy.Time.now()
@@ -415,7 +419,7 @@ class AtlasPathPlanner(PathPlanner) :
             footstep.header.frame_id = self.planning_frame
             footstep.id = id
             footstep.action = 0
-            p = resp.steps[id]
+            p = steps[id]
             footstep.ns = "footstep"
             footstep.pose = p
             footsteps.markers.append(footstep)
@@ -438,7 +442,7 @@ class AtlasPathPlanner(PathPlanner) :
             path.poses.append(pp)
 
             self.footstep_pub.publish(footsteps)
-            self.footstep_pub.publish(footsteps)
+            # self.footstep_pub.publish(footsteps) 
 
 
     def execute_navigation_path(self, footsteps) :
