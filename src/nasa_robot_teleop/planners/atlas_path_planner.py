@@ -19,6 +19,7 @@ import matec_msgs.msg
 from step_finder.srv import *
 
 from nasa_robot_teleop.path_planner import *
+from nasa_robot_teleop.util.kinematics_util import *
 
 from nasa_robot_teleop.msg import *
 from nasa_robot_teleop.srv import *
@@ -48,7 +49,7 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 
         self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback)
-        self.footstep_pub = rospy.Publisher("/planner/footsteps_in", visualization_msgs.msg.MarkerArray)
+        self.footstep_pub = rospy.Publisher("/planner/footsteps_in", visualization_msgs.msg.MarkerArray, queue_size=1)
 
         rospy.sleep(2)
 
@@ -241,6 +242,14 @@ class AtlasPathPlanner(PathPlanner) :
             self.footstep_pub.publish(footsteps)
             # self.footstep_pub.publish(footsteps)
 
+    def get_start_foot(self) :
+        return rospy.get_param("/atlas_path_planner/start_foot")
+
+    def get_foot_display_pose_offset(self, foot_name) :
+        p = Pose()
+        p.orientation.w=1
+        p.position.z = 0.025
+        return p
 
     ###################################
     ######## EXECUTION METHODS ########
@@ -493,7 +502,13 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
         # print resp.steps
 
-        self.publish_footsteps(resp.steps, resp.left_foot_start)
+        if resp.left_foot_first :            
+            rospy.set_param("/atlas_path_planner/start_foot", "left")
+        else :
+            rospy.set_param("/atlas_path_planner/start_foot", "right")
+        
+        return resp.steps
+        # self.publish_footsteps(resp.steps)
 
 
     ### multigroup functions
