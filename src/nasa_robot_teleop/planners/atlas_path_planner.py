@@ -129,14 +129,10 @@ class AtlasPathPlanner(PathPlanner) :
         else :
             joint_list = get_chain(self.urdf_model, root, tip, joints=True, fixed=True)
 
-        # joint_list = self.srdf_model.get_group_joints(group_name)
-        # rospy.logwarn("ATLAS PLANNER GOT JOINTS FROM SRDF: ")
-        # print joint_list
         joint_name_map = JointNameMap()
 
         for j in joint_list :
             if not j in self.joint_names :
-                # rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- joint " + str(j) + " not found in joint names!!"))
                 continue
             joint_name_map.names.append(j)
             joint_name_map.ids.append(self.joint_names.index(j))
@@ -146,7 +142,6 @@ class AtlasPathPlanner(PathPlanner) :
     def joint_name_callback(self, msg) :
         self.joint_names = msg.data
         rospy.loginfo("GOT JOINT NAMES!!")
-        # print self.joint_names
 
 
     #################################
@@ -172,14 +167,12 @@ class AtlasPathPlanner(PathPlanner) :
             return self.groups[group_name].planning_frame
 
     def has_end_effector_link(self, group_name) :
-        # print self.groups.keys()
         if not group_name in self.groups.keys() :
             rospy.logerr(str("AtlasPathPlanner::has_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
             return False
         else :
             return self.groups[group_name].control_frame != None
-            # return self.srdf_model.has_end_effector(group_name) and (self.groups[group_name].control_frame != None)
-
+        
     def get_end_effector_link(self, group_name) :
         if not group_name in self.groups.keys() :
             rospy.logerr(str("AtlasPathPlanner::get_end_effector_link() -- group name \'" + str(group_name) + "\' not found"))
@@ -271,7 +264,7 @@ class AtlasPathPlanner(PathPlanner) :
 
                 idx += 1
         except :
-            rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
+            rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan()"))
             return None
 
         # print "==================================================="
@@ -281,6 +274,7 @@ class AtlasPathPlanner(PathPlanner) :
         
         rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
         try :
+            rospy.loginfo(str("AtlasPathPlanner::execute_navigation_plan() -- calling service"))
             planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
             resp = planner(req)
             return resp.result
@@ -472,7 +466,6 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
-        # print resp.steps
 
         if resp.left_foot_start :            
             rospy.set_param("/atlas_path_planner/start_foot", "left")
@@ -480,7 +473,6 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.set_param("/atlas_path_planner/start_foot", "right")
         
         return resp.steps
-        # self.publish_footsteps(resp.steps)
 
 
     ### multigroup functions

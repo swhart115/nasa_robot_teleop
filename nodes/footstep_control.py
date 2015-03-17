@@ -96,7 +96,7 @@ class FootstepControl(object) :
         start_foot = self.path_planner.get_start_foot()
         start_foot_id = self.feet_names.index(start_foot)
 
-        print "Adding ", len(poses), " footsteps" 
+        rospy.loginfo(str("FootstepControl::translate() -- Adding " + str(len(poses)) + " footsteps")) 
         for id in range(len(poses)) :
             m = Marker()
             m.header = poses[id].header
@@ -106,7 +106,7 @@ class FootstepControl(object) :
             # with the input pose array (modulated by the start foot. probably 
             # a bad assumption in general)
             m.text = self.feet_names[(id+start_foot_id)%num_feet] + "/" + str(id/2)            
-            print "adding foot with name: ", m.text, " and position (", m.pose.position.x, ", ", m.pose.position.y, ") (frame: ", m.header.frame_id, ")"
+            rospy.loginfo(str("FootstepControl::translate() -- Adding foot[" + str(m.text) + "] at (" + str(m.pose.position.x) + ", " + str(m.pose.position.y) + ")_[" + str(m.header.frame_id) + "]"))
             self.footstep_array.markers.append(m)
 
         
@@ -210,7 +210,7 @@ class FootstepControl(object) :
                 self.toggle_foot_controls(feedback)
                 self.create_foot_interactive_markers()
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
-            print "Moved Foot #: ", feedback.marker_name
+            rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
             self.footstep_change_map.append(feedback.marker_name)
             self.update_footstep_markers_from_server()
             
@@ -272,9 +272,9 @@ class FootstepControl(object) :
         self.update_footstep_markers_from_server()
         if len(self.footstep_markers)>0 and self.footstep_plan_valid :
             step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
-            print "==== FINAL STEP POSES ==="
-            print step_poses
-            print "======="
+            # print "==== FINAL STEP POSES ==="
+            # print step_poses
+            # print "======="
             self.path_planner.execute_navigation_plan(step_poses)
             self.footstep_plan_valid = False
 

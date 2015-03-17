@@ -20,6 +20,7 @@ if __name__=="__main__":
     path_pub = rospy.Publisher("/planner/path", Path)
     rospy.set_param("/atlas_path_planner/start_foot", "left")
     
+    frame_id = "/global"
     footsteps = MarkerArray()
 
     foot_width = 0.125
@@ -28,7 +29,7 @@ if __name__=="__main__":
     angle = 0.1
 
     path = Path()
-    path.header.frame_id = "/ground"
+    path.header.frame_id = frame_id
     path.header.stamp = rospy.Time.now()
 
     
@@ -38,7 +39,7 @@ if __name__=="__main__":
         footstep = Marker()
         footstep.header.stamp = rospy.Time.now()
         footstep.header.seq = id
-        footstep.header.frame_id = "/ground"
+        footstep.header.frame_id = frame_id
         footstep.id = id
         footstep.action = 0
         p = Pose()
@@ -53,7 +54,7 @@ if __name__=="__main__":
             footstep.text = "right/" + str(id/2)
 
             pp = PoseStamped()
-            pp.header.frame_id = "/ground"
+            pp.header.frame_id = frame_id
             pp.header.seq = id/2
             pp.header.stamp = rospy.Time.now()
             pp.pose.position.x = (p.position.x + last_point.position.x)/2.0
