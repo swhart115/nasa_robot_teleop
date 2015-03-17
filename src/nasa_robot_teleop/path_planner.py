@@ -714,6 +714,9 @@ class PathPlanner(object):
         rospy.logwarn("PathPlanner::get_joint_map() -- not implemented")
         raise NotImplementedError
   
+    def get_feet_names(self) :
+        rospy.logwarn("PathPlanner::get_feet_names() -- not implemented")
+        raise NotImplementedError
 
     ### planing and execution methods
     def plan_to_cartesian_goal(self, group_name, pt) :

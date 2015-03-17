@@ -37,7 +37,8 @@ class AtlasPathPlanner(PathPlanner) :
         self.planning_frame = rospy.get_param("/interactive_control/navigation_frame", "/global")
         self.groups = {}
         self.joint_names = []
-
+        self.feet_names = ['left', 'right']
+        
         rospy.set_param("/atlas_path_planner/interpolation_type", 1)
         rospy.set_param("/atlas_path_planner/duration", 2.0)
         rospy.set_param("/atlas_path_planner/num_visualizaton_points", 5)
@@ -49,8 +50,7 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 
         self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback)
-        self.footstep_pub = rospy.Publisher("/planner/footsteps_in", visualization_msgs.msg.MarkerArray, queue_size=1)
-
+        
         rospy.sleep(2)
 
     ##############################
@@ -197,44 +197,6 @@ class AtlasPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].joint_map.names
 
-    def publish_footsteps(self, steps) :
-
-        footsteps = visualization_msgs.msg.MarkerArray()
-        path = nav_msgs.msg.Path()
-        path.header.frame_id = self.planning_frame
-        path.header.stamp = rospy.Time.now()
-
-        last_point = geometry_msgs.msg.PoseStamped()
-        for id in range(len(steps)) :
-
-            footstep = visualization_msgs.msg.Marker()
-            footstep.header.stamp = rospy.Time.now()
-            footstep.header.seq = id
-            footstep.id = id
-            footstep.action = 0
-            p = steps[id]
-            footstep.ns = "footstep"
-            footstep.header.frame_id = p.header.frame_id
-            footstep.pose = p.pose
-            footsteps.markers.append(footstep)
-
-            if id%2 == 0 :
-                footstep.text = "left/" + str(id/2)
-                last_point = p
-            else :
-                footstep.text = "right/" + str(id/2)
-
-            pp = geometry_msgs.msg.PoseStamped()
-            pp.header.frame_id = self.planning_frame
-            pp.header.seq = id/2
-            pp.header.stamp = rospy.Time.now()
-            pp.pose.position.x = (p.pose.position.x + last_point.pose.position.x)/2.0
-            pp.pose.position.y = (p.pose.position.y + last_point.pose.position.y)/2.0
-            pp.pose.position.z = (p.pose.position.z + last_point.pose.position.z)/2.0
-            path.poses.append(pp)
-
-            self.footstep_pub.publish(footsteps)
-
     def get_start_foot(self) :
         return rospy.get_param("/atlas_path_planner/start_foot")
 
@@ -243,6 +205,9 @@ class AtlasPathPlanner(PathPlanner) :
         p.orientation.w=1
         p.position.z = 0.025
         return p
+
+    def get_feet_names(self) :
+        return self.feet_names
 
     ###################################
     ######## EXECUTION METHODS ########
@@ -290,7 +255,7 @@ class AtlasPathPlanner(PathPlanner) :
                     spec.group_name = "left_leg" 
                 else :
                     spec.group_name = "right_leg"
-                    
+
                 spec.control_frame = foot.header.frame_id
 
                 spec.waypoints.append(foot)
