@@ -82,9 +82,9 @@ class FootstepControl(object) :
         self.create_foot_interactive_markers()
 
 
-    def footstep_callback(self, feedback) :
+    def footstep_callback(self, data) :
         self.clear_footsteps()
-        self.footstep_array = feedback
+        self.footstep_array = data
         self.create_foot_interactive_markers()
 
 
@@ -101,17 +101,15 @@ class FootstepControl(object) :
             m = Marker()
             m.header = poses[id].header
             m.pose = poses[id].pose
-
+            m.id = id
             # this assumes the feet order in the names is the order assoicated 
             # with the input pose array (modulated by the start foot. probably 
             # a bad assumption in general)
             m.text = self.feet_names[(id+start_foot_id)%num_feet] + "/" + str(id/2)            
-            print "adding foot with name: ", m.text, " and position (", m.pose.position.x, ", ", m.pose.position.y, ")"
+            print "adding foot with name: ", m.text, " and position (", m.pose.position.x, ", ", m.pose.position.y, ") (frame: ", m.header.frame_id, ")"
             self.footstep_array.markers.append(m)
 
-        print "Made MarkerArray"
-        # print self.footstep_array.markers
-
+        
 
     def create_foot_interactive_markers(self) :
 
@@ -121,7 +119,6 @@ class FootstepControl(object) :
 
         for m in self.footstep_array.markers :
 
-            print "making interactive marker for: ", m.id
             # lookup the foot name
             for foot in self.feet_names :
                 if foot in m.text : foot_name = foot

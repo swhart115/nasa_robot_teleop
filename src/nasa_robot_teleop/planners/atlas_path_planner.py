@@ -335,7 +335,7 @@ class AtlasPathPlanner(PathPlanner) :
             req.group_plan_specs.append(spec)
 
         else :
-            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_pathplan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
+            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_path(" + group_name + ") -- no group found of that name!"))
             return None
 
         rospy.wait_for_service("/interactive_controls_bridge/cartesian_plan_command")
