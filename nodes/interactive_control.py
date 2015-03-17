@@ -84,7 +84,7 @@ class InteractiveControl:
         # nav control markers
         if self.navigation_frame :
             rospy.loginfo("InteractiveControl::init() -- setting up NavigationWaypointControl")
-            self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame)
+            self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame, self.tf_listener)
 
         # joint state sub
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)

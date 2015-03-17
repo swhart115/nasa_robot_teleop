@@ -23,18 +23,23 @@ from footstep_control import *
 
 class NavigationWaypointControl(object) :
 
-    def __init__(self, robot, server=None, frame="/global") :
+    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None) :
 
-        self.robot_name = robot
-        self.frame = frame
+        self.robot = robot
+        self.frame_id = frame_id
 
         if server :
             self.server = server
         else :
-            self.server = InteractiveMarkerServer(str(self.robot_name + "_navigation_control"))
+            self.server = InteractiveMarkerServer(str(self.robot + "_navigation_control"))
+
+        if tf_listener :
+            self.tf_listener = tf_listener
+        else :
+            self.tf_listener = tf.TransformListener()
 
         self.path_planner = None
-        self.footstep_controls = FootstepControl(robot, server, frame)
+        self.footstep_controls = FootstepControl(self.robot, self.server, self.frame_id, self.tf_listener)
 
         self.waypoint_marker_menus = {}
         self.waypoint_menu_handles = {}
@@ -129,7 +134,7 @@ class NavigationWaypointControl(object) :
 
         # init interactivemarker waypoint and adjust offset
         waypoint = InteractiveMarker()
-        waypoint.header.frame_id = self.frame
+        waypoint.header.frame_id = self.frame_id
         waypoint.name = key
         waypoint.description = str("NavigationMarker:"+self.get_next_id())
         waypoint.scale = 0.25

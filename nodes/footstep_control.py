@@ -5,6 +5,7 @@ import roslib; roslib.load_manifest("nasa_robot_teleop")
 
 import math
 import random
+import tf
 
 from copy import deepcopy
 
@@ -24,15 +25,20 @@ from nasa_robot_teleop.util.kinematics_util import *
 
 class FootstepControl(object) :
 
-    def __init__(self, robot, server=None, frame="/global") :
+    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None) :
 
         self.robot_name = robot
-        self.frame = frame
+        self.frame_id = frame_id
 
         if server :
             self.server = server
         else :
             self.server = InteractiveMarkerServer(str(self.robot_name + "_footstep_control"))
+
+        if tf_listener :
+            self.tf_listener = tf_listener
+        else :
+            self.tf_listener = tf.TransformListener()
 
         self.path_planner = None
 
@@ -90,17 +96,26 @@ class FootstepControl(object) :
 
     def translate_poses_to_markers(self, poses) :       
 
+        rospy.loginfo(str("FootstepControl::translate() -- Adding " + str(len(poses)) + " footsteps")) 
+        
         self.footstep_array = MarkerArray()
         num_feet = len(self.feet_names)
 
         start_foot = self.path_planner.get_start_foot()
         start_foot_id = self.feet_names.index(start_foot)
-
-        rospy.loginfo(str("FootstepControl::translate() -- Adding " + str(len(poses)) + " footsteps")) 
+        
         for id in range(len(poses)) :
+            
             m = Marker()
-            m.header = poses[id].header
-            m.pose = poses[id].pose
+            
+            try :
+                ps =  self.tf_listener.transformPose(self.frame_id, poses[id])
+                m.header = ps.header
+                m.pose = ps.pose
+            except :
+                rospy.logerr(str("FootstepControl::translate() -- error translating pose from " + poses[id].header.frame_id + " to " + self.frame_id))
+                return
+
             m.id = id
             # this assumes the feet order in the names is the order assoicated 
             # with the input pose array (modulated by the start foot. probably 
