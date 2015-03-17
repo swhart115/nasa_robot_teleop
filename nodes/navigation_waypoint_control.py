@@ -311,7 +311,7 @@ if __name__=="__main__":
 
     rospy.init_node("NavigationControl")
 
-    server = InteractiveMarkerServer(str(args.robot + "_teleop"))
+    server = InteractiveMarkerServer(str(args.robot + "_interactive_marker_server"))
 
     nc = NavigationWaypointControl(args.robot, server, args.frame)
     nc.activate_navigation_markers(True)

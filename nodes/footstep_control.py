@@ -276,7 +276,7 @@ if __name__=="__main__":
 
     rospy.init_node("FootstepControl")
 
-    server = InteractiveMarkerServer(str(args.robot + "_teleop"))
+    server = InteractiveMarkerServer(str(args.robot + "_interactive_marker_server"))
 
     fc = FootstepControl("atlas", server, "/global")
     fc.activate_navigation_markers(True)

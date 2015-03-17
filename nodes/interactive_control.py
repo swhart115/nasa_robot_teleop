@@ -79,7 +79,7 @@ class InteractiveControl:
         self.get_tolerances(self.tolerance_file)
       
         # interactive marker server
-        self.server = InteractiveMarkerServer(str(self.robot_name + "_interactive_control"))
+        self.server = InteractiveMarkerServer(str(self.robot_name + "_interactive_controls_server"))
 
         # nav control markers
         if self.navigation_frame :
