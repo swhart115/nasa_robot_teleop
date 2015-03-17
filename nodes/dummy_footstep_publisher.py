@@ -18,7 +18,8 @@ if __name__=="__main__":
 
     footstep_pub = rospy.Publisher("/planner/footsteps_in", MarkerArray)
     path_pub = rospy.Publisher("/planner/path", Path)
-        
+    rospy.set_param("/atlas_path_planner/start_foot", "left")
+    
     footsteps = MarkerArray()
 
     foot_width = 0.125
@@ -30,6 +31,7 @@ if __name__=="__main__":
     path.header.frame_id = "/ground"
     path.header.stamp = rospy.Time.now()
 
+    
     last_point = PoseStamped()
     for id in range(10) :
 

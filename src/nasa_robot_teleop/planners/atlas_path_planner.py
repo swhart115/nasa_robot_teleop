@@ -215,12 +215,6 @@ class AtlasPathPlanner(PathPlanner) :
             p = steps[id]
             footstep.ns = "footstep"
             footstep.header.frame_id = p.header.frame_id
-
-            # print "p: "
-            # print p
-
-            # print "footstep.pose: "
-            # print footstep.pose
             footstep.pose = p.pose
             footsteps.markers.append(footstep)
 
@@ -240,7 +234,6 @@ class AtlasPathPlanner(PathPlanner) :
             path.poses.append(pp)
 
             self.footstep_pub.publish(footsteps)
-            # self.footstep_pub.publish(footsteps)
 
     def get_start_foot(self) :
         return rospy.get_param("/atlas_path_planner/start_foot")
@@ -270,6 +263,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def execute_navigation_plan(self, footsteps) :
 
+        rospy.loginfo("AtlasPathPlanner::execute_navigation_plan()")
         req = CartesianPlanCommandRequest()
 
         interpolation_type = rospy.get_param("/atlas_path_planner/interpolation_type")
@@ -280,12 +274,23 @@ class AtlasPathPlanner(PathPlanner) :
         req.maintain_hand_pose_offsets = rospy.get_param("/atlas_path_planner/maintain_hand_pose_offsets")
         req.move_as_far_as_possible = rospy.get_param("/atlas_path_planner/move_as_far_as_possible")
 
-        group_name = "left_leg"
+        start_foot = self.get_start_foot()
+        if start_foot=="left" :
+            indicator = 0
+        else :
+            indicator = 1
 
         try :
+        
+            idx = 0
             for foot in footsteps :
                 spec = CartesianPlanRequestSpecification()
-                spec.group_name = group_name
+                
+                if idx%2 == indicator :
+                    spec.group_name = "left_leg" 
+                else :
+                    spec.group_name = "right_leg"
+                    
                 spec.control_frame = foot.header.frame_id
 
                 spec.waypoints.append(foot)
@@ -298,14 +303,16 @@ class AtlasPathPlanner(PathPlanner) :
                 spec.interpolation_type = interpolation_type
                 spec.num_visualizaton_points = num_visualizaton_points
                 req.group_plan_specs.append(spec)
+
+                idx += 1
         except :
             rospy.logerr(str("AtlasPathPlanner::plan_navigation()"))
             return None
 
-        print "==================================================="
-        print "Footstep plan:"
-        print req
-        print "==================================================="
+        # print "==================================================="
+        # print "Footstep plan:"
+        # print req
+        # print "==================================================="
         
         rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command")
         try :

@@ -183,7 +183,7 @@ class FootstepControl(object) :
 
             if str(m.id) in self.footstep_height_controls.keys() :
                 if self.footstep_height_controls[str(m.id)] :
-                    print "adding height controls to ", str(m.id)
+                    # print "adding height controls to ", str(m.id)
                     footstep_marker.controls.append(makeYTransControl())
                     footstep_marker.controls.append(makeXRotControl())
                     footstep_marker.controls.append(makeZRotControl())
@@ -215,7 +215,7 @@ class FootstepControl(object) :
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             handle = feedback.menu_entry_id
             if handle == self.footstep_menu_handles["Toggle Full Controls"] :
-                print "adding height controls for foot: ", feedback.marker_name
+                # print "adding height controls for foot: ", feedback.marker_name
                 self.add_foot_controls(feedback)
                 self.translate_feet_to_interactive_markers()
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
