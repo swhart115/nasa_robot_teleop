@@ -474,7 +474,7 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
         # print resp.steps
 
-        if resp.left_foot_first :            
+        if resp.left_foot_start :            
             rospy.set_param("/atlas_path_planner/start_foot", "left")
         else :
             rospy.set_param("/atlas_path_planner/start_foot", "right")
