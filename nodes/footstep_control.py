@@ -84,8 +84,8 @@ class FootstepControl(object) :
 
     def set_footstep_poses(self, poses) :
         self.clear_footsteps()
-        self.translate_poses_to_markers(poses)
-        self.create_foot_interactive_markers()
+        if self.translate_poses_to_markers(poses) :
+            self.create_foot_interactive_markers()
 
 
     def footstep_callback(self, data) :
@@ -95,6 +95,10 @@ class FootstepControl(object) :
 
 
     def translate_poses_to_markers(self, poses) :       
+
+        if not poses :
+            rospy.logwarn("FootstepControl::translate() -- can't make markers no poses given!")
+            return False
 
         rospy.loginfo(str("FootstepControl::translate() -- Adding " + str(len(poses)) + " footsteps")) 
         
@@ -114,7 +118,7 @@ class FootstepControl(object) :
                 m.pose = ps.pose
             except :
                 rospy.logerr(str("FootstepControl::translate() -- error translating pose from " + poses[id].header.frame_id + " to " + self.frame_id))
-                return
+                return False
 
             m.id = id
             # this assumes the feet order in the names is the order assoicated 
@@ -124,6 +128,7 @@ class FootstepControl(object) :
             rospy.loginfo(str("FootstepControl::translate() -- Adding foot[" + str(m.text) + "] at (" + str(m.pose.position.x) + ", " + str(m.pose.position.y) + ")_[" + str(m.header.frame_id) + "]"))
             self.footstep_array.markers.append(m)
 
+        return True
         
 
     def create_foot_interactive_markers(self) :

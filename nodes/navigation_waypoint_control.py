@@ -57,6 +57,7 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Request Plan")
         self.waypoint_menu_options.append("Execute")
         
+        self.last_waypoint_height = 2.0
 
     def activate_navigation_markers(self, v) :
         self.waypoint_markers_on = v
@@ -77,7 +78,7 @@ class NavigationWaypointControl(object) :
        
         # add a new waypoint if it's the first
         if len(self.waypoint_markers) == 0:
-            self.insert_waypoint(offset, replace, full_controls)
+            self.insert_waypoint(offset, replace, full_controls=full_controls)
             self.server.applyChanges()
             return True
         else:
@@ -94,18 +95,28 @@ class NavigationWaypointControl(object) :
                 self.push_waypoints_and_resize(index)
 
             # insert waypoint into vector and server
-            self.insert_waypoint(offset, replace, full_controls)
+            self.insert_waypoint(offset, replace, full_controls=full_controls)
 
             # pop any stored waypoints
             if self.waypoint_stack:
                 self.pop_waypoints()
 
+           
             self.server.applyChanges()
 
-            if len(self.waypoint_markers) > original_size:
-                return True
-            else:
+            if len(self.waypoint_markers) <= original_size:
+                rospy.logwarn("huh?")
                 return False
+
+        # print "\n===============\nRESIZING ALL MAKERS (ADD)"
+        # do this for adjusting scale of everyone
+        self.push_waypoints_and_resize(-1)
+        if self.waypoint_stack:
+            self.pop_waypoints()
+        self.server.applyChanges()
+
+        return True
+
 
     def delete_waypoint(self, name):
         index = self.waypoint_markers.index(name)
@@ -122,6 +133,15 @@ class NavigationWaypointControl(object) :
                 self.pop_waypoints()
 
             self.server.applyChanges()
+
+
+        # do this for adjusting scale of everyone
+        # print "\n===============\nRESIZING ALL MAKERS (DEL)"
+        self.push_waypoints_and_resize(-1)
+        if self.waypoint_stack:
+            self.pop_waypoints()
+        self.server.applyChanges()
+
 
         if len(self.waypoint_markers) == original_size - 1:
             return True
@@ -152,10 +172,30 @@ class NavigationWaypointControl(object) :
         
         # set up controls
         translate = CreateNavControl()
-        translate.markers.append(createArrow(waypoint_id))
-        waypoint.controls.append(translate)
-        waypoint.controls.append(makeYRotControl())
 
+        percent = float(len(self.waypoint_markers)+1.0)/float(len(self.waypoint_markers)+len(self.waypoint_stack)+1)
+
+        last_waypoint=(len(self.waypoint_stack)==0)
+
+        # print "key: ", key
+        # print "  percent: ", percent
+        # print "  test name: ", self.get_waypoint_name(len(self.waypoint_markers))
+        # print "  last_waypoint: ", last_waypoint
+        # print "  n: ", len(self.waypoint_markers)
+        
+        if last_waypoint :
+            translate.markers.append(createArrow(waypoint_id))
+            waypoint.controls.append(translate)
+            waypoint.controls.append(makeYRotControl())
+            height = self.last_waypoint_height
+        else :
+            height = self.last_waypoint_height*percent
+        
+        # print "  height: ", height
+        # print "  z: ", waypoint.pose.position.x
+        # print "  stack size: ", len(self.waypoint_stack)
+        # print "  list size: ", len(self.waypoint_markers)
+        
         if full_controls :
             waypoint.controls.append(makeXRotControl())
             waypoint.controls.append(makeZRotControl())
@@ -163,7 +203,27 @@ class NavigationWaypointControl(object) :
 
         self.waypoint_controls[key] = full_controls
 
-        cyl = createCylinder(waypoint_id, height=1.0, radius=0.25)
+        cyl = createCylinder(waypoint_id, height=height/2.0, radius=0.25)
+
+
+        def rgb(minimum, maximum, value):
+            minimum, maximum = float(minimum), float(maximum)
+            ratio = 2 * (value-minimum) / (maximum - minimum)
+            b = float(max(0, (1 - ratio)))
+            r = float(max(0, (ratio - 1)))
+            g = 1.0 - b - r
+            return r, g, b
+
+        hm_min = 0.0
+        hm_max = 0.5
+        hm_range = hm_max-hm_min
+        r,g,b = rgb(hm_min,hm_max,hm_min+percent*hm_range)
+        cyl.color.r = hm_min+r*hm_range
+        cyl.color.g = hm_min+g*hm_range
+        cyl.color.b = hm_min+b*hm_range
+        cyl.color.a = 0.75
+
+        # print "   color: ", cyl.color
         cyl_control = CreateVisualControlFromMarker(cyl, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
         waypoint.controls.append(cyl_control)
 

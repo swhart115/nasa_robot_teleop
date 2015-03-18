@@ -297,7 +297,7 @@ class PathPlanner(object):
         if display_mode == "all_points" :
             r = joint_trajectory.points[1:num_points:self.path_increment]
         elif display_mode == "last_point" :
-            r = joint_trajectory.points[num_points-1]
+            r = [joint_trajectory.points[num_points-1]]
 
         for point in r :
             waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])

@@ -452,7 +452,9 @@ class AtlasPathPlanner(PathPlanner) :
 
         req = PlanStepsRequest()
 
-        req.target = waypoints[0]
+        for wp in waypoints :
+            req.target.append(wp)
+            
         req.plan_through_unknown_cells = True
         req.solver_timeout = 10.0
 

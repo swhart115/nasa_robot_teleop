@@ -124,10 +124,10 @@ class InteractiveControl:
        
         # planner instantiatation
         if planner_type == "moveit" :
-            from nasa_robot_teleop.planners.moveit_path_planner import *
+            from nasa_robot_teleop.planners.moveit_path_planner import MoveItPathPlanner
             self.path_planner = MoveItPathPlanner(self.robot_name, self.planner_config_file)
         elif planner_type == "atlas" :
-            from nasa_robot_teleop.planners.atlas_path_planner import *
+            from nasa_robot_teleop.planners.atlas_path_planner import AtlasPathPlanner
             self.path_planner = AtlasPathPlanner(self.robot_name, self.planner_config_file)
         else :
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
