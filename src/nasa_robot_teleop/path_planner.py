@@ -58,7 +58,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 2
+        self.path_increment = 1
 
         self.gripper_service = None
         self.bridge_topic_map = {}
@@ -123,17 +123,14 @@ class PathPlanner(object):
         return self.srdf_model
 
     def get_end_effector_names(self) :
-        ee_list = []
-        for g in self.group_types.keys() :
-            if self.group_types[g] == "endeffector" : ee_list.append(g)
-        return ee_list
-
+        return self.get_srdf_model().group_end_effectors.keys() 
+        
     def get_control_frame(self, group_name) :
-        if self.srdf_model.has_tip_link(group_name) :
-            return self.srdf_model.get_tip_link(group_name)
-        elif self.group_types[group_name] == "endeffector" :
+        if self.group_types[group_name] == "endeffector" :
             if group_name in self.srdf_model.group_end_effectors :
                 return self.srdf_model.group_end_effectors[group_name].parent_link
+        elif self.srdf_model.has_tip_link(group_name) :
+            return self.srdf_model.get_tip_link(group_name)
         return "world"
     
     def get_stored_group_state(self, group_name, group_state_name) :
@@ -148,11 +145,9 @@ class PathPlanner(object):
     def get_control_mesh(self, group_name) :
         return self.control_meshes[group_name]
 
-    # probably can clean this up, it's messy FIXME
-    def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.005]*3, orientation_tolerances=[.02]*3) :
+    def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.02]*3, orientation_tolerances=[.05]*3) :
 
-        # rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
-
+        rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
         self.plan_generated[group_name] = False
         self.stored_plans[group_name] = None
         self.display_modes[group_name] = "all_points"
@@ -170,31 +165,28 @@ class PathPlanner(object):
         try :           
 
             # generate a random group_id
-            id_found = False
-            while not id_found :
-                r = int(random.random()*10000000)
-                if not r in self.group_id_offset.values() :
-                    self.group_id_offset[group_name] = r
-                    id_found = True
+            self.group_id_offset[group_name] = self.get_random_offset_id()
 
             # check to see if the group has an associated end effector, and add it if so
-            if self.has_end_effector_link(group_name) :
-                self.control_frames[group_name] = self.get_end_effector_link(group_name)
-                ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
-                try :
-                    # self.control_meshes[group_name] = ee_link.visual.geometry.filename
-                    self.control_meshes[group_name] = get_child_mesh(self.urdf_model, ee_link)
-                except :
-                    rospy.logwarn("no mesh found")
-                for ee in self.srdf_model.end_effectors.keys() :
-                    if self.srdf_model.end_effectors[ee].parent_group == group_name :
-                        self.end_effector_map[group_name] = ee
-                        self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                            joint_tolerance=joint_tolerance, position_tolerances=position_tolerances, orientation_tolerances=orientation_tolerances)
-            elif self.srdf_model.has_tip_link(group_name) :
-                self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
-                ee_link = self.urdf_model.link_map[self.srdf_model.get_tip_link(group_name)]
-                self.control_meshes[group_name] = ee_link.visual.geometry.filename
+            if self.group_types[group_name] == "cartesian" :
+                if self.has_end_effector_link(group_name) :
+                    ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+                    self.control_frames[group_name] = self.get_end_effector_link(group_name)
+                    for ee in self.srdf_model.end_effectors.keys() :
+                        if self.srdf_model.end_effectors[ee].parent_group == group_name :
+                            self.end_effector_map[group_name] = ee
+                else :
+                    self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
+                   
+            elif self.group_types[group_name] == "joint" :
+                if self.srdf_model.has_tip_link(group_name) :
+                    self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
+                    tip_link = self.urdf_model.link_map[self.control_frames[group_name]]
+                    try :
+                        self.control_meshes[group_name] = get_child_mesh(self.urdf_model, tip_link)
+                    except :
+                        rospy.logdebug("PathPlanner::add_planning_group() -- no tip mesh found")
+                            
             elif self.group_types[group_name] == "endeffector" :
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
                 ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
@@ -202,16 +194,34 @@ class PathPlanner(object):
                     self.control_meshes[group_name] = ee_link.visual.geometry.filename
                 except :
                     self.control_meshes[group_name] = ""
-                    rospy.logwarn("no mesh found")              
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
                 self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-            
-            return True
+             #     if self.has_end_effector_link(group_name) :
+            #         ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+            #     print "ee_link: ", ee_link
+            #     try :
+            #         self.control_meshes[group_name] = get_child_mesh(self.urdf_model, ee_link)
+            #     except :
+            #         rospy.logwarn("no mesh found")
+                # for ee in self.srdf_model.end_effectors.keys() :
+                #     if self.srdf_model.end_effectors[ee].parent_group == group_name :
+                #         self.end_effector_map[group_name] = ee
+                #         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
+                #             joint_tolerance=joint_tolerance, position_tolerances=position_tolerances, orientation_tolerances=orientation_tolerances)
 
         except :
             rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
-            return False
+            return False          
+            
+        return True
    
+    def get_random_offset_id(self) :
+        while True:
+            r = int(random.random()*10000000)
+            if not r in self.group_id_offset.values() :
+                return r
+
+
     def get_group_links(self, group) :
         return self.srdf_model.get_group_links(group)
 
@@ -265,7 +275,7 @@ class PathPlanner(object):
             if self.group_types[group] != "endeffector" :
                 path_visualization_marker_array = self.joint_trajectory_to_marker_array(jt, group, self.display_modes[group])
                 self.path_visualization.publish(path_visualization_marker_array)
-
+                
 
     # publish a dummy MarkerArray so that RViz clears things out
     def clear_published_path(self,group) :
@@ -285,6 +295,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
+        # print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points "
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -295,7 +306,7 @@ class PathPlanner(object):
         ee_offset = toPose((0,0,0), (0,0,0,1))
 
         if display_mode == "all_points" :
-            r = joint_trajectory.points[1:num_points:self.path_increment]
+            r = joint_trajectory.points[0:num_points:self.path_increment]
         elif display_mode == "last_point" :
             r = [joint_trajectory.points[num_points-1]]
 
@@ -304,7 +315,6 @@ class PathPlanner(object):
             idx += self.group_id_offset[group]
             idx += len(waypoint_markers)
             for m in waypoint_markers: markers.markers.append(m)
-
             if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
                 ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
                 ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
@@ -313,12 +323,11 @@ class PathPlanner(object):
                     (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
                     rot = normalize_vector(rot)
                     ee_offset = toPose(trans, rot)
-                    
+
                 offset_pose = toMsg(end_pose*fromMsg(ee_offset))
                 end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
                 for m in end_effector_markers.markers: markers.markers.append(m)
                 idx += len(end_effector_markers.markers)
-
 
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
@@ -420,13 +429,17 @@ class PathPlanner(object):
         # call the abstract method
         self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt) 
         
-        # check to make sure the plan has a non-0 amount of waypoints
-        if self.stored_plans[group_name] :
-            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
-        
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
+        try :
+            # check to make sure the plan has a non-0 amount of waypoints
+            if self.stored_plans[group_name] :
+                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+            
+            # if the plan was found publish it to be displayed in RViz as a MarkerArray
+            if self.plan_generated[group_name] :
+                rospy.loginfo(str("PathPlanner::create_plan_to_target() -- generated"))
+                self.publish_path_data(self.stored_plans[group_name], group_name)
+        except:
+            rospy.logwarn("PathPlanner::create_plan_to_target() -- no feedback available")
 
         return self.plan_generated[group_name]
 
@@ -448,13 +461,16 @@ class PathPlanner(object):
         # call the abstract method
         self.stored_plans[group_name] = self.plan_to_joint_goal(group_name, js) 
 
-        # check to make sure the plan has a non-0 amount of waypoints
-        if self.stored_plans[group_name] :
-            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+        try :
+            # check to make sure the plan has a non-0 amount of waypoints
+            if self.stored_plans[group_name] :
+                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
 
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
+            # if the plan was found publish it to be displayed in RViz as a MarkerArray
+            if self.plan_generated[group_name] :
+                self.publish_path_data(self.stored_plans[group_name], group_name)
+        except:
+            rospy.logwarn("PathPlanner::create_joint_plan_to_target() -- no feedback available")
 
         return self.plan_generated[group_name]
 
@@ -472,13 +488,16 @@ class PathPlanner(object):
         # call the abstract method
         self.stored_plans[group_name] = self.plan_to_random_goal(group_name) 
 
-        # check to make sure the plan has a non-0 amount of waypoints
-        if self.stored_plans[group_name] :
-            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+        try: 
+            # check to make sure the plan has a non-0 amount of waypoints
+            if self.stored_plans[group_name] :
+                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
 
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
+            # if the plan was found publish it to be displayed in RViz as a MarkerArray
+            if self.plan_generated[group_name] :
+                self.publish_path_data(self.stored_plans[group_name], group_name)
+        except:
+            rospy.logwarn("PathPlanner::create_random_target() -- no feedback available")
 
         return self.plan_generated[group_name]
 
@@ -491,18 +510,14 @@ class PathPlanner(object):
         rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
 
         waypoints = []
-
         rospy.logdebug("PathPlanner::create_path_plan() -- transforming input waypoint list")
         for p in pt_list :
             pt = geometry_msgs.msg.PoseStamped()
-            pt.pose = p
-            rospy.logdebug(str("PathPlanner::create_path_plan() -- INPUT FRAME: " + frame_id))
-            rospy.logdebug(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_group_planning_frame(group_name)))
-            pt.header.frame_id = frame_id
-            if pt.header.frame_id != self.get_group_planning_frame(group_name) :
-                self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
-                pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), pt)
-            pt.header.frame_id = self.get_group_planning_frame(group_name)
+            rospy.loginfo(str("PathPlanner::create_path_plan() -- INPUT FRAME: " + frame_id))
+            rospy.loginfo(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_group_planning_frame(group_name)))
+            if p.header.frame_id != self.get_group_planning_frame(group_name) :
+                self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time.now(), rospy.Duration(5.0))
+                pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), p)
             waypoints.append(copy.deepcopy(pt.pose))
                    
         # if there is more then one waypoint, use the PathPlanner interface to create a Cartesian trajectory through each.
@@ -519,13 +534,16 @@ class PathPlanner(object):
             pt.pose = waypoints[0]
             self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt)
 
-        # check to make sure the plan has a non-0 amount of waypoints
-        if self.stored_plans[group_name] :
-            self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+        try :
+            # check to make sure the plan has a non-0 amount of waypoints
+            if self.stored_plans[group_name] :
+                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
 
-        # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        if self.plan_generated[group_name] :
-            self.publish_path_data(self.stored_plans[group_name], group_name)
+            # if the plan was found publish it to be displayed in RViz as a MarkerArray
+            if self.plan_generated[group_name] :
+                self.publish_path_data(self.stored_plans[group_name], group_name)
+        except:
+            rospy.logwarn("PathPlanner::create_path_plan() -- no feedback available")
 
         return self.plan_generated[group_name]
 
@@ -536,6 +554,11 @@ class PathPlanner(object):
     def plan_cartesian_goal_and_execute(self, group_name, pt) :
         self.auto_execute[group_name] = True
         
+        rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() -- Robot Name: " + self.robot_name))
+        rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() ---- PathPlanner Group Name: " + group_name))
+        rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() ---- Creating & Executing Path Plan"))
+
+
         # transform the goal to the robot/group planning frame 
         if pt.header.frame_id != self.get_group_planning_frame(group_name) :
             self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
@@ -543,11 +566,23 @@ class PathPlanner(object):
         pt.header.stamp = rospy.Time.now()
         pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb PathPlanner thing)
 
-        return self.plan_to_cartesian_goal(group_name,pt)
+        self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name,pt)
+        try :
+            # check to make sure the plan has a non-0 amount of waypoints
+            if self.stored_plans[group_name] :
+                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+
+            # if the plan was found publish it to be displayed in RViz as a MarkerArray
+            if self.plan_generated[group_name] :
+                self.publish_path_data(self.stored_plans[group_name], group_name)
+        except:
+            rospy.logwarn("PathPlanner::plan_cartesian_goal_and_execute() -- no feedback available")
+
+        return self.stored_plans[group_name]
 
     def execute(self, group_name, from_stored=True, wait=False) :
         if self.group_types[group_name] == "endeffector" and self.gripper_service:
-            rospy.loginf("PathPlanner::execute() -- using gripper service")
+            rospy.loginfo("PathPlanner::execute() -- using gripper service")
             return self.execute_gripper_service(group_name)
         else :
             return self.execute_plan(group_name, from_stored, wait)
@@ -566,13 +601,12 @@ class PathPlanner(object):
             if group_name in self.get_group_names() :
                 rospy.loginfo(str("============ Type: " + str(self.group_types[group_name])))
                 rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_group_planning_frame(group_name))))
-                # rospy.loginfo(str("============ PathPlanner Pose Ref Frame: " + self.get_pose_reference_frame(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Tolerance: " + self.get_goal_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Joint Tolerance: " + self.get_goal_joint_tolerance(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Position Tolerance: " + self.get_goal_position_tolerances(group_name)))
-                # rospy.loginfo(str("============ PathPlanner Goal Orientation Tolerance: " + self.get_goal_orientation_tolerances(group_name)))
                 rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
                 rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
+                # this is a joke
+                print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Position Tolerances: ", self.get_goal_position_tolerances(group_name)
+                print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Orientation Tolerances: ", self.get_goal_orientation_tolerances(group_name)
+                print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Joint Tolerance: ", self.get_goal_joint_tolerance(group_name)
             rospy.loginfo("============================================================")
 
     def print_basic_info(self) :

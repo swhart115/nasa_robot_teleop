@@ -126,6 +126,7 @@ class SRDFModel :
                 self.group_end_effectors[ee].name = elem.attrib["name"]
                 self.group_end_effectors[ee].group = elem.attrib["group"]
                 self.group_end_effectors[ee].parent_link = elem.attrib["parent_link"]
+
                 if "parent_group" in elem.attrib:
                     self.group_end_effectors[ee].parent_group = elem.attrib["parent_group"]
                 else :
@@ -137,10 +138,10 @@ class SRDFModel :
                 r = elem.attrib["reason"]
                 self.disable_collisions[(l1,l2)] = r
 
-        # self.print_groups()
-
         if self.urdf :
             self.expand_with_urdf()
+
+        # self.print_groups()
 
         return True
 
@@ -198,7 +199,9 @@ class SRDFModel :
             if self.is_chain[g] :
                 self.full_group_joints[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=True, links=False, fixed=False)
                 # self.full_group_links[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=False, links=True, fixed=False)                   
-
+            else :
+                self.full_group_joints[g] = self.group_joints[g]
+                
             self.joint_mask[g] = self.compute_joint_mask(g)
             
             # print "===================="
@@ -218,19 +221,24 @@ class SRDFModel :
 
     def compute_joint_mask(self, g) :
         
+        ordered_list = []
+        mask = []
+
         if not g in self.full_group_joints or not g in self.group_joints:
             return None
         
-        ordered_list = []
-        mask = []
-        for j in self.full_group_joints[g] :
-            if j in self.group_joints[g] :
+        if not self.is_chain[g] :
+            for j in self.group_joints[g] :
                 mask.append(True)
-                ordered_list.append(j)
-            else :
-                mask.append(False)
+        else :
+            for j in self.full_group_joints[g] :
+                if j in self.group_joints[g] :
+                    mask.append(True)
+                    ordered_list.append(j)
+                else :
+                    mask.append(False)
 
-        self.group_joints[g] = ordered_list
+            self.group_joints[g] = ordered_list
         return mask
                 
     def has_tip_link(self, group) :
@@ -292,11 +300,13 @@ class SRDFModel :
     #             return True
     #     return False
 
-    # def get_end_effector_link(self, group) :
-    #     for ee in self.group_end_effectors.keys() : 
-    #         if self.group_end_effectors[ee].parent_group == group :
-    #             return self.group_end_effectors[ee].parent_link
-    #     return ""
+    def get_end_effector_link(self, group) :
+        try :
+            for ee in self.end_effectors.keys() : 
+                if self.end_effectors[ee].parent_group == group :
+                    return self.end_effectors[ee].parent_link
+        except :
+            return ""
 
     def print_group_state(self, group, name) :
         if group in self.group_states :

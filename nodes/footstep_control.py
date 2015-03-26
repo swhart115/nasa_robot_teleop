@@ -113,6 +113,7 @@ class FootstepControl(object) :
             m = Marker()
             
             try :
+                self.tf_listener.waitForTransform(self.frame_id, poses[id].header.frame_id, rospy.Time.now(), rospy.Duration(5.0))
                 ps =  self.tf_listener.transformPose(self.frame_id, poses[id])
                 m.header = ps.header
                 m.pose = ps.pose

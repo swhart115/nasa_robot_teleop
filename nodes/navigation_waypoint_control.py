@@ -100,15 +100,12 @@ class NavigationWaypointControl(object) :
             # pop any stored waypoints
             if self.waypoint_stack:
                 self.pop_waypoints()
-
-           
+          
             self.server.applyChanges()
 
             if len(self.waypoint_markers) <= original_size:
-                rospy.logwarn("huh?")
                 return False
 
-        # print "\n===============\nRESIZING ALL MAKERS (ADD)"
         # do this for adjusting scale of everyone
         self.push_waypoints_and_resize(-1)
         if self.waypoint_stack:
@@ -134,9 +131,7 @@ class NavigationWaypointControl(object) :
 
             self.server.applyChanges()
 
-
         # do this for adjusting scale of everyone
-        # print "\n===============\nRESIZING ALL MAKERS (DEL)"
         self.push_waypoints_and_resize(-1)
         if self.waypoint_stack:
             self.pop_waypoints()
@@ -177,12 +172,6 @@ class NavigationWaypointControl(object) :
 
         last_waypoint=(len(self.waypoint_stack)==0)
 
-        # print "key: ", key
-        # print "  percent: ", percent
-        # print "  test name: ", self.get_waypoint_name(len(self.waypoint_markers))
-        # print "  last_waypoint: ", last_waypoint
-        # print "  n: ", len(self.waypoint_markers)
-        
         if last_waypoint :
             translate.markers.append(createArrow(waypoint_id))
             waypoint.controls.append(translate)
@@ -190,12 +179,7 @@ class NavigationWaypointControl(object) :
             height = self.last_waypoint_height
         else :
             height = self.last_waypoint_height*percent
-        
-        # print "  height: ", height
-        # print "  z: ", waypoint.pose.position.x
-        # print "  stack size: ", len(self.waypoint_stack)
-        # print "  list size: ", len(self.waypoint_markers)
-        
+                
         if full_controls :
             waypoint.controls.append(makeXRotControl())
             waypoint.controls.append(makeZRotControl())
@@ -218,12 +202,11 @@ class NavigationWaypointControl(object) :
         hm_max = 0.5
         hm_range = hm_max-hm_min
         r,g,b = rgb(hm_min,hm_max,hm_min+percent*hm_range)
-        cyl.color.r = hm_min+r*hm_range
+        cyl.color.r = 0.75#hm_min+r*hm_range
         cyl.color.g = hm_min+g*hm_range
         cyl.color.b = hm_min+b*hm_range
         cyl.color.a = 0.75
 
-        # print "   color: ", cyl.color
         cyl_control = CreateVisualControlFromMarker(cyl, interaction_mode=InteractiveMarkerControl.MOVE_PLANE)
         waypoint.controls.append(cyl_control)
 

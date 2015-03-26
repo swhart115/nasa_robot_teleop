@@ -53,6 +53,10 @@ class MoveItPathPlanner(PathPlanner) :
         r = True
         rospy.loginfo(str("MoveItPathPlanner::setup_group() -- " + group_name))     
 
+        self.position_tolerances[group_name] = position_tolerances
+        self.orientation_tolerances[group_name] = orientation_tolerances
+        self.joint_tolerance[group_name] = joint_tolerance
+
         try :
             controller_name = self.lookup_controller_name(group_name)  # FIXME
             msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
@@ -75,19 +79,19 @@ class MoveItPathPlanner(PathPlanner) :
             self.groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
             self.groups[group_name].set_goal_joint_tolerance(joint_tolerance)
 
-            if len(position_tolerances) != 3 or len(orientation_tolerances) != 3 :
+            if len(self.position_tolerances[group_name]) != 3 or len(self.orientation_tolerances[group_name]) != 3 :
                 rospy.logwarn("MoveItPathPlanner::setup_group() tolerance vectors of wrong size. Just using first val")
-                position_tolerances = [position_tolerances[0]]*3
-                orientation_tolerances = [orientation_tolerances[0]]*3
+                self.position_tolerances[group_name] = [self.position_tolerances[group_name][0]]*3
+                self.orientation_tolerances[group_name] = [self.orientation_tolerances[group_name][0]]*3
             else :
-                if not(position_tolerances[0] == position_tolerances[1] == position_tolerances[2]) :
-                    position_tolerances = [position_tolerances[0]]*3
+                if not(self.position_tolerances[group_name][0] == self.position_tolerances[group_name][1] == self.position_tolerances[group_name][2]) :
+                    self.position_tolerances[group_name] = [self.position_tolerances[group_name][0]]*3
                     rospy.logwarn("MoveItPathPlanner::setup_group() dimensional position tolerances not supported. Just using first val")
-                if not(orientation_tolerances[0] == orientation_tolerances[1] == orientation_tolerances[2]) :
-                    orientation_tolerances = [orientation_tolerances[0]]*3
+                if not(self.orientation_tolerances[group_name][0] == self.orientation_tolerances[group_name][1] == self.orientation_tolerances[group_name][2]) :
+                    self.orientation_tolerances[group_name] = [self.orientation_tolerances[group_name][0]]*3
                     rospy.logwarn("MoveItPathPlanner::setup_group() dimensional orientation tolerances not supported. Just using first val")                              
             self.groups[group_name].set_goal_position_tolerance(position_tolerances[0])
-            self.groups[group_name].set_goal_orientation_tolerance(orientation_tolerances[0])
+            self.groups[group_name].set_goal_orientation_tolerance(self.orientation_tolerances[group_name][0])
         except :
             rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
@@ -217,7 +221,7 @@ class MoveItPathPlanner(PathPlanner) :
                 self.plan_generated[group_name] = False
                 r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
         else :
-            rospy.logwarn(str("MoveItPathPlanner::execute_plan() -- no plan for group" + group_name + " yet generated."))
+            rospy.logwarn(str("MoveItPathPlanner::execute_plan() -- no plan for group " + group_name + " yet generated."))
             r = False
         rospy.logdebug(str("MoveItPathPlanner::execute_plan() -- plan execution: " + str(r)))
         return r
@@ -278,9 +282,15 @@ class MoveItPathPlanner(PathPlanner) :
 
     def plan_cartesian_path(self, group_name, waypoints) :
         try :
+
             fraction = 0
-            self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0)  
-            (plan, fraction) = self.groups[group_name].plan()
+            try :
+                # this jump parameter often makes it fail---more investigation needed here.
+                # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
+                (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0)  
+            except :
+                rospy.logerr("MoveItInterface::plan_cartesian_path() -- Generating Cartesian Path Plan Failed")
+
             if fraction < 0 :
                 rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_path(" + group_name + ") -- failed, fraction: " + str(fraction)))
                 return None
@@ -290,6 +300,7 @@ class MoveItPathPlanner(PathPlanner) :
             return None
 
 
+    # multigroup stuff, not tested yet
     def plan_to_cartesian_goals(self, group_names, pts) :
         r = []
         if not len(group_names) == len(pts) :

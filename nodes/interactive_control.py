@@ -142,7 +142,6 @@ class InteractiveControl:
         # setup the groups
         self.setup_groups()       
 
-
         for n in self.get_groups() :
             self.control_frames[n] = self.path_planner.get_control_frame(n)
         
@@ -313,6 +312,7 @@ class InteractiveControl:
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
 
         control_frame = self.path_planner.get_control_frame(group)
+
         ee_links = get_all_child_links(self.urdf, control_frame)
         # self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
         self.markers[group].header.frame_id = self.path_planner.srdf_model.get_base_link(group)
@@ -328,6 +328,9 @@ class InteractiveControl:
                     end_effector_marker.color.b = 1
                     end_effector_marker.color.a = 0.1
                     end_effector_marker.id = idx
+                    end_effector_marker.scale.x *= 1.01
+                    end_effector_marker.scale.y *= 1.01
+                    end_effector_marker.scale.z *= 1.01
                     menu_control.markers.append(end_effector_marker)
                     idx += 1
             except :

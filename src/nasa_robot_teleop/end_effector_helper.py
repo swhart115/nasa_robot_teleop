@@ -181,6 +181,7 @@ class EndEffectorHelper :
         return self.offset_pose_data[link]
 
     def get_root_frame(self) :
+        # rospy.logwarn(str("EndEffectorHelper::get_root_frame() -- " + str(self.root_frame)))
         return self.root_frame
 
     def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):
