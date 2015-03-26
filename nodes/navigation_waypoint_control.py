@@ -302,7 +302,7 @@ class NavigationWaypointControl(object) :
         # // we want the new vector to be
         # //   vector {0, 1, 2, 3, 4}
         # // So we can resize it using the index. This seems dirty. Is this dirty?
-        name = self.waypoint_markers[index]
+        # name = self.waypoint_markers[index]
         self.waypoint_markers = self.waypoint_markers[:index+1]
 
 
