@@ -122,7 +122,7 @@ def get_mesh_marker_for_link(link_name, urdf) :
         link = urdf.link_map[link_name]
 
         marker.header.frame_id = link_name
-        marker.header.stamp = rospy.get_rostime()
+        marker.header.stamp = rospy.Time(0)
         marker.ns = link_name
 
         marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE

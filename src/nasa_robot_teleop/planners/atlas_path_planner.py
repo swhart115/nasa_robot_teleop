@@ -289,7 +289,12 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.loginfo(str("AtlasPathPlanner::execute_navigation_plan() -- calling service"))
             planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
             resp = planner(req)
-            return resp.result[0]
+
+            if len(resp.result) > 0 :
+                return resp.result[0]
+            else :
+                rospy.logwarn(str("AtlasPathPlanner::execute_navigation_plan() -- failed to get footstep plan to goal"))
+                return None
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan()" + str(e)))
             return None
@@ -352,7 +357,11 @@ class AtlasPathPlanner(PathPlanner) :
         try :
             planner = rospy.ServiceProxy("/interactive_controls_bridge/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
-            return resp.result[0]
+            if len(resp.result) > 0 :
+                return resp.result[0]
+            else :
+                rospy.logwarn(str("AtlasPathPlanner::plan_cartesian_path(" + group_name + ") -- failed to get plan to goal"))
+                return None
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- CartesianPlanCommand service call failed: " + str(e)))
             return None

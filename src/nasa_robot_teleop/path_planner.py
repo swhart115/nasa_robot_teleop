@@ -270,7 +270,6 @@ class PathPlanner(object):
         if jt != None :
             # first clear out the last one cause RViz is terrible
             self.clear_published_path(group)
-            
             # only do it if it is NOT an end-effector
             if self.group_types[group] != "endeffector" :
                 path_visualization_marker_array = self.joint_trajectory_to_marker_array(jt, group, self.display_modes[group])
@@ -300,6 +299,7 @@ class PathPlanner(object):
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
         num_points = len(joint_trajectory.points)
+        # print "num_points:", num_points
         if num_points == 0 : return markers
         idx = 0
 

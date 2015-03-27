@@ -48,6 +48,7 @@ class InteractiveControl:
         self.navigation_frame = navigation_frame
         
         self.group_map = []
+        self.group_config = {}
         self.tolerances = None
         self.gripper_service = None
         self.config_parser = None
@@ -160,9 +161,9 @@ class InteractiveControl:
                 self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
        
         # Create EndEffectorHelper objects to help with EE displays
-        for n in self.path_planner.get_end_effector_names() :
-            self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
-            self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.urdf, self.path_planner.get_srdf_model())
+        # for n in self.path_planner.get_end_effector_names() :
+        #     self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
+        #     self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.urdf, self.path_planner.get_srdf_model())
 
     def parse_config_file(self, config_file) :
         self.config_parser = GroupConfigParser(config_file)
@@ -271,17 +272,14 @@ class InteractiveControl:
         
  
     def initialize_joint_group(self, group) :    
-
         self.setup_joint_menus(group)
-
         menu_control = InteractiveMarkerControl()
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
-
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         control_frame = self.path_planner.get_control_frame(group)
         jg_links = get_all_child_links(self.urdf, control_frame)
         idx = 0
-        for jg_link in jg_links :  # TODO set frames of markers to be actual robot link frames 
+        for jg_link in jg_links :  
             try :
                 marker = get_mesh_marker_for_link(jg_link, self.urdf)
                 if marker != None :
@@ -293,30 +291,23 @@ class InteractiveControl:
                     marker.scale.y = marker.scale.y*1.03
                     marker.scale.z = marker.scale.z*1.03
                     marker.id = idx
+                    marker.frame_locked = True
                     menu_control.markers.append(marker)
                     idx += 1
             except :
                 pass
-
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
-        # self.markers[group].controls.append(menu_control)
- 
 
     def initialize_endeffector_group(self, group) : 
-
         self.setup_endeffector_menus(group)
-
         menu_control = InteractiveMarkerControl()
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
-
         control_frame = self.path_planner.get_control_frame(group)
-
         ee_links = get_all_child_links(self.urdf, control_frame)
-        # self.markers[group].header.frame_id = self.path_planner.srdf_model.group_end_effectors[group].parent_link
         self.markers[group].header.frame_id = self.path_planner.srdf_model.get_base_link(group)
-
+        self.markers[group].header.stamp = rospy.Time(0)
         idx = 0
         for ee_link in ee_links :
             try :
@@ -331,15 +322,12 @@ class InteractiveControl:
                     end_effector_marker.scale.x *= 1.01
                     end_effector_marker.scale.y *= 1.01
                     end_effector_marker.scale.z *= 1.01
+                    end_effector_marker.frame_locked = True
                     menu_control.markers.append(end_effector_marker)
                     idx += 1
             except :
                 pass
-
-        # self.marker_menus[group].setCheckState( self.group_menu_handles[(group,"Execute On Plan")], MenuHandler.CHECKED )
-
-        self.markers[group].controls.append(menu_control)
- 
+        self.markers[group].controls.append(menu_control) 
 
     def remove_group_markers(self, group) :
         self.server.erase(self.markers[group].name)
@@ -468,7 +456,13 @@ class InteractiveControl:
 
     def reset_group_marker(self, group, delay=0) :
         rospy.sleep(delay)
-        self.server.setPose(self.markers[group].name, Pose())
+        if self.get_group_type(group) == "cartesian" :
+            self.server.setPose(self.markers[group].name, Pose())
+        else :
+            self.remove_group_markers(group)
+            self.initialize_group_markers(group)
+
+        self.server.applyChanges()
 
     def get_current_jpos(self, jnt) :
         if jnt in self.joint_data.name :
@@ -524,17 +518,11 @@ class InteractiveControl:
     def stored_pose_callback(self, feedback) :
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
             if self.group_menu_handles[(feedback.marker_name,"Stored Poses",p)] == feedback.menu_entry_id :
-                if True:
-                # if self.auto_execute[feedback.marker_name] or self.path_planner.get_group_type(feedback.marker_name) == "endeffector" :
-                    self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                    r = self.path_planner.execute(feedback.marker_name)
-                    # r = self.path_planner.plan_joint_goal_and_execute(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                    if not r : rospy.logerr(str("InteractiveControl::process_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name + ". re-synching..."))
-                else :
-                    self.path_planner.clear_goal_target(feedback.marker_name)
-                    self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                if self.path_planner.get_group_type(feedback.marker_name) == "cartesian" :
-                    self.reset_group_marker(feedback.marker_name)
+                self.path_planner.clear_goal_target(feedback.marker_name)
+                self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
+                r = self.path_planner.execute(feedback.marker_name)
+                if not r : rospy.logerr(str("InteractiveControl::process_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name + ". re-synching..."))
+                self.reset_group_marker(feedback.marker_name)
 
     def posture_feedback(self, feedback) :
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
@@ -624,8 +612,8 @@ class InteractiveControl:
                             self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if (feedback.marker_name,"Execute") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                        r = self.path_planner.execute(feedback.marker_name)
                         self.reset_group_marker(feedback.marker_name)
+                        r = self.path_planner.execute(feedback.marker_name)
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 if (feedback.marker_name,"Plan") in self.group_menu_handles:
@@ -664,9 +652,9 @@ if __name__=="__main__":
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
-    if gripper_service :
-        rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
-        control.set_gripper_service(gripper_service)
+    # if gripper_service :
+    #     rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
+    #     control.set_gripper_service(gripper_service)
 
     # if navigation_frame :
     #     control.navigation_controls.activate_navigation_markers(True)
