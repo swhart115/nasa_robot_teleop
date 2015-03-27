@@ -3,6 +3,3 @@ joint:
 cartesian:
   - left_tool
   - right_tool
-endeffector:
-  - left_hand
-  - right_hand
