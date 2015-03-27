@@ -159,11 +159,6 @@ class InteractiveControl:
             for state_name in self.path_planner.get_stored_state_list(group) :
                 self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
        
-        # Create EndEffectorHelper objects to help with EE displays
-        for n in self.path_planner.get_end_effector_names() :
-            self.end_effector_link_data[n] = EndEffectorHelper(self.robot_name, n, self.path_planner.get_control_frame(n), self.tf_listener)
-            self.end_effector_link_data[n].populate_data(self.path_planner.get_group_links(n), self.urdf, self.path_planner.get_srdf_model())
-
     def parse_config_file(self, config_file) :
         self.config_parser = GroupConfigParser(config_file)
         return self.config_parser.get_group_map()
@@ -664,12 +659,9 @@ if __name__=="__main__":
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
-    if gripper_service :
+    if not gripper_service == "" :
         rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
         control.set_gripper_service(gripper_service)
-
-    # if navigation_frame :
-    #     control.navigation_controls.activate_navigation_markers(True)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
