@@ -635,6 +635,7 @@ class AtlasPathPlanner(PathPlanner) :
         self.groups[group_name].joint_mask.mask = mask
         self.srdf_model.set_joint_mask[group_name, mask]
 
+       
 if __name__=="__main__":
 
     rospy.init_node("atlas_planner_client")

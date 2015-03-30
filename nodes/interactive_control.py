@@ -304,7 +304,7 @@ class InteractiveControl:
         menu_control.interaction_mode = InteractiveMarkerControl.BUTTON
         control_frame = self.path_planner.get_control_frame(group)
         ee_links = get_all_child_links(self.urdf, control_frame)
-        self.markers[group].header.frame_id = self.path_planner.srdf_model.get_base_link(group)
+        self.markers[group].header.frame_id = self.path_planner.get_group_base_frame(group)
         self.markers[group].header.stamp = rospy.Time(0)
         idx = 0
         for ee_link in ee_links :

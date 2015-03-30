@@ -239,6 +239,9 @@ class PathPlanner(object):
     def set_base_frame(self, group, base_frame) :
         self.base_frames[group] = base_frame
 
+    def get_group_base_frame(self, group_name) :
+        return self.srdf_model.get_base_link(group_name)
+
     def get_joint_mask(self, group) :
         return self.srdf_model.get_joint_mask(group)
 
