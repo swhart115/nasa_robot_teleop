@@ -33,7 +33,7 @@ from nasa_robot_teleop.tolerances import *
 # path planner instances
 from nasa_robot_teleop.path_planner import *
 from nasa_robot_teleop.planners.moveit_path_planner import *
-from nasa_robot_teleop.planners.atlas_path_planner import *
+#from nasa_robot_teleop.planners.atlas_path_planner import *
 from nasa_robot_teleop.group_config_parser import *
 from nasa_robot_teleop.group_config import *
 
@@ -127,8 +127,8 @@ class InteractiveControl:
         # planner instantiatation
         if planner_type == "moveit" :
             self.path_planner = MoveItPathPlanner(self.robot_name, self.planner_config_file)
-        elif planner_type == "atlas" :
-            self.path_planner = AtlasPathPlanner(self.robot_name, self.planner_config_file)
+        # elif planner_type == "atlas" :
+        #     self.path_planner = AtlasPathPlanner(self.robot_name, self.planner_config_file)
         else :
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
             exit()

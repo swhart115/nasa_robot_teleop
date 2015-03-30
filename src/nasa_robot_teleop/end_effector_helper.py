@@ -62,8 +62,10 @@ class EndEffectorHelper :
 
         # look up stored pose or compute it if it doesnt exist
         if not pose in self.pose_marker_arrays.keys() :
+            print "********EndEffectorHelper::get_markers_for_pose() -- Line 65"
             if not self.srdf == None :
                 poses = self.srdf.get_group_state_list(self.name)
+                print "********EndEffectorHelper::get_markers_for_pose() -- Line 68"
                 poses.sort()
                 N = len(poses)
                 color = (0,poses.index(pose)/(N-1,0,1))
@@ -76,6 +78,7 @@ class EndEffectorHelper :
             else :
                 rospy.logerr("EndEffectorHelper::get_markers_for_pose() -- no SRDF set!!")
         else :
+            print "********EndEffectorHelper::get_markers_for_pose() -- Line 81"
             markers = self.pose_marker_arrays[pose]
         
         return markers

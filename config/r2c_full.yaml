@@ -1,0 +1,13 @@
+joint:
+  - head
+  - waist
+cartesian:
+  - left_arm
+  - right_arm
+  - left_leg
+  - right_leg
+endeffector:
+  - left_hand
+  - right_hand
+  - left_foot
+  - right_foot
