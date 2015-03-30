@@ -61,6 +61,7 @@ add_service_files(
   ExecuteCommand.srv
   ConfigurePlanningService.srv
   GetPlanningServiceConfiguration.srv
+  GetJointNames.srv
 )
 
 ## Generate actions in the 'action' folder

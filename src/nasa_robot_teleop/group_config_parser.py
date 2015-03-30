@@ -25,7 +25,7 @@ class GroupConfigParser(object):
 
     def save_yaml(self, filename) :
         with open(filename, 'w') as yaml_file:
-            yaml_file.write( yaml.dump(self.groups, default_flow_style=False))
+            yaml_file.write(yaml.dump(self.groups, default_flow_style=False))
 
     def get_group_map(self) :
         return self.groups
@@ -56,6 +56,7 @@ class GroupConfigParser(object):
     
     def print_info(self) :
         print self.groups
+
 
 if __name__=="__main__":
     gcp = GroupConfigParser("/home/swhart/ros/catkin_workspace/src/nasa_robot_teleop/config/atlas.yaml")

@@ -1,2 +1,2 @@
 ---
-std_msgs/string[] joint_names
+string[] joint_names

@@ -338,12 +338,29 @@ class InteractiveControl:
         g = GroupConfig()
         g.name = req.name
         g.type = req.type
-        g.joint_list = req.joint_list
-        g.root_frame = req.root_frame
-        g.control_frame = req.control_frame
-        self.setup_group(g)
-        resp.id = 0
-        rospy.loginfo(str("InteractiveControl::handle_add_group() -- added " + req.name + " -- id: " + str(resp.id)))
+        self.group_map[g.type].append(g.name)
+
+        if len(req.joint_list) == 0 or g.root_frame == "" or g.control_frame == "" :
+            pass
+            # gc = self.config_parser.get_group_info(g.name, g.type)
+            # g.joint_list = gc.joint_list
+            # g.root_frame = gc.root_frame
+            # g.control_frame = gc.control_frame
+        else :
+            g.joint_list = req.joint_list
+            g.root_frame = req.root_frame
+            g.control_frame = req.control_frame
+            self.group_map[g.type].append(g.name)
+
+        self.setup_groups()       
+
+        # if self.path_planner.add_planning_group(g.name, g.type) :
+        #     resp.id = 0
+        #     rospy.loginfo(str("InteractiveControl::handle_add_group() -- added " + req.name + " -- id: " + str(resp.id)))
+        #     self.initialize_group_markers(g.name)
+        # else :
+        #     rospy.logerr(str("InteractiveControl::handle_add_group() -- failed to add " + req.name))
+
         return resp
 
     def handle_remove_group(self, req) :
