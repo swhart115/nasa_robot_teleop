@@ -626,11 +626,16 @@ class PathPlanner(object):
     ####################################
 
     def set_gripper_service(self, srv) :
-        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
-        rospy.wait_for_service(srv)
-        rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
-        self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
-       
+        
+        try :
+            rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
+            rospy.wait_for_service(srv,5.0)
+            rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
+            self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
+        except rospy.ROSException as e:
+            rospy.logerr("PathPlanner::set_gripper_service(): " + str(e))
+            self.clear_gripper_service()
+
     def clear_gripper_service(self) :
         self.gripper_service = None   
 
@@ -649,6 +654,11 @@ class PathPlanner(object):
     # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
     # to send a service call to any custom node that will interpret the JT as whatever is necessary
     def publish_to_gripper_service(self, group, traj) :
+        
+        if not self.gripper_service :
+            rospy.logwarn("PathPlanner::publish_to_gripper_service() -- trying to publish, but no gripper service set!")
+            return False
+
         try:
             rospy.loginfo("PathPlanner::publish_to_gripper_service() -- calling gripper service")
             resp = self.gripper_service(traj, group, "end_effector_pose") # did i hardcode this? FIXME!! should be something like "Left Hand Close"

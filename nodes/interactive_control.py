@@ -130,6 +130,9 @@ class InteractiveControl:
         elif planner_type == "atlas" :
             from nasa_robot_teleop.planners.atlas_path_planner import AtlasPathPlanner
             self.path_planner = AtlasPathPlanner(self.robot_name, self.planner_config_file)
+        elif planner_type == "srv" :
+            from nasa_robot_teleop.planners.srv_path_planner import SrvPathPlanner
+            self.path_planner = SrvPathPlanner(self.robot_name, self.planner_config_file)
         else :
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
             exit()
