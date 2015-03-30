@@ -81,7 +81,7 @@ class InteractiveControl:
         self.server = InteractiveMarkerServer(str(self.robot_name + "_interactive_controls_server"))
 
         # nav control markers
-        if self.navigation_frame :
+        if self.navigation_frame and navigation_frame != "":
             rospy.loginfo("InteractiveControl::init() -- setting up NavigationWaypointControl")
             self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame, self.tf_listener)
 
@@ -650,9 +650,9 @@ if __name__=="__main__":
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
-    #if not gripper_service == "" :
-    #    rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
-    #    control.set_gripper_service(gripper_service)
+    if gripper_service and gripper_service != "" :
+       rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
+       control.set_gripper_service(gripper_service)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
