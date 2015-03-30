@@ -650,9 +650,9 @@ if __name__=="__main__":
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
-    if not gripper_service == "" :
-        rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
-        control.set_gripper_service(gripper_service)
+    #if not gripper_service == "" :
+    #    rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
+    #    control.set_gripper_service(gripper_service)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():
