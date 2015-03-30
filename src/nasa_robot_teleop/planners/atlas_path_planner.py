@@ -5,7 +5,6 @@ import random
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
 
-roslib.load_manifest('matec_msgs')
 roslib.load_manifest('step_finder')
 
 import geometry_msgs.msg
@@ -13,7 +12,6 @@ import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
-import matec_msgs.msg
 
 from step_finder.srv import *
 
@@ -47,8 +45,6 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("~move_as_far_as_possible", False)
 
         self.get_joint_names()
-        # self.joint_name_sub = rospy.Subscriber("/smi/joint_names", matec_msgs.msg.JointNames, self.joint_name_callback)
-        # rospy.sleep(1)
 
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
 

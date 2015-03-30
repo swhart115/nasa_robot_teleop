@@ -28,14 +28,14 @@ class SrvPathPlanner(PathPlanner) :
     ####### CONSTRUCTOR ########
     ############################
 
-    def __init__(self, robot_name, config_package, namespace="/interactive_controls_bridge"):
+    def __init__(self, robot_name, config_package):
         PathPlanner.__init__(self, robot_name, config_package)
         rospy.loginfo(str("============ Setting up Path Planner for: \'" + self.robot_name + "\'"))
-        self.planning_frame = rospy.get_param("~navigation_frame", "/global")
+        self.planning_frame = rospy.get_param("/interactive_control/navigation_frame", "/global")
         self.groups = {}
         self.joint_names = []
         self.feet_names = ['left', 'right']
-        self.namespace = namespace
+        self.wait_for_service_timeout = 5.0
 
         rospy.set_param("~interpolation_type", 1)
         rospy.set_param("~duration", 2.0)
@@ -44,23 +44,33 @@ class SrvPathPlanner(PathPlanner) :
         rospy.set_param("~maintain_hand_pose_offsets", False)
         rospy.set_param("~move_as_far_as_possible", False)
 
-        # self.load_configurations()
+        self.get_joint_names()
+
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
-        
+
     ##############################
     ####### SETUP METHODS ########
     ##############################
 
     def load_configurations(self) :
         req = GetPlanningServiceConfigurationRequest()
-        rospy.wait_for_service(str(self.namespace + "/get_config"))
+
         try :
-            get_planner_config = rospy.ServiceProxy(str(self.namespace + "/get_config", GetPlanningServiceConfiguration))
+            rospy.wait_for_service("/interactive_controls_bridge/get_config", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::load_configurations(): " + str(e))
+            return False
+
+        try :
+            get_planner_config = rospy.ServiceProxy("/interactive_controls_bridge/get_config", GetPlanningServiceConfiguration)
             resp = get_planner_config(req)
             for g in resp.group_configurations:
                 self.groups[g.group_name] = g
         except rospy.ServiceException, e:
             rospy.logerr(str("SrvPathPlanner::load_configurations() -- GetPlanningServiceConfiguration service call failed: " + str(e)))
+            return False
+
+        return True
 
     def configure_group(self, group_name) :
         r = True
@@ -69,10 +79,16 @@ class SrvPathPlanner(PathPlanner) :
             rospy.logerr(str("SrvPathPlanner::configure_group(" + group_name + ") -- group not found"))
             return False
         req = ConfigurePlanningServiceRequest()
-        rospy.wait_for_service(str(self.namespace + "/config"))
+
+        try :
+            rospy.wait_for_service("/interactive_controls_bridge/config", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::configure_group(): " + str(e))
+            return False
+        
         try :
             req.group_configurations.append(self.groups[group_name])
-            configure_planner = rospy.ServiceProxy(str(self.namespace + "/config", ConfigurePlanningService))
+            configure_planner = rospy.ServiceProxy("/interactive_controls_bridge/config", ConfigurePlanningService)
             resp = configure_planner(req)
             if not resp.status :
                 rospy.logwarn(str("SrvPathPlanner::configure_group(" + group_name + ") -- status error"))
@@ -110,7 +126,6 @@ class SrvPathPlanner(PathPlanner) :
         self.groups[group_name].group_id = self.srdf_model.groups.index(group_name)
         self.groups[group_name].control_frame = self.srdf_model.get_tip_link(group_name)
         self.groups[group_name].planning_frame = self.planning_frame
-       
         self.groups[group_name].joint_mask.mask = self.srdf_model.get_joint_mask(group_name)
 
         return True
@@ -128,8 +143,6 @@ class SrvPathPlanner(PathPlanner) :
 
         joint_name_map = JointNameMap()
 
-        self.get_joint_names()
-
         for j in joint_list :
             if not j in self.joint_names :
                 continue
@@ -138,11 +151,23 @@ class SrvPathPlanner(PathPlanner) :
 
         return joint_name_map
 
+    # def joint_name_callback(self, msg) :
+    #     self.joint_names = msg.data
+    #     rospy.loginfo("GOT JOINT NAMES!!")
+
     def get_joint_names(self) :
-        rospy.wait_for_service(str(self.namespace + "/get_joint_names"))
+        rospy.loginfo("SrvPathPlanner::get_joint_names() -- getting joint names from service")
+
+        try : 
+            rospy.wait_for_service("/interactive_controls_bridge/get_joint_names", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::get_joint_names(): " + str(e))
+            return None
+        
+
         try :
             rospy.loginfo(str("SrvPathPlanner::get_joint_names() -- calling service"))
-            get_names = rospy.ServiceProxy(str(self.namespace + "/get_joint_names", GetJointNames))
+            get_names = rospy.ServiceProxy("/interactive_controls_bridge/get_joint_names", GetJointNames)
             resp = get_names()
             self.joint_names = resp.joint_names
         except rospy.ServiceException, e:
@@ -222,9 +247,14 @@ class SrvPathPlanner(PathPlanner) :
         req = ExecuteCommandRequest()
         req.groups.append(group_name)
 
-        rospy.wait_for_service(str(self.namespace + "/execute_command"))
         try :
-            executor = rospy.ServiceProxy(str(self.namespace + "/execute_command", ExecuteCommand))
+            rospy.wait_for_service("/interactive_controls_bridge/execute_command", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::execute_plan(): " + str(e))
+            return False
+
+        try :
+            executor = rospy.ServiceProxy("/interactive_controls_bridge/execute_command", ExecuteCommand)
             resp = executor(req)
             for p in resp.progress :
                 rospy.loginfo(str("SrvPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
@@ -285,11 +315,15 @@ class SrvPathPlanner(PathPlanner) :
         # print "Footstep plan:"
         # print req
         # print "==================================================="
-        
-        rospy.wait_for_service(str(self.namespace + "/navigation_plan_command"))
+        try :
+            rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::execute_navigation_plan(): " + str(e))
+            return None
+
         try :
             rospy.loginfo(str("SrvPathPlanner::execute_navigation_plan() -- calling service"))
-            planner = rospy.ServiceProxy(str(self.namespace + "/navigation_plan_command", CartesianPlanCommand))
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
             resp = planner(req)
 
             if len(resp.result) > 0 :
@@ -355,9 +389,14 @@ class SrvPathPlanner(PathPlanner) :
             rospy.logerr(str("SrvPathPlanner::plan_cartesian_path(" + group_name + ") -- no group found of that name!"))
             return None
 
-        rospy.wait_for_service(str(self.namespace + "/cartesian_plan_command"))
         try :
-            planner = rospy.ServiceProxy(str(self.namespace + "/cartesian_plan_command", CartesianPlanCommand))
+            rospy.wait_for_service("/interactive_controls_bridge/cartesian_plan_command", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::plan_cartesian_path(): " + str(e))
+            return None
+
+        try :
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
             if len(resp.result) > 0 :
                 return resp.result[0]
@@ -417,9 +456,14 @@ class SrvPathPlanner(PathPlanner) :
             spec.waypoints.append(goal)
             req.group_plan_specs.append(spec)
 
-        rospy.wait_for_service(str(self.namespace + "/joint_plan_command"))
         try :
-            planner = rospy.ServiceProxy(str(self.namespace + "/joint_plan_command", JointPlanCommand))
+            rospy.wait_for_service("/interactive_controls_bridge/joint_plan_command", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::plan_to_joint_goal(): " + str(e))
+            return None
+
+        try :
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/joint_plan_command", JointPlanCommand)
             resp = planner(req)
             return resp.result[0]
         except rospy.ServiceException, e:
@@ -484,14 +528,17 @@ class SrvPathPlanner(PathPlanner) :
 
         else :
             rospy.logerr(str("SrvPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- no group found of that name!"))
-            return False
+            return None
 
-        rospy.wait_for_service(str(self.namespace + "/cartesian_plan_command"))
         try :
-            planner = rospy.ServiceProxy(str(self.namespace + "/cartesian_plan_command", CartesianPlanCommand))
+            rospy.wait_for_service("/interactive_controls_bridge/cartesian_plan_command", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::plan_to_cartesian_goal(): " + str(e))
+            return None
+
+        try :
+            planner = rospy.ServiceProxy("/interactive_controls_bridge/cartesian_plan_command", CartesianPlanCommand)
             resp = planner(req)
-            print "cartesian plan got response: "
-            print resp
             return resp.result[0]
         except rospy.ServiceException, e:
             rospy.logerr(str("SrvPathPlanner::plan_to_cartesian_goal(" + group_name + ") -- PlanCommand service call failed: " + str(e)))
@@ -509,10 +556,15 @@ class SrvPathPlanner(PathPlanner) :
         req.plan_through_unknown_cells = True
         req.solver_timeout = 10.0
 
-        rospy.wait_for_service(str(self.namespace + "/plan_steps"))
+        try :
+            rospy.wait_for_service("/plan_steps", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("SrvPathPlanner::plan_navigation_path(): " + str(e))
+            return None
+
         try :
             rospy.loginfo("SrvPathPlanner::plan_navigation_path() -- requesting plan!")
-            step_planner = rospy.ServiceProxy(str(self.namespace + "/plan_steps", PlanSteps))
+            step_planner = rospy.ServiceProxy("/plan_steps", PlanSteps)
             resp = step_planner(req)
         except rospy.ServiceException, e:
             rospy.logerr(str("SrvPathPlanner::plan_navigation_path() -- " + str(e)))
@@ -585,6 +637,6 @@ class SrvPathPlanner(PathPlanner) :
 
 if __name__=="__main__":
 
-    rospy.init_node("srv_planner_client")
-    pp = SrvPathPlanner("srv", "atlas_moveit_config")
+    rospy.init_node("atlas_planner_client")
+    pp = SrvPathPlanner("atlas", "atlas_moveit_config")
     rospy.spin()
