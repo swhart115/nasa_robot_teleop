@@ -75,6 +75,7 @@ add_message_files(
   JointNameMap.msg
   JointMask.msg
   ToleranceInfo.msg
+  StringArray.msg
 )
 
 ## Generate services in the 'srv' folder

@@ -310,6 +310,7 @@ class InteractiveControl:
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
 
+
     def initialize_endeffector_group(self, group) : 
         self.setup_endeffector_menus(group)
         menu_control = InteractiveMarkerControl()
@@ -353,32 +354,56 @@ class InteractiveControl:
         for g in self.path_planner.srdf_model.get_groups() :
             resp.group_name.append(g)
         
-        for g in self.path_planner.get_group_names() :
+        for g in self.markers.keys() :
             
-            resp.active_group_name.append(g)
-            resp.group_type.append(self.get_group_type(g))
-            resp.plan_found.append(self.path_planner.plan_generated[g])
+            try :
+                resp.active_group_name.append(g)
+                resp.group_type.append(self.get_group_type(g))
+                resp.plan_found.append(self.path_planner.plan_generated[g])
+            except :
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with basic joint data")
             
-            jm = JointMask()
-            jm.mask = self.path_planner.get_joint_mask(g)
-            resp.joint_mask.append(jm)
-            resp.joint_names.append(self.path_planner.get_joint_map(g))
+            try :
+                jm = JointMask()
+                jm.mask = self.path_planner.get_joint_mask(g)
+                resp.joint_mask.append(jm)
+                resp.joint_names.append(self.path_planner.get_joint_map(g))
+            except :
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with joint_mask")
             
-            if g in self.auto_execute.keys() :
-                resp.execute_on_plan.append(self.auto_execute[g])
-            else :
-                resp.execute_on_plan.append(False)
-            
-            if g in self.auto_plan.keys() :
-                resp.plan_on_move.append(self.auto_plan[g])
-            else :
-                resp.plan_on_move.append(False)
-            
-            if g in self.path_planner.display_modes.keys() :
-                resp.path_visualization_mode.append(self.path_planner.display_modes[g])
-            else :
-                resp.path_visualization_mode.append("last_point")
+            try :
+                if g in self.auto_execute.keys() :
+                    resp.execute_on_plan.append(self.auto_execute[g])
+                else :
+                    resp.execute_on_plan.append(False)
+            except :
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with auto_execute")
+                    
+            try :
+                if g in self.auto_plan.keys() :
+                    resp.plan_on_move.append(self.auto_plan[g])
+                else :
+                    resp.plan_on_move.append(False)
+            except:
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with plan_on_move")
 
+            try :
+                if g in self.path_planner.display_modes.keys() :
+                    resp.path_visualization_mode.append(self.path_planner.display_modes[g])
+                else :
+                    resp.path_visualization_mode.append("last_point")
+            except:
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with path_visualization_mode")
+
+            try :
+                pose_list = StringArray()
+                for p in self.stored_poses[g] :
+                    pose_list.data.append(p)
+                resp.stored_pose_list.append(pose_list)
+            except :
+                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with stored_poses")
+
+        try :
             for m in self.tolerances.get_tolerance_modes() :
 
                 t = ToleranceInfo()
@@ -393,8 +418,10 @@ class InteractiveControl:
                 ts.mode = m
                 ts.types.append(self.get_tolerance_setting(g,m))
                 resp.tolerance_setting.append(ts)
+        except :
+            rospy.logwarn("InteractiveControl::populate_service_response() -- problem with tolerances")
 
-
+        # print resp
         return resp
 
     def handle_configure(self, req) :
@@ -414,8 +441,18 @@ class InteractiveControl:
                 if not self.path_planner.execute(g) :
                     rospy.logerr(str("InteractiveControl::handle_configure() -- failed planner execution for group: " + g))
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
+            for idx in range(len(req.group_name)) :
+                g = req.group_name[idx]
+                p = req.stored_pose_name[idx]
+                self.path_planner.clear_goal_target(g)
+                self.path_planner.create_joint_plan_to_target(g, self.stored_poses[g][p])
+                if not self.path_planner.execute(g): 
+                    rospy.logerr(str("InteractiveControl::handle_configure(pose) -- failed stored pose execution for group: " + g))
+                self.reset_group_marker(g)
+
+
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
-            print req
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]
                 if g in self.get_groups('cartesian') :
@@ -615,13 +652,13 @@ class InteractiveControl:
             self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.UNCHECKED )
 
     def reset_group_marker(self, group, delay=0) :
+        rospy.loginfo("InteractiveControl::reset_group_marker()")
         rospy.sleep(delay)
         if self.get_group_type(group) == "cartesian" :
             self.server.setPose(self.markers[group].name, Pose())
         else :
             self.remove_group_markers(group)
             self.initialize_group_markers(group)
-
         self.server.applyChanges()
 
     def get_current_jpos(self, jnt) :
@@ -681,7 +718,7 @@ class InteractiveControl:
                 self.path_planner.clear_goal_target(feedback.marker_name)
                 self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
                 r = self.path_planner.execute(feedback.marker_name)
-                if not r : rospy.logerr(str("InteractiveControl::process_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name + ". re-synching..."))
+                if not r : rospy.logerr(str("InteractiveControl::process_feedback(pose) -- failed execution for group: " + feedback.marker_name + ". re-synching..."))
                 self.reset_group_marker(feedback.marker_name)
 
     def posture_feedback(self, feedback) :

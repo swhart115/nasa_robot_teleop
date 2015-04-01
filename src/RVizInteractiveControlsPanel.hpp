@@ -18,44 +18,44 @@ class RVizInteractiveControlsPanel;
 namespace rviz_interactive_controls_panel
 {
 
-	class RVizInteractiveControlsPanel : public rviz::Panel
-	{
-	    Q_OBJECT
+    class RVizInteractiveControlsPanel : public rviz::Panel
+    {
+        Q_OBJECT
 
-	public:
-	    explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
-	    ~RVizInteractiveControlsPanel();
+    public:
+        explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
+        ~RVizInteractiveControlsPanel();
 
-	   public Q_SLOTS:
-		
-		 bool getConfigData();
-		 bool addGroupRequest();
-		 bool removeGroupRequest();
+       public Q_SLOTS:
+        
+         bool getConfigData();
+         bool addGroupRequest();
+         bool removeGroupRequest();
 
-	private:
-	    
-		// pointer to maink UI panel
-	    Ui::RVizInteractiveControlsPanel *ui;
+    private:
+        
+        // pointer to maink UI panel
+        Ui::RVizInteractiveControlsPanel *ui;
 
-		// service client to get/set info
-		ros::ServiceClient interactive_control_client_;
+        // service client to get/set info
+        ros::ServiceClient interactive_control_client_;
 
-		// ros node handle
-	    ros::NodeHandle nh_;
+        // ros node handle
+        ros::NodeHandle nh_;
 
-	    // array of group widgets
-	    std::map<std::string, GroupControlsWidget *> group_widgets;
+        // array of group widgets
+        std::map<std::string, GroupControlsWidget *> group_widgets;
 
-	    // setup widget function
-	    void setupWidgets();
+        // setup widget function
+        void setupWidgets();
 
-	    // function add a new group controls tab
-	    bool addGroupControls(std::string group_name);
+        // function add a new group controls tab
+        bool addGroupControls(std::string group_name);
 
-		bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
 
 
-	};
+    };
 
 }
 

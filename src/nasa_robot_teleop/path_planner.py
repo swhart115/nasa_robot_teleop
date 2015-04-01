@@ -35,6 +35,7 @@ class PathPlanner(object):
         self.robot_name = robot_name
         self.config_file = config_file
 
+        self.active_groups = []
         self.group_types = {}
         self.group_controllers = {}
 
@@ -103,12 +104,14 @@ class PathPlanner(object):
         return group_name in self.get_group_names()
 
     def get_group_names(self) :
-        return self.group_types.keys()
+        return self.active_groups
 
     def remove_group(self, group_name) :
-        del self.group_types[group_name]
-        # should probably do more here, but this is okay for now....
-
+        try :
+            self.active_groups.remove(group_name)
+        except :
+            pass
+            
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
             return self.group_types[group_name]
@@ -130,6 +133,9 @@ class PathPlanner(object):
         return self.get_srdf_model().group_end_effectors.keys() 
         
     def get_control_frame(self, group_name) :
+        if not group_name in self.group_types.keys() :
+            rospy.logwarn(str("PathPlanner::get_control_frame() -- can't find "+ group_name))
+            return ""
         if self.group_types[group_name] == "endeffector" :
             if group_name in self.srdf_model.group_end_effectors :
                 return self.srdf_model.group_end_effectors[group_name].parent_link
@@ -152,6 +158,10 @@ class PathPlanner(object):
     def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.02]*3, orientation_tolerances=[.05]*3) :
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
+
+        if not group_name in self.active_groups :
+            self.active_groups.append(group_name)
+    
         self.plan_generated[group_name] = False
         self.stored_plans[group_name] = None
         self.display_modes[group_name] = "all_points"
@@ -481,6 +491,7 @@ class PathPlanner(object):
         except:
             rospy.logwarn("PathPlanner::create_joint_plan_to_target() -- no feedback available")
 
+        rospy.logdebug("PathPlanner::create_joint_plan_to_target() -- finished")
         return self.plan_generated[group_name]
 
 

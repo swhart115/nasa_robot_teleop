@@ -25,15 +25,19 @@ string[] group_name
 # types of groups if being added
 string[] group_type
 
-# should be "all_points" or "last_point"
+# the stored pose to go to
 string[] stored_pose_name
+
+# should be "all_points" or "last_point"
 string[] path_visualization_mode
 
 # sets the interactive markers (for cartesian groups only) to the given poses
 geometry_msgs/PoseStamped[] goal_pose
 
+# the joint mask for each group
 JointMask[] joint_mask
 
+# the different tolerance modes to set
 ToleranceInfo[] tolerance
 
 # the names of the navigation_points that will be deleted
@@ -67,12 +71,15 @@ JointNameMap[] joint_names
 # current path visualization modes
 string[] path_visualization_mode
 
-# current list of (set) tolerance
+# the different tolerance modes (applicable to all groups)
 ToleranceInfo[] tolerance
 
-# current tolerance settings
+# current tolerance settings for each group
 ToleranceInfo[] tolerance_setting
 
 # current setting of flags
 bool[] execute_on_plan
 bool[] plan_on_move
+
+# the stored poses for each group
+StringArray[] stored_pose_list

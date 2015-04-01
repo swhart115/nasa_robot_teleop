@@ -18,64 +18,67 @@ class GroupControls;
 namespace rviz_interactive_controls_panel
 {
 
-	class GroupControlsWidget : public QWidget
-	{
-	    Q_OBJECT
+    class GroupControlsWidget : public QWidget
+    {
+        Q_OBJECT
 
-	public:
-		explicit GroupControlsWidget(QWidget *parent = 0);
-	     ~GroupControlsWidget();
+    public:
+        explicit GroupControlsWidget(QWidget *parent = 0);
+         ~GroupControlsWidget();
 
-	    void setNodeHandle(ros::NodeHandle &nh) {
-	    	nh_ = nh;
-	    }
-		
-		void setServiceClient(ros::ServiceClient *client_) { 
-			service_client_ = client_;
-		}
+        void setNodeHandle(ros::NodeHandle &nh) {
+            nh_ = nh;
+        }
+        
+        void setServiceClient(ros::ServiceClient *client_) { 
+            service_client_ = client_;
+        }
 
-	    void setupDisplay();
-	    
+        void setupDisplay();
+        
 
-	public Q_SLOTS:
-		bool planRequest();
-		bool executeRequest();
-		bool toggleJointControlRequest();
+    public Q_SLOTS:
+        bool planRequest();
+        bool executeRequest();
+        bool toggleJointControlRequest();
+        bool storedPoseRequest();
+        
+    private:
 
-	private:
+        // the ui
+        Ui::GroupControls *ui;
 
-		// the ui
-	    Ui::GroupControls *ui;
+        // setup widget function
+        void setupWidgets();
 
-	    // setup widget function
-	    void setupWidgets();
+        // ros node handle
+        ros::NodeHandle nh_;
 
-	    // ros node handle
-	    ros::NodeHandle nh_;
+        ros::ServiceClient *service_client_;
 
-	    ros::ServiceClient *service_client_;
+     public:
 
-	 public:
+        // group storage info
+        std::string group_name;
+        std::string group_type;
+        std::string path_visualization_mode;
+        
+        std::vector<std::string> joint_names;
+        std::vector<bool> joint_mask;
+        
+        std::vector<std::string> position_tolerances;
+        std::vector<std::string> orientation_tolerances;
 
-	    // group storage info
-	    std::string group_name;
-	    std::string group_type;
-		std::string path_visualization_mode;
-	    
-	    std::vector<std::string> joint_names;
-	    std::vector<bool> joint_mask;
-	    
-	    std::vector<std::string> position_tolerances;
-		std::vector<std::string> orientation_tolerances;
+        std::string position_tolerance;
+        std::string orientation_tolerance;
 
-		std::string position_tolerance;
-		std::string orientation_tolerance;
-		
-		bool plan_on_move;
+        std::vector<std::string> stored_poses;
+        
+        bool plan_on_move;
         bool execute_on_plan;
 
-		bool plan_found;
-	};
+        bool plan_found;
+    };
 
 }
 
