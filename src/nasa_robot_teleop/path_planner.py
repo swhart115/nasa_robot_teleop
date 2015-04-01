@@ -313,7 +313,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
+        # print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state

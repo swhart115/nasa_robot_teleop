@@ -24,14 +24,13 @@ RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent) :
 RVizInteractiveControlsPanel::~RVizInteractiveControlsPanel()
 {
     delete ui;
+    group_widgets.clear();
 }
 
 void RVizInteractiveControlsPanel::setupWidgets() {
-
     QObject::connect(ui->refresh_button, SIGNAL(clicked()), this, SLOT(getConfigData()));
     QObject::connect(ui->add_group_button, SIGNAL(clicked()), this, SLOT(addGroupRequest()));
     QObject::connect(ui->remove_group_button, SIGNAL(clicked()), this, SLOT(removeGroupRequest()));
-
 }
 
 bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {

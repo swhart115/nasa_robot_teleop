@@ -23,6 +23,9 @@ void GroupControlsWidget::setupWidgets() {
     QObject::connect(ui->toggle_joint_control_button, SIGNAL(clicked()), this, SLOT(toggleJointControlRequest()));
     QObject::connect(ui->go_to_stored_pose_button, SIGNAL(clicked()), this, SLOT(storedPoseRequest()));
 
+    QObject::connect(ui->plan_on_move, SIGNAL(stateChanged(int)), this, SLOT(planOnMoveClicked(int)));
+    QObject::connect(ui->execute_on_plan, SIGNAL(stateChanged(int)), this, SLOT(executeOnPlanClicked(int)));
+
 }
 
 void GroupControlsWidget::setupDisplay() {
@@ -95,9 +98,124 @@ void GroupControlsWidget::setupDisplay() {
     } else {
         ui->execute_on_plan->setCheckState(Qt::Unchecked);
     }
+    
+}
 
+bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+
+    for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
+        if(group_name == resp.active_group_name[idx]) {
+            
+            int jdx=0;
+            joint_names.clear();
+            joint_mask.clear();
+
+            if(idx < resp.joint_names.size()) {         
+                for (auto& j: resp.joint_names[idx].names) {
+                    joint_names.push_back(j);
+                    joint_mask.push_back(resp.joint_mask[idx].mask[jdx]);
+                    jdx++;  
+                }
+            }
+
+            if(idx < resp.group_type.size()) {
+                group_type = resp.group_type[idx];
+            }
+            if(idx < resp.path_visualization_mode.size()) {
+                path_visualization_mode = resp.path_visualization_mode[idx];
+            }
+            if(idx < resp.plan_on_move.size()) {
+                plan_on_move = resp.plan_on_move[idx];
+            }
+            if(idx < resp.execute_on_plan.size()) {
+                execute_on_plan = resp.execute_on_plan[idx];
+            }
+            if(idx < resp.plan_found.size()) {
+                plan_found = resp.plan_found[idx];
+            }
+
+            for (auto& tol_mode: resp.tolerance) {
+                if(tol_mode.mode == "Position Tolerance") {
+                    position_tolerances.clear();
+                    for (auto& tol_type: tol_mode.types) {
+                        position_tolerances.push_back(tol_type);
+                    }
+                }
+                if(tol_mode.mode == "Angle Tolerance") {
+                    orientation_tolerances.clear();
+                    for (auto& tol_type: tol_mode.types) {
+                        orientation_tolerances.push_back(tol_type);
+                    }
+                }
+            }
+
+            for (auto& tol_mode: resp.tolerance_setting) {
+                if(tol_mode.mode == "Position Tolerance") {
+                    position_tolerance = tol_mode.types[0];
+                } else if(tol_mode.mode == "Angle Tolerance") {
+                    orientation_tolerance = tol_mode.types[0];
+                }
+            }
+            
+            stored_poses.clear();
+            if(idx < resp.stored_pose_list.size()) {
+                for (auto& stored_pose: resp.stored_pose_list[idx].data) {  
+                    stored_poses.push_back(stored_pose);
+                }
+            }       
+            setupDisplay();
+        }   
+    }
+    return true;
+
+}
+
+
+void GroupControlsWidget::planOnMoveClicked(int d) {
     
+    ROS_INFO("GroupControlsWidget::planOnMoveClicked()");    
+    plan_on_move = (d == Qt::Checked);
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_PLAN_ON_MOVE;
+    srv.request.group_name.push_back(group_name);
+    srv.request.plan_on_move.push_back(plan_on_move);
+
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("GroupControlsWidget::planOnMoveClicked() -- success");
+        setGroupDataFromResponse(srv.response);
+
+    }
+    else
+    {
+        ROS_ERROR("GroupControlsWidget::planOnMoveClicked() -- failed to call service");
+    }
+
+
+}
+
+void GroupControlsWidget::executeOnPlanClicked(int d) {
     
+    ROS_INFO("GroupControlsWidget::executeOnPlanClicked()");    
+    execute_on_plan = (d == Qt::Checked);
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_EXECUTE_ON_PLAN;
+    srv.request.group_name.push_back(group_name);
+    srv.request.execute_on_plan.push_back(execute_on_plan);
+
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("GroupControlsWidget::executeOnPlanClicked() -- success");
+        setGroupDataFromResponse(srv.response);
+
+    }
+    else
+    {
+        ROS_ERROR("GroupControlsWidget::executeOnPlanClicked() -- failed to call service");
+    }
+
 }
 
 
@@ -127,15 +245,13 @@ bool GroupControlsWidget::planRequest() {
     if (service_client_->call(srv))
     {
         ROS_INFO("GroupControlsWidget::planRequest() -- success");
-        setupDisplay();
+        return setGroupDataFromResponse(srv.response);
     }
     else
     {
         ROS_ERROR("GroupControlsWidget::planRequest() -- failed to call service");
         return false;
     }
-
-    return true;
 }
 
 
@@ -151,8 +267,7 @@ bool GroupControlsWidget::executeRequest() {
     if (service_client_->call(srv))
     {
         ROS_INFO("GroupControlsWidget::executeRequest() -- success");
-        setupDisplay();
-
+        return setGroupDataFromResponse(srv.response);
     }
     else
     {
@@ -160,7 +275,6 @@ bool GroupControlsWidget::executeRequest() {
         return false;
     }
 
-    return true;
 }
 
 
@@ -176,15 +290,13 @@ bool GroupControlsWidget::toggleJointControlRequest() {
     if (service_client_->call(srv))
     {
         ROS_INFO("GroupControlsWidget::toggleJointControlRequest() -- success");
-        setupDisplay();
+        return setGroupDataFromResponse(srv.response);
     }
     else
     {
         ROS_ERROR("GroupControlsWidget::toggleJointControlRequest() -- failed to call service");
         return false;
     }
-
-    return true;
 }
 
 
@@ -202,7 +314,7 @@ bool GroupControlsWidget::storedPoseRequest() {
     if (service_client_->call(srv))
     {
         ROS_INFO("GroupControlsWidget::storedPoseRequest() -- success");
-        setupDisplay();
+        setGroupDataFromResponse(srv.response);
     }
     else
     {

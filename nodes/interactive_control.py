@@ -361,7 +361,7 @@ class InteractiveControl:
                 resp.group_type.append(self.get_group_type(g))
                 resp.plan_found.append(self.path_planner.plan_generated[g])
             except :
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with basic joint data")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with basic joint data")
             
             try :
                 jm = JointMask()
@@ -369,7 +369,7 @@ class InteractiveControl:
                 resp.joint_mask.append(jm)
                 resp.joint_names.append(self.path_planner.get_joint_map(g))
             except :
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with joint_mask")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with joint_mask")
             
             try :
                 if g in self.auto_execute.keys() :
@@ -377,7 +377,7 @@ class InteractiveControl:
                 else :
                     resp.execute_on_plan.append(False)
             except :
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with auto_execute")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with auto_execute")
                     
             try :
                 if g in self.auto_plan.keys() :
@@ -385,7 +385,7 @@ class InteractiveControl:
                 else :
                     resp.plan_on_move.append(False)
             except:
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with plan_on_move")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with plan_on_move")
 
             try :
                 if g in self.path_planner.display_modes.keys() :
@@ -393,7 +393,7 @@ class InteractiveControl:
                 else :
                     resp.path_visualization_mode.append("last_point")
             except:
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with path_visualization_mode")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with path_visualization_mode")
 
             try :
                 pose_list = StringArray()
@@ -401,7 +401,7 @@ class InteractiveControl:
                     pose_list.data.append(p)
                 resp.stored_pose_list.append(pose_list)
             except :
-                rospy.logwarn("InteractiveControl::populate_service_response() -- problem with stored_poses")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with stored_poses")
 
         try :
             for m in self.tolerances.get_tolerance_modes() :
@@ -419,9 +419,9 @@ class InteractiveControl:
                 ts.types.append(self.get_tolerance_setting(g,m))
                 resp.tolerance_setting.append(ts)
         except :
-            rospy.logwarn("InteractiveControl::populate_service_response() -- problem with tolerances")
+            rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerances")
 
-        # print resp
+        print resp
         return resp
 
     def handle_configure(self, req) :
@@ -509,7 +509,37 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.REMOVE_GROUP :
             for g in req.group_name :
                 self.remove_group_markers(g)
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_PLAN_ON_MOVE :
+            try :
+                for idx in range(len(req.group_name)) :
+                    g = req.group_name[idx]
+                    self.auto_plan[g] = req.plan_on_move[idx]                                       
+                    handle = self.group_menu_handles[(g,"Plan On Move")] 
+                    if self.auto_plan[g]:
+                        self.marker_menus[g].setCheckState( handle, MenuHandler.CHECKED )
+                    else :
+                        self.marker_menus[g].setCheckState( handle, MenuHandler.UNCHECKED )
+                    self.marker_menus[g].reApply( self.server )
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting plan_on_move")
         
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_EXECUTE_ON_PLAN :
+            try :
+                for idx in range(len(req.group_name)) :
+                    g = req.group_name[idx]
+                    self.auto_execute[g] = req.execute_on_plan[idx]                                       
+                    self.path_planner.auto_execute[g] = self.auto_execute[g]
+                    handle = self.group_menu_handles[(g,"Execute On Plan")] 
+                    if self.auto_execute[g]:
+                        self.marker_menus[g].setCheckState( handle, MenuHandler.CHECKED )
+                    else :
+                        self.marker_menus[g].setCheckState( handle, MenuHandler.UNCHECKED )
+                    self.marker_menus[g].reApply( self.server )
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting execute_on_plan")
+
+        self.server.applyChanges()
         resp = self.populate_service_response()
         # print resp
         return resp
