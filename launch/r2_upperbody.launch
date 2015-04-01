@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<launch>
+    <node pkg="nasa_robot_teleop" type="interactive_control.py" name="interactive_control" output="screen"> 
+		<param name="robot" value="r2_upperbody"/>
+		<param name="planner_type" value="moveit"/>
+		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/r2_upperbody.yaml"/>
+		<param name="planner_config_file" value="$(find r2_moveit_config)/config/r2_upperbody.srdf"/>
+    </node>
+</launch>
