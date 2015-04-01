@@ -22,19 +22,27 @@ class Tolerance(object) :
 
         return None
   
-
     def get_tolerance_mode(self, mode, vals) :
         round_digits = 4
         v1 = [round(vals[0],round_digits), round(vals[1],round_digits), round(vals[2],round_digits)]   
         if not mode in self.tolerances : 
             rospy.logerr(str("Tolerance::get_tolerance_mode() -- " + mode + " not in Tolerance set: " + self.tolerances.keys()))
-            return "EXACT_ANGLE"
+            if "Position" in mode:
+                return "CENTIMETER"
+            else :       
+                return "EXACT_ANGLE"
+
         for tol_type in self.tolerances[mode] :
             for t in tol_type.keys() :
                 v2 = [round(v,round_digits) for v in tol_type[t]]   
                 if v1==v2 :
-                    return t       
-        return "EXACT_ANGLE"
+                    return t  
+
+        if "Position" in mode:
+            return "CENTIMETER"
+        else :       
+            return "EXACT_ANGLE"
+
 
     def get_tolerance_vals(self, mode, tol_type) :
         if not mode in self.tolerances : 

@@ -37,6 +37,9 @@ from nasa_robot_teleop.group_config import *
 
 from navigation_waypoint_control import *
 
+from nasa_robot_teleop.msg import *
+from nasa_robot_teleop.srv import *
+
 class InteractiveControl:
 
     def __init__(self, robot_name, planner_type, navigation_frame, group_config_file, planner_config_file, tolerance_file):
@@ -89,6 +92,7 @@ class InteractiveControl:
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
 
         # service helpers
+        self.configure_srv = rospy.Service('/interactive_control/configure', InteractiveControlsInterface, self.handle_configure)
         self.add_group_srv = rospy.Service('/interactive_control/add_group', AddGroup, self.handle_add_group)
         self.remove_group_srv = rospy.Service('/interactive_control/remove_group', RemoveGroup, self.handle_remove_group)
 
@@ -180,6 +184,14 @@ class InteractiveControl:
         else :
             rospy.logerr("InteractiveControl::set_tolerances() -- unknown tolerance mode!")
 
+    def get_tolerance_setting(self, group, tolerance_mode) :
+        v = [0]*3
+        if tolerance_mode == "Position Tolerance" :
+            v = self.path_planner.get_goal_position_tolerances(group)
+        elif tolerance_mode == "Angle Tolerance" :
+            v = self.path_planner.get_goal_orientation_tolerances(group)
+        m = self.tolerances.get_tolerance_mode(tolerance_mode, v)
+        return m
 
     def get_groups(self, group_type=None) :
         if group_type==None :
@@ -331,7 +343,140 @@ class InteractiveControl:
         self.server.erase(self.markers[group].name)
         del self.markers[group]
         del self.marker_menus[group]
+        self.path_planner.remove_group(group)
         self.server.applyChanges()
+
+    def populate_service_response(self) :
+        
+        resp = InteractiveControlsInterfaceResponse()
+        
+        for g in self.path_planner.srdf_model.get_groups() :
+            resp.group_name.append(g)
+        
+        for g in self.path_planner.get_group_names() :
+            
+            resp.active_group_name.append(g)
+            resp.group_type.append(self.get_group_type(g))
+            resp.plan_found.append(self.path_planner.plan_generated[g])
+            
+            jm = JointMask()
+            jm.mask = self.path_planner.get_joint_mask(g)
+            resp.joint_mask.append(jm)
+            resp.joint_names.append(self.path_planner.get_joint_map(g))
+            
+            if g in self.auto_execute.keys() :
+                resp.execute_on_plan.append(self.auto_execute[g])
+            else :
+                resp.execute_on_plan.append(False)
+            
+            if g in self.auto_plan.keys() :
+                resp.plan_on_move.append(self.auto_plan[g])
+            else :
+                resp.plan_on_move.append(False)
+            
+            if g in self.path_planner.display_modes.keys() :
+                resp.path_visualization_mode.append(self.path_planner.display_modes[g])
+            else :
+                resp.path_visualization_mode.append("last_point")
+
+            for m in self.tolerances.get_tolerance_modes() :
+
+                t = ToleranceInfo()
+                t.mode = m
+                for tol in self.tolerances.get_tolerances(m) :
+                    t.types.append(tol)
+                    v = self.tolerances.get_tolerance_vals(m,tol)
+                    t.vals.append(Vector3(v[0],v[1],v[2]))
+                resp.tolerance.append(t)
+
+                ts = ToleranceInfo()
+                ts.mode = m
+                ts.types.append(self.get_tolerance_setting(g,m))
+                resp.tolerance_setting.append(ts)
+
+
+        return resp
+
+    def handle_configure(self, req) :
+        
+        resp = None
+        
+        if req.action_type == InteractiveControlsInterfaceRequest.GET_INFO :
+            return self.populate_service_response()
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.TOGGLE_POSTURE_CONTROLS :
+            for g in req.group_name :
+                self.toggle_posture_control(g)
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
+            for g in req.group_name :
+                self.reset_group_marker(g)
+                if not self.path_planner.execute(g) :
+                    rospy.logerr(str("InteractiveControl::handle_configure() -- failed planner execution for group: " + g))
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
+            print req
+            for idx in range(len(req.group_name)) :
+                g = req.group_name[idx]
+                if g in self.get_groups('cartesian') :
+                    im = self.server.get(g)
+                    pt = geometry_msgs.msg.PoseStamped()
+                    pt.header = im.header
+                    pt.pose = im.pose
+
+                    try :
+                        self.path_planner.display_modes[g] = req.path_visualization_mode[idx]
+                        print self.path_planner.display_modes
+                    except :
+                        pass
+
+                    try :
+                        self.auto_execute[g] = req.execute_on_plan[idx]
+                    except :
+                        pass
+
+                    try :
+                        self.auto_plan[g] = req.plan_on_move[idx]
+                    except :
+                        pass
+
+                    if self.auto_execute[g] :
+                        if not self.path_planner.plan_cartesian_goal_and_execute(g, pt) :
+                            rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + g + ". re-synching..."))
+                        self.reset_group_marker(g)
+                    else :
+                        self.path_planner.clear_goal_target(g)
+                        self.path_planner.create_plan_to_target(g, pt)
+
+                    try :
+                        for tol in req.tolerance :
+                            self.set_tolerances(g,tol.mode,tol.types[0])
+                            rospy.loginfo(str("setting ", tol.mode, " tolerance for group ", g, " to ", tol.types[0]))
+                    except :
+                        pass
+
+                    self.server.applyChanges()
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.ADD_GROUP :
+            try :
+                for idx in range(len(req.group_name)) :
+                    gt = req.group_type[idx]
+                    if gt in self.group_map.keys() :
+                        gn = req.group_name[idx]
+                        if not (gn in self.group_map[gt]) :
+                            self.group_map[gt].append(gn)
+                    self.setup_group(gn)       
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem adding groups")
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.REMOVE_GROUP :
+            for g in req.group_name :
+                self.remove_group_markers(g)
+        
+        resp = self.populate_service_response()
+        # print resp
+        return resp
+
 
     def handle_add_group(self, req) :
         resp = AddGroupResponse()

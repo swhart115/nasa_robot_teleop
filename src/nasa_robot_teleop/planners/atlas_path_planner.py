@@ -39,7 +39,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         rospy.set_param("~interpolation_type", 1)
         rospy.set_param("~duration", 2.0)
-        rospy.set_param("~num_visualizaton_points", 1)
+        rospy.set_param("~num_visualizaton_points", 5)
         rospy.set_param("~visualize_path", True)
         rospy.set_param("~maintain_hand_pose_offsets", False)
         rospy.set_param("~move_as_far_as_possible", False)
