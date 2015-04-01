@@ -105,6 +105,10 @@ class PathPlanner(object):
     def get_group_names(self) :
         return self.group_types.keys()
 
+    def remove_group(self, group_name) :
+        del self.group_types[group_name]
+        # should probably do more here, but this is okay for now....
+
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
             return self.group_types[group_name]
@@ -175,6 +179,8 @@ class PathPlanner(object):
                     for ee in self.srdf_model.end_effectors.keys() :
                         if self.srdf_model.end_effectors[ee].parent_group == group_name :
                             self.end_effector_map[group_name] = ee
+                            self.add_planning_group(self.srdf_model.end_effectors[ee].group, "endeffector") 
+
                 else :
                     self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                    
@@ -297,7 +303,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        # print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points "
+        print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -331,7 +337,7 @@ class PathPlanner(object):
                 end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
                 for m in end_effector_markers.markers: markers.markers.append(m)
                 idx += len(end_effector_markers.markers)
-
+            
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
@@ -436,7 +442,7 @@ class PathPlanner(object):
             # check to make sure the plan has a non-0 amount of waypoints
             if self.stored_plans[group_name] :
                 self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
-            
+
             # if the plan was found publish it to be displayed in RViz as a MarkerArray
             if self.plan_generated[group_name] :
                 rospy.loginfo(str("PathPlanner::create_plan_to_target() -- generated"))
@@ -606,10 +612,12 @@ class PathPlanner(object):
                 rospy.loginfo(str("============ PathPlanner Planning Frame: " + str(self.get_group_planning_frame(group_name))))
                 rospy.loginfo(str("============ Control Frame: " + str(self.get_control_frame(group_name))))
                 rospy.loginfo(str("============ Control Mesh: " + str(self.get_control_mesh(group_name))))
+                
                 # this is a joke
                 print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Position Tolerances: ", self.get_goal_position_tolerances(group_name)
                 print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Orientation Tolerances: ", self.get_goal_orientation_tolerances(group_name)
                 print "[INFO] [WallTime: 1426794727.845558] [1565.645000] ============ Cartesian Joint Tolerance: ", self.get_goal_joint_tolerance(group_name)
+            
             rospy.loginfo("============================================================")
 
     def print_basic_info(self) :
