@@ -7,7 +7,7 @@ import threading
 import geometry_msgs
 import PyKDL as kdl
 
-from nasa_robot_teleop.kdl_posemath import *
+from nasa_robot_teleop.util.kinematics_util import *
 
 class PoseUpdateThread(threading.Thread) :
     def __init__(self, name, root_frame, control_frame, tf_listener, offset_pose) :

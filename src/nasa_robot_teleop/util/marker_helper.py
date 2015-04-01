@@ -3,14 +3,14 @@
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import *
+from geometry_msgs.msg import Pose, Vector3
+from random import randint
 
-def makeEmptyMarker( dummyBox=True ):
-    global marker_pos
+def makeInteractiveMarker(name, frame_id="/world", pose=Pose(), scale=1):
     int_marker = InteractiveMarker()
-    int_marker.header.frame_id = "/base_link"
-    int_marker.pose.position.y = -3.0 * marker_pos
-    marker_pos += 1
-    int_marker.scale = 1
+    int_marker.header.frame_id = frame_id
+    int_marker.pose = pose
+    int_marker.scale = scale
     return int_marker
 
 def makeBox( msg ):
@@ -37,6 +37,18 @@ def makeSphere( msg, scale ):
     marker.color.a = 1.0
     return marker
 
+def makeFlatCylinder( msg, radius ):
+    marker = Marker()
+    marker.type = Marker.SPHERE
+    marker.scale.x = msg.scale.x * radius
+    marker.scale.y = msg.scale.y * radius
+    marker.scale.z = 0.01
+    marker.color.r = 0.0
+    marker.color.g = 1.0
+    marker.color.b = 0.0
+    marker.color.a = 0.5
+    return marker
+
 def makeMesh( msg, mesh_str, p, sf=[1, 1, 1], alpha=1, mesh_use_embedded_materials=True ):
     marker = Marker()
     marker.type = Marker.MESH_RESOURCE
@@ -51,6 +63,32 @@ def makeMesh( msg, mesh_str, p, sf=[1, 1, 1], alpha=1, mesh_use_embedded_materia
     marker.mesh_resource = mesh_str
     marker.mesh_use_embedded_materials = mesh_use_embedded_materials
     return marker
+
+# def makePrimitive( msg, scale, marker_type, id=randint(0,10000)):
+#     marker = Marker()
+#     marker.type = marker_type
+#     marker.id = id
+#     marker.ns = 'visual'
+#     marker.scale.x = scale
+#     marker.scale.y = scale
+#     marker.scale.z = scale
+#     marker.color.r = 0.0
+#     marker.color.g = 0.0
+#     marker.color.b = 1.0
+#     marker.color.a = 1.0
+#     return marker
+
+def makePrimitive(scaleFactor, marker_type, id=randint(0,10000)):
+    marker = Marker()
+    marker.ns = "visual"
+    marker.id = id
+    marker.scale.x = scaleFactor
+    marker.scale.y = scaleFactor
+    marker.scale.z = scaleFactor
+    marker.type = marker_type
+    marker.pose.orientation.w = 1.0
+    return marker
+
 
 def makeBoxControl( msg ):
     control =  InteractiveMarkerControl()
@@ -78,6 +116,13 @@ def makeSphereControl( msg, sphere ):
     control =  InteractiveMarkerControl()
     control.always_visible = False
     control.markers.append( makeSphere(msg, sphere) )
+    msg.controls.append( control )
+    return control
+
+def makeFlatCylinderControl( msg, radius ):
+    control =  InteractiveMarkerControl()
+    control.always_visible = False
+    control.markers.append( makeFlatCylinder(msg, radius) )
     msg.controls.append( control )
     return control
 
@@ -150,3 +195,54 @@ def make6DOFControls() :
     controls.append(makeYRotControl())
     controls.append(makeZRotControl())
     return controls
+
+def CreateNavControl() :
+    control = InteractiveMarkerControl()
+    control.orientation.w = 1
+    control.orientation.y = 1
+    control.interaction_mode = InteractiveMarkerControl.MOVE_PLANE
+    return control
+
+def CreateVisualControlFromMarker(marker, always_visible=True, interaction_mode=InteractiveMarkerControl.MENU):
+    control = InteractiveMarkerControl()
+    control.name = "visual"
+    control.always_visible = always_visible
+    control.interaction_mode = interaction_mode
+    control.orientation.w = 1
+    control.orientation.y = 1
+    control.markers.append(marker)
+    return control
+
+def createArrow(id):
+    arrow = makePrimitive(0.0, Marker.ARROW, id)
+    arrow.color.r = 0
+    arrow.color.g = 1
+    arrow.color.b = 0
+    arrow.color.a = 1    
+    arrow.scale.x = 0.35 #* scaleFactorX
+    arrow.scale.y = 0.05 #* scaleFactorY
+    arrow.scale.z = 0.05 #* scaleFactorZ
+    return arrow
+
+def createCylinder(id, height=0.01, radius=0.25):
+    cly = makePrimitive(0.0, Marker.CYLINDER, id)
+    cly.color.b = 0.5
+    cly.color.r = 0.75
+    cly.color.a = 0.75
+    cly.scale.x = radius
+    cly.scale.y = radius
+    cly.scale.z = height
+    cly.pose.position.z = height/2.0
+    return cly
+
+def createSphere(id, height=0.01, radius=0.25):
+    sph = makePrimitive(0.0, Marker.SPHERE, id)
+    sph.color.b = 0.5
+    sph.color.r = 0.75
+    sph.color.a = 0.75
+    sph.scale.x = radius
+    sph.scale.y = radius
+    sph.scale.z = radius
+    sph.pose.position.z = height
+    return sph
+

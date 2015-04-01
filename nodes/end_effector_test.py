@@ -21,9 +21,9 @@ from visualization_msgs.msg import Marker
 
 import PyKDL as kdl
 
-from nasa_robot_teleop.moveit_interface import *
-from nasa_robot_teleop.marker_helper import *
-from nasa_robot_teleop.kdl_posemath import *
+from nasa_robot_teleop.planners.moveit_interface import *
+from nasa_robot_teleop.util.marker_helper import *
+from nasa_robot_teleop.util.kinematics_util import *
 from nasa_robot_teleop.pose_update_thread import *
 from nasa_robot_teleop.end_effector_helper import *
 

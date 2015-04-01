@@ -2,17 +2,23 @@
 
 from lxml import etree
 import io
-
+import copy
 import rospy
 import sensor_msgs.msg
 
+from urdf_helper import *
+
 class SRDFModel :
 
-    def __init__(self, robot) :
+    def __init__(self, robot, urdf=None) :
         self.srdf_file = None
         self.srdf = None
+        self.urdf = urdf
         self.robot_name = robot
         self.reset_model()
+
+    def set_urdf(self, urdf) :
+        self.urdf = urdf
 
     def reset_model(self) :
 
@@ -26,6 +32,10 @@ class SRDFModel :
         self.end_effectors = {}
         self.group_end_effectors = {}
         self.disable_collisions = {}
+        self.is_chain = {}
+        self.full_group_joints = {}
+        # self.full_group_links = {}
+        self.joint_mask = {}
 
     def get_group_links(self, group) :
         return self.group_links[group]
@@ -58,15 +68,18 @@ class SRDFModel :
         for elem in root.getchildren() :
             if elem.tag == "group" :
                 group_name = elem.attrib["name"]
-                print "SRDFModel::parse_srdf() -- found group: ", group_name
+                rospy.loginfo(str("SRDFModel::parse_srdf() -- found group: " + group_name))
                 self.groups.append(group_name)
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []
+                self.full_group_joints[group_name] = []
+                # self.full_group_links[group_name] = []
                 self.group_states[group_name] = dict()
+                self.base_links[elem.attrib["name"]] = None
+                self.tip_links[elem.attrib["name"]] = None
 
                 for group_elem in elem.getchildren() :
-                    self.base_links[elem.attrib["name"]] = None
-                    self.tip_links[elem.attrib["name"]] = None
+                    
                     if group_elem.tag == "chain" :
                         if "base_link" in group_elem.attrib :
                             self.base_links[elem.attrib["name"]] = group_elem.attrib["base_link"]
@@ -102,6 +115,7 @@ class SRDFModel :
                 self.end_effectors[ee].name = ee
                 self.end_effectors[ee].group = elem.attrib["group"]
                 self.end_effectors[ee].parent_link = elem.attrib["parent_link"]
+                self.base_links[elem.attrib["group"]] = elem.attrib["parent_link"]
                 if "parent_group" in elem.attrib:
                     self.end_effectors[ee].parent_group = elem.attrib["parent_group"]
                 else :
@@ -112,6 +126,7 @@ class SRDFModel :
                 self.group_end_effectors[ee].name = elem.attrib["name"]
                 self.group_end_effectors[ee].group = elem.attrib["group"]
                 self.group_end_effectors[ee].parent_link = elem.attrib["parent_link"]
+
                 if "parent_group" in elem.attrib:
                     self.group_end_effectors[ee].parent_group = elem.attrib["parent_group"]
                 else :
@@ -123,8 +138,109 @@ class SRDFModel :
                 r = elem.attrib["reason"]
                 self.disable_collisions[(l1,l2)] = r
 
+        if self.urdf :
+            self.expand_with_urdf()
+
+        # self.print_groups()
+
         return True
 
+
+    def expand_with_urdf(self) :
+        rospy.loginfo("SRDFModel::expanding_with_urdf()")
+
+        for g in self.get_groups() :
+
+            if g not in self.base_links:
+                self.base_links[g] = None
+            if g not in self.tip_links:
+                self.tip_links[g] = None
+     
+            if not self.base_links[g] :
+                # print "oops, no base link for group: ", g
+                if len(self.group_joints[g]) > 0 :
+                    # print "getting first link from joint: ", self.group_joints[g][0]
+                    self.base_links[g] = get_joint_parent_link(self.group_joints[g][0], self.urdf)
+
+            if not self.tip_links[g] :
+                # print "oops, no tip link for group: ", g
+                if len(self.group_joints[g]) > 0 :
+                    # print "getting last link from joint: ", self.group_joints[g][len(self.group_joints[g])-1]
+                    self.tip_links[g] = get_joint_child_link(self.group_joints[g][len(self.group_joints[g])-1], self.urdf)
+
+            if not g in self.group_joints :
+                self.group_joints[g] = []
+
+            if len(self.group_joints[g]) == 0 :
+                if is_chain(self.urdf, self.tip_links[g], self.base_links[g]) :
+                    self.group_joints[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=True, links=False, fixed=False)
+                else :
+                    for l in self.group_links[g] :
+                        jnt = get_link_joint(l, self.urdf)
+                        if not self.urdf.joint_map[jnt].joint_type == 'fixed' :
+                            self.group_joints[g].append(jnt) 
+                            self.full_group_joints[g].append(jnt)           
+                
+            if g in self.group_links :
+                if not g in self.group_links :
+                    self.group_links[g] = []
+
+            if len(self.group_links[g]) == 0 :
+                if is_chain(self.urdf, self.tip_links[g], self.base_links[g]) :
+                    self.group_links[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=False, links=True, fixed=False)
+                else :
+                    # print "just getting links manually for ", g
+                    self.group_links[g] = [get_joint_parent_link(j, self.urdf) for j in self.group_joints[g]]
+                    # self.full_group_links[g] = self.group_links[g] 
+                    # print [get_joint_child_link(j, self.urdf) for j in self.group_joints[g]]
+
+            self.is_chain[g] = is_chain(self.urdf, self.tip_links[g], self.base_links[g])
+
+            if self.is_chain[g] :
+                self.full_group_joints[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=True, links=False, fixed=False)
+                # self.full_group_links[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=False, links=True, fixed=False)                   
+            else :
+                self.full_group_joints[g] = self.group_joints[g]
+                
+            self.joint_mask[g] = self.compute_joint_mask(g)
+            
+            # print "===================="
+            # print "Group: ", g
+            # print " base: ", self.base_links[g]
+            # print " tip: ", self.tip_links[g]
+            # print " joints (spec): ", self.group_joints[g]
+            # print " joints (full): ", self.full_group_joints[g]
+            # print " joint mask: ", self.joint_mask[g]
+            # print " links  (spec): ", self.group_links[g]
+            # print " is chain: ", 
+            # print "====================\n"
+
+    def compute_joint_masks(self) :
+         for g in self.get_groups() :
+            self.joint_mask = self.compute_joint_mask(g)
+
+    def compute_joint_mask(self, g) :
+        
+        ordered_list = []
+        mask = []
+
+        if not g in self.full_group_joints or not g in self.group_joints:
+            return None
+        
+        if not self.is_chain[g] :
+            for j in self.group_joints[g] :
+                mask.append(True)
+        else :
+            for j in self.full_group_joints[g] :
+                if j in self.group_joints[g] :
+                    mask.append(True)
+                    ordered_list.append(j)
+                else :
+                    mask.append(False)
+
+            self.group_joints[g] = ordered_list
+        return mask
+                
     def has_tip_link(self, group) :
         return group in self.tip_links and self.tip_links[group] != None
 
@@ -135,6 +251,13 @@ class SRDFModel :
             rospy.logerr(str("No Tip Link for Group " + group))
             return ""
 
+    def get_base_link(self, group) :
+        if group in self.base_links and self.base_links[group] != None :
+            return self.base_links[group]
+        else :
+            rospy.logerr(str("No base Link for Group " + group))
+            return ""
+
     def get_groups(self) :
         return self.groups
 
@@ -142,7 +265,7 @@ class SRDFModel :
         if group in self.group_states :
             return self.group_states[group].keys()
         else :
-            rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
+            rospy.logerr(str("Group " + group + " does not exist in SRDF"))
             return []
 
     def get_group_state(self, group, name) :
@@ -150,9 +273,9 @@ class SRDFModel :
             if name in self.group_states[group] :
                 return self.group_states[group][name]
             else :
-                rospy.logerr(str("GroupState " + name + " does not exist in MoveIt! interface for group: " + group))
+                rospy.logerr(str("GroupState " + name + " does not exist in SRDF for group: " + group))
         else :
-            print rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
+            rospy.logerr(str("Group " + group + " does not exist in SRDF"))
 
     def get_end_effector_groups(self) :
         g = []
@@ -163,14 +286,36 @@ class SRDFModel :
     def get_end_effector_parent_group(self, ee_group) :
         return self.group_end_effectors[ee_group].parent_group
 
+    def get_joint_mask(self, g) :
+        if not g in self.joint_mask :
+            return None
+        return self.joint_mask[g]
+
+    def set_joint_mask(self, g, mask) :
+        self.joint_mask[g] = mask
+
+    # def has_end_effector(self, group) :
+    #     for ee in self.group_end_effectors.keys() : 
+    #         if self.group_end_effectors[ee].parent_group == group :
+    #             return True
+    #     return False
+
+    def get_end_effector_link(self, group) :
+        try :
+            for ee in self.end_effectors.keys() : 
+                if self.end_effectors[ee].parent_group == group :
+                    return self.end_effectors[ee].parent_link
+        except :
+            return ""
+
     def print_group_state(self, group, name) :
         if group in self.group_states :
             if name in self.group_states[group] :
                 self.group_states[group][name].print_group_state()
             else :
-                rospy.logerr(str("GroupState " + name + " does not exist in MoveIt! interface for group: " + group))
+                rospy.logerr(str("GroupState " + name + " does not exist in SRDF for group: " + group))
         else :
-            rospy.logerr(str("Group " + group + " does not exist in MoveIt! interface"))
+            rospy.logerr(str("Group " + group + " does not exist in SRDF"))
 
     def print_group_states(self, group) :
         for gs in self.get_group_state_list(group) :

@@ -1,0 +1,5 @@
+joint:
+  - head
+cartesian:
+  - left_tool
+  - right_tool

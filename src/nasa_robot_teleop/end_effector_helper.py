@@ -10,9 +10,9 @@ from visualization_msgs.msg import MarkerArray, Marker
 import threading
 import PyKDL as kdl
 
-from nasa_robot_teleop.kdl_posemath import *
-from nasa_robot_teleop.urdf_helper import *
-from nasa_robot_teleop.urdf_parser_py import *
+from nasa_robot_teleop.util.kinematics_util import *
+from nasa_robot_teleop.models.urdf_helper import *
+from nasa_robot_teleop.models.urdf_parser_py import *
 from nasa_robot_teleop.pose_update_thread import *
 
 class EndEffectorHelper :
@@ -181,6 +181,7 @@ class EndEffectorHelper :
         return self.offset_pose_data[link]
 
     def get_root_frame(self) :
+        # rospy.logwarn(str("EndEffectorHelper::get_root_frame() -- " + str(self.root_frame)))
         return self.root_frame
 
     def get_current_position_marker(self, link, offset=None, root="", scale=1, color=(0,1,0,1), idx=0):

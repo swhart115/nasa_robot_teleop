@@ -1,0 +1,9 @@
+<library path="lib/libnasa_robot_teleop">
+  <class name="RVizInteractiveControlsPanel/RVizInteractiveControlsPanel"
+         type="rviz_interactive_controls_panel::RVizInteractiveControlsPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      An RViz panel widget for Interactive Controls program.
+    </description>
+  </class>
+</library>

@@ -1,0 +1,7 @@
+# group configs
+PlanGroupConfiguration[] group_configurations
+
+---
+
+# return status
+bool status
