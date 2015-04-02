@@ -111,7 +111,7 @@ class PathPlanner(object):
             self.active_groups.remove(group_name)
         except :
             pass
-            
+
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
             return self.group_types[group_name]
@@ -334,20 +334,23 @@ class PathPlanner(object):
             idx += self.group_id_offset[group]
             idx += len(waypoint_markers)
             for m in waypoint_markers: markers.markers.append(m)
-            if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
-                ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
-                ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-                if last_link != ee_root_frame :
-                    self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
-                    (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                    rot = normalize_vector(rot)
-                    ee_offset = toPose(trans, rot)
+            try :
+                if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
+                    ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
+                    ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
+                    if last_link != ee_root_frame :
+                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
+                        (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+                        rot = normalize_vector(rot)
+                        ee_offset = toPose(trans, rot)
 
-                offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
-                for m in end_effector_markers.markers: markers.markers.append(m)
-                idx += len(end_effector_markers.markers)
-            
+                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
+                    for m in end_effector_markers.markers: markers.markers.append(m)
+                    idx += len(end_effector_markers.markers)
+            except :
+                rospy.logwarn("PathPlanner::joint_trajectory_to_marker_array() -- problem getting end-effector markers")
+
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
