@@ -159,7 +159,13 @@ class PathPlanner(object):
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
 
-        if not group_name in self.active_groups :
+        if not group_name in self.srdf_model.get_groups() :
+            rospy.logwarn(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
+            if group_name in self.active_groups :
+                self.active_groups.remove(group_name)
+            return False
+
+        if not group_name in self.active_groups  :
             self.active_groups.append(group_name)
     
         self.plan_generated[group_name] = False
