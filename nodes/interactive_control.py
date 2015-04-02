@@ -160,12 +160,6 @@ class InteractiveControl:
         if self.navigation_frame :
             self.navigation_controls.set_path_planner(self.path_planner)
             self.navigation_controls.activate_navigation_markers(True)
-
-        # get stored poses from model
-        for group in self.get_groups() :
-            self.stored_poses[group] = {}
-            for state_name in self.path_planner.get_stored_state_list(group) :
-                self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
        
     def parse_config_file(self, config_file) :
         self.config_parser = GroupConfigParser(config_file)
@@ -216,12 +210,20 @@ class InteractiveControl:
         for g in self.get_groups() :
             self.setup_group(g)
 
-    def setup_group(self, group) :       
-        group_type = self.get_group_type(group)
+    def setup_group(self, group, group_type=None) :
+        if not group_type :           
+            group_type = self.get_group_type(group)
+
         if not self.path_planner.add_planning_group(group, group_type) :
             self.group_map[group_type].remove(group)
             rospy.logerr(str("InteractiveControl::setup_group() -- planner rejected group: " + group + " of type: " + group_type))
             return False        
+
+        # get stored poses from model
+        self.stored_poses[group] = {}
+        for state_name in self.path_planner.get_stored_state_list(group) :
+            self.stored_poses[group][state_name] = self.path_planner.get_stored_group_state(group, state_name)
+
         # create interactive markers for group
         return self.initialize_group_markers(group)
 
@@ -421,7 +423,7 @@ class InteractiveControl:
         except :
             rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerances")
 
-        print resp
+        # print resp
         return resp
 
     def handle_configure(self, req) :
@@ -497,12 +499,14 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.ADD_GROUP :
             try :
                 for idx in range(len(req.group_name)) :
+                    gn = req.group_name[idx]
                     gt = req.group_type[idx]
                     if gt in self.group_map.keys() :
-                        gn = req.group_name[idx]
                         if not (gn in self.group_map[gt]) :
                             self.group_map[gt].append(gn)
-                    self.setup_group(gn)       
+                    else :
+                        self.group_map[gt] = [gn]
+                    self.setup_group(gn, gt)       
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem adding groups")
 
