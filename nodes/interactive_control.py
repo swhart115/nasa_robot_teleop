@@ -683,7 +683,11 @@ class InteractiveControl:
         sub_menu_handle = self.marker_menus[group].insert(mode)
         for p in self.tolerances.get_tolerances(mode) :
             self.group_menu_handles[(group,mode,p)] = self.marker_menus[group].insert(p,parent=sub_menu_handle,callback=self.tolerance_callback)
-            self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.UNCHECKED )
+            if p == self.tolerances.get_default_tolerance(mode) :
+                self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.CHECKED )
+                self.set_tolerances(group, mode, p)
+            else :
+                self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.UNCHECKED )
 
     def reset_group_marker(self, group, delay=0) :
         rospy.loginfo("InteractiveControl::reset_group_marker()")

@@ -11,14 +11,20 @@ class Tolerance(object) :
             rospy.logwarn("No Tolerance File given!!")
             return
 
+        self.defaults = {}
+
         try :
             f = open(filename)
             self.tolerances = yaml.load(f.read())
             f.close()    
-            # print yaml.dump(self.tolerances)
         except :
             self.tolerances = None
-            print "bad tolerance file!"
+            rospy.logerr(str("Tolerance() -- bad tolerance file: " + str(filename)))
+
+        if 'Defaults' in self.tolerances.keys() :
+            for default in self.tolerances['Defaults'] :
+                self.defaults[default['mode']] = default['type']
+            del self.tolerances['Defaults']
 
         return None
   
@@ -65,5 +71,12 @@ class Tolerance(object) :
                 r.append(k)
         return r
 
+    def get_default_tolerance(self, mode) :
+        if mode in self.defaults.keys() :
+            return self.defaults[mode]
+        else :
+            rospy.logwarn(str("tolerance::get_default_tolerance(" + str(mode) +") not found!"))
+            return ""
+
 if __name__=="__main__":
-    t = Tolerance(None)
+    t = Tolerance("/home/swhart/ros/catkin_workspace/src/nasa_robot_teleop/config/tolerances.yaml")
