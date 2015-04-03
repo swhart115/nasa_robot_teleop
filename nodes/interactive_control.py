@@ -184,7 +184,7 @@ class InteractiveControl:
             v = self.path_planner.get_goal_position_tolerances(group)
         elif tolerance_mode == "Angle Tolerance" :
             v = self.path_planner.get_goal_orientation_tolerances(group)
-        m = self.tolerances.get_tolerance_mode(tolerance_mode, v)
+        m = self.tolerances.get_tolerance_type(tolerance_mode, v)
         return m
 
     def get_groups(self, group_type=None) :
@@ -355,9 +355,7 @@ class InteractiveControl:
         
         for g in self.path_planner.srdf_model.get_groups() :
             resp.group_name.append(g)
-        
         for g in self.markers.keys() :
-            
             try :
                 resp.active_group_name.append(g)
                 resp.group_type.append(self.get_group_type(g))
@@ -405,6 +403,17 @@ class InteractiveControl:
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with stored_poses")
 
+            try :
+                for m in self.tolerances.get_tolerance_modes() :
+                    ts = ToleranceInfo()
+                    ts.mode = m
+                    t = self.get_tolerance_setting(g,m)
+                    ts.types.append(t)
+                    resp.tolerance_setting.append(ts)
+            except :
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerance settings")
+            
+
         try :
             for m in self.tolerances.get_tolerance_modes() :
 
@@ -416,14 +425,10 @@ class InteractiveControl:
                     t.vals.append(Vector3(v[0],v[1],v[2]))
                 resp.tolerance.append(t)
 
-                ts = ToleranceInfo()
-                ts.mode = m
-                ts.types.append(self.get_tolerance_setting(g,m))
-                resp.tolerance_setting.append(ts)
+                
         except :
             rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerances")
 
-        # print resp
         return resp
 
     def handle_configure(self, req) :
@@ -465,7 +470,6 @@ class InteractiveControl:
 
                     try :
                         self.path_planner.display_modes[g] = req.path_visualization_mode[idx]
-                        print self.path_planner.display_modes
                     except :
                         pass
 
@@ -476,6 +480,11 @@ class InteractiveControl:
 
                     try :
                         self.auto_plan[g] = req.plan_on_move[idx]
+                    except :
+                        pass
+
+                    try :
+                        self.path_planner.set_joint_mask(g, req.joint_mask[idx].mask)
                     except :
                         pass
 
@@ -495,6 +504,7 @@ class InteractiveControl:
                         pass
 
                     self.server.applyChanges()
+
 
         elif req.action_type == InteractiveControlsInterfaceRequest.ADD_GROUP :
             try :
@@ -543,9 +553,28 @@ class InteractiveControl:
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting execute_on_plan")
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_TOLERANCES :
+            try :
+                for idx in range(len(req.group_name)) :
+                    g = req.group_name[idx]                    
+                    if g in self.get_groups('cartesian') :
+                        try :
+                            for tol in req.tolerance :
+                                cur_type = self.get_tolerance_setting(g, tol.mode)
+                                new_type = tol.types[0]                         
+                                if cur_type != new_type :
+                                    self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,cur_type)], MenuHandler.UNCHECKED )
+                                    self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,new_type)], MenuHandler.CHECKED )
+                                    self.set_tolerances(g,tol.mode,new_type)
+                                    self.marker_menus[g].reApply( self.server )
+                        except :
+                            pass
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting tolerances")
+           
         self.server.applyChanges()
         resp = self.populate_service_response()
-        # print resp
+            
         return resp
 
 

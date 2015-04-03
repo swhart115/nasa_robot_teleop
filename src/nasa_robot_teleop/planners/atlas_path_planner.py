@@ -542,9 +542,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         goal.segments.append(motion);
 
-        print goal
-        print "------\n DONE"
-
         rospy.loginfo("AtlasPathPlanner::plan_to_cartesian_goal() -- sending goal")
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
@@ -553,13 +550,13 @@ class AtlasPathPlanner(PathPlanner) :
         # finished_before_timeout = self.cartesian_reach_client.wait_for_result(rospy.Duration(20))
 
         return None
-        
+
         rospy.loginfo("AtlasPathPlanner::plan_to_cartesian_goal() -- got result")
         resp = self.cartesian_reach_client.get_feedback()
         
-        print resp
+        # print resp
 
-        print resp.visualization_plan.trajectory
+        # print resp.visualization_plan.trajectory
 
         return resp.visualization_plan.trajectory
 

@@ -24,6 +24,6 @@ Position Tolerance:
 
 Defaults:
   - mode: "Angle Tolerance"
-    type: EXACT_ANGLE
+    type: SPHERE
   - mode: "Position Tolerance"
     type: CENTIMETER

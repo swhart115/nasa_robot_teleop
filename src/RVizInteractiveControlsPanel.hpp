@@ -45,7 +45,7 @@ namespace rviz_interactive_controls_panel
 
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
-
+        
         // setup widget function
         void setupWidgets();
 

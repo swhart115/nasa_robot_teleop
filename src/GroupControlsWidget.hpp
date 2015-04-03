@@ -46,6 +46,8 @@ namespace rviz_interactive_controls_panel
 
         void planOnMoveClicked(int d);
         void executeOnPlanClicked(int d);
+        bool positionToleranceChanged(const QString&);
+        bool rotationToleranceChanged(const QString&);
         
     private:
 

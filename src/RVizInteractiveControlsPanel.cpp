@@ -41,6 +41,17 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
     }
     ui->active_group_list->clear();
 
+    // close old group widgets
+    for (auto& gw : group_widgets) {
+        auto result = std::find(std::begin(resp.active_group_name), std::end(resp.active_group_name), gw.first);
+        if(result == std::end(resp.active_group_name)) {
+            int index = ui->GroupTabs->indexOf(group_widgets[gw.first]);
+            ui->GroupTabs->removeTab(index);
+            delete group_widgets[gw.first];
+            ui->GroupTabs->show();
+        }
+    }
+
     for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
         std::string group_name = resp.active_group_name[idx];
         ui->active_group_list->addItem(QString(group_name.c_str()));
@@ -166,7 +177,6 @@ bool RVizInteractiveControlsPanel::addGroupRequest() {
     QList<QListWidgetItem *> items = ui->all_group_list->selectedItems();
     for (auto& g: items) {
         std::string group_name = g->text().toStdString();       
-        std::cout << "adding " << group_name << " (type(" << group_type << ") to add list" << std::endl; 
         srv.request.group_name.push_back(group_name);
         srv.request.group_type.push_back(group_type);
     }
@@ -195,7 +205,6 @@ bool RVizInteractiveControlsPanel::removeGroupRequest() {
     QList<QListWidgetItem *> items = ui->active_group_list->selectedItems();
     for (auto& g: items) {
         std::string group_name = g->text().toStdString();
-        std::cout << "adding " << group_name << " to remove list" << std::endl; 
         srv.request.group_name.push_back(group_name);
 
         int idx = ui->GroupTabs->indexOf(group_widgets[group_name]);
