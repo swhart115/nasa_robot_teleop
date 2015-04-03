@@ -54,8 +54,10 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Add Waypoint")
         self.waypoint_menu_options.append("Toggle Full Control")
         self.waypoint_menu_options.append("Delete Waypoint")
-        self.waypoint_menu_options.append("Request Plan")
-        self.waypoint_menu_options.append("Execute")
+        self.waypoint_menu_options.append("Move Directly")
+        self.waypoint_menu_options.append("Request Footstep Plan")
+        self.waypoint_menu_options.append("Execute Footstep Plan")
+
         
         self.last_waypoint_height = 2.0
 
@@ -330,6 +332,12 @@ class NavigationWaypointControl(object) :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
 
+    def direct_move(self, data) :
+        rospy.logwarn("NavigationControl::direct_move() -- not implemented yet!!")
+
+
+
+
     def waypoint_menu_callback(self, feedback):
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
             handle = feedback.menu_entry_id
@@ -337,12 +345,14 @@ class NavigationWaypointControl(object) :
                 self.add_waypoint(feedback.marker_name, feedback.pose)
             elif handle == self.waypoint_menu_handles["Delete Waypoint"] :
                 self.delete_waypoint(feedback.marker_name)
-            elif handle == self.waypoint_menu_handles["Request Plan"] :
+            elif handle == self.waypoint_menu_handles["Request Footstep Plan"] :
                 self.request_navigation_plan(feedback)
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
-            elif handle == self.waypoint_menu_handles["Execute"] :
+            elif handle == self.waypoint_menu_handles["Execute Footstep Plan"] :
                 self.footstep_controls.execute_footstep_path()
+            elif handle == self.waypoint_menu_handles["Move Directly"] :
+                self.direct_move(feedback)
 
 
     def navigation_marker_callback(self, feedback) :
