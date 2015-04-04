@@ -493,6 +493,7 @@ class InteractiveControl:
 
                     try :
                         self.path_planner.set_joint_mask(g, req.joint_mask[idx].mask)
+                        print "setting joint mask for ", g, " to: ", req.joint_mask[idx].mask
                     except :
                         pass
 

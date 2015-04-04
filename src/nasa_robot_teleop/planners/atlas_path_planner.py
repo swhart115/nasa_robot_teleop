@@ -503,7 +503,14 @@ class AtlasPathPlanner(PathPlanner) :
         goal.execute_on_plan = self.auto_execute[group_name]
 
         motion = matec_msgs.msg.GoalMotion()
-        motion.available_joints = self.get_group_joints(group_name)
+
+        try :
+            for idx in range(len(self.get_group_joints(group_name))) :
+                if self.groups[group_name].joint_mask.mask[idx] :
+                    motion.available_joints.append(self.get_group_joints(group_name)[idx])  
+        except :          
+            motion.available_joints = self.get_group_joints(group_name)
+    
         motion.max_angular_velocity = 0.2
         motion.max_linear_velocity = 0.2
         motion.stable_frame = self.srdf_model.get_base_link(group_name)
@@ -786,8 +793,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         goal.segments.append(motion);
 
-        print goal
-
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_path() -- sending goal")
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
@@ -955,8 +960,6 @@ class AtlasPathPlanner(PathPlanner) :
 
             goal.segments.append(motion);
 
-        print goal
-        print "------\n DONE"
 
         rospy.loginfo("AtlasPathPlanner::plan_to_cartesian_goals() -- sending goal")
         # Sends the goal to the action server.
@@ -1064,7 +1067,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         goal.segments.append(motion);
 
-        print goal
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- sending goal")
         # Sends the goal to the action server.
