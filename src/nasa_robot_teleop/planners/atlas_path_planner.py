@@ -9,12 +9,14 @@ import PyKDL as kdl
 
 roslib.load_manifest('step_finder')
 roslib.load_manifest('walk_controller')
+roslib.load_manifest('matec_msgs')
 
 import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
+import std_msgs.msg
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
@@ -22,6 +24,7 @@ from matec_msgs.msg import *
 from matec_actions.msg import *
 from walk_controller.msg import *
 
+from matec_msgs.srv import *
 from step_finder.srv import *
 
 from nasa_robot_teleop.path_planner import *
@@ -29,7 +32,6 @@ from nasa_robot_teleop.util.kinematics_util import *
 
 from nasa_robot_teleop.msg import *
 from nasa_robot_teleop.srv import *
-
 
 class AtlasPathPlanner(PathPlanner) :
 
@@ -47,16 +49,18 @@ class AtlasPathPlanner(PathPlanner) :
         self.wait_for_service_timeout = 5.0
 
         rospy.set_param("~interpolation_type", 1)
-        rospy.set_param("~duration", 2.0)
         rospy.set_param("~num_visualizaton_points", 5)
         rospy.set_param("~visualize_path", True)
         rospy.set_param("~maintain_hand_pose_offsets", False)
         rospy.set_param("~move_as_far_as_possible", False)
 
+        rospy.set_param("~duration", 2.0)
         rospy.set_param("~allow_incomplete_planning", True)
         rospy.set_param("~num_acceptable_consecutive_failures", 0)
         rospy.set_param("~plan_visualization_density", 0.5)
-        
+        rospy.set_param("~max_angular_velocity", 0.4)
+        rospy.set_param("~max_linear_velocity", 0.1)
+
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
         self.walk_controller_client = actionlib.SimpleActionClient('/path_walker', walk_controller.msg.WalkPathAction)
@@ -266,24 +270,35 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logwarn("AtlasPathPlanner::execute_plan() -- can't execute leg command directly; use \'execute_on_plan\' instead")
             return False
 
-        req = ExecuteCommandRequest()
-        req.groups.append(group_name)
-
         try :
-            rospy.wait_for_service("/interactive_controls_bridge/execute_command", self.wait_for_service_timeout)
-        except rospy.ROSException as e:
-            rospy.logerr("AtlasPathPlanner::execute_plan(): " + str(e))
-            return False
-
-        try :
-            executor = rospy.ServiceProxy("/interactive_controls_bridge/execute_command", ExecuteCommand)
-            resp = executor(req)
-            for p in resp.progress :
-                rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
+            executor = rospy.ServiceProxy("/planned_manipulation/execute", ExecuteManipulationPlan)
+            resp = executor()
+            # for p in resp.progress :
+            #     rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
             return True
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::execute_plan(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
             return False
+
+
+        # req = ExecuteCommandRequest()
+        # req.groups.append(group_name)
+
+        # try :
+        #     rospy.wait_for_service("/interactive_controls_bridge/execute_command", self.wait_for_service_timeout)
+        # except rospy.ROSException as e:
+        #     rospy.logerr("AtlasPathPlanner::execute_plan(): " + str(e))
+        #     return False
+
+        # try :
+        #     executor = rospy.ServiceProxy("/interactive_controls_bridge/execute_command", ExecuteCommand)
+        #     resp = executor(req)
+        #     for p in resp.progress :
+        #         rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
+        #     return True
+        # except rospy.ServiceException, e:
+        #     rospy.logerr(str("AtlasPathPlanner::execute_plan(" + group_name + ") -- ExecuteCommand service call failed: " + str(e)))
+        #     return False
 
     def execute_navigation_plan(self, footsteps) :
 
@@ -511,8 +526,8 @@ class AtlasPathPlanner(PathPlanner) :
         except :          
             motion.available_joints = self.get_group_joints(group_name)
     
-        motion.max_angular_velocity = 0.2
-        motion.max_linear_velocity = 0.2
+        motion.max_angular_velocity = rospy.get_param("~max_angular_velocity")
+        motion.max_linear_velocity = rospy.get_param("~max_linear_velocity")
         motion.stable_frame = self.srdf_model.get_base_link(group_name)
         motion.segment_duration = 0.0
 
