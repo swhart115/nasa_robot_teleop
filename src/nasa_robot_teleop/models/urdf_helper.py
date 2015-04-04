@@ -54,6 +54,35 @@ def link_has_mesh(link) :
     except :
         return False
 
+def link_has_shape(link) :
+    try :
+        if link.visual :
+            if link.visual.geometry :
+                if isinstance(link.visual.geometry, Sphere) :
+                    return "Sphere"
+                elif isinstance(link.visual.geometry, Cylinder) :
+                    return "Cylinder"
+                elif isinstance(link.visual.geometry, Box) :
+                    return "Box"
+        return ""
+    except :
+        return ""
+
+def get_shape_properties(link) :
+    try :
+        if link.visual :
+            if link.visual.geometry :
+                if isinstance(link.visual.geometry, Sphere) :
+                    return link.visual.geometry.radius
+                elif isinstance(link.visual.geometry, Cylinder) :
+                    return (link.visual.geometry.radius, link.visual.geometry.length)
+                elif isinstance(link.visual.geometry, Box) :
+                    return link.visual.geometry.size
+        return None
+    except :
+        return None
+
+
 def link_has_origin(link) :
     if link.visual :
         if link.visual.origin :

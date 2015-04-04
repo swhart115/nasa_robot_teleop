@@ -59,7 +59,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 1
+        self.path_increment = 10
 
         self.gripper_service = None
         self.bridge_topic_map = {}
@@ -298,7 +298,8 @@ class PathPlanner(object):
             # only do it if it is NOT an end-effector
             if self.group_types[group] != "endeffector" :
                 path_visualization_marker_array = self.joint_trajectory_to_marker_array(jt, group, self.display_modes[group])
-                self.path_visualization.publish(path_visualization_marker_array)
+                if len(path_visualization_marker_array.markers) > 0 :
+                    self.path_visualization.publish(path_visualization_marker_array)
                 
 
     # publish a dummy MarkerArray so that RViz clears things out
@@ -319,7 +320,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        # print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
+        print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -382,6 +383,8 @@ class PathPlanner(object):
 
         for joint in full_names :
 
+            # print "getting maker info for joint ", joint
+
             marker = visualization_msgs.msg.Marker()
             parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].parent]
             child_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].child]
@@ -404,7 +407,8 @@ class PathPlanner(object):
             T_kin = fromMsg(joint_origin_to_pose(model_joint))
             T_acc = T_acc*T_kin*T_joint
 
-            if link_has_mesh(child_link) :
+            if link_has_mesh(child_link) or (link_has_shape(child_link) != ""):
+
                 T_viz = fromMsg(link_origin_to_pose(child_link))
                 T_link = T_acc*T_viz
                 marker.pose = toMsg(T_link)
@@ -413,6 +417,7 @@ class PathPlanner(object):
                 marker.ns = self.robot_name
                 marker.text = joint
                 marker.id = self.group_id_offset[group] + idx
+
                 try :
                     marker.scale.x = child_link.visual.geometry.scale[0]
                     marker.scale.y = child_link.visual.geometry.scale[1]
@@ -421,16 +426,47 @@ class PathPlanner(object):
                     marker.scale.x = 1
                     marker.scale.y = 1
                     marker.scale.z = 1
+
                 marker.color.r = self.plan_color[0]
                 marker.color.g = self.plan_color[1]
                 marker.color.b = self.plan_color[2]
                 marker.color.a = self.plan_color[3]
                 idx += 1
-                marker.mesh_resource = child_link.visual.geometry.filename
-                marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+
+                if link_has_mesh(child_link) :
+                    marker.mesh_resource = child_link.visual.geometry.filename
+                    marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+                else :
+                    print child_link.visual
+                    props = get_shape_properties(child_link)
+                    if props :
+                        print "size props: ", props
+                        if link_has_shape(child_link) == "Sphere" :
+                            marker.type = visualization_msgs.msg.Marker.SPHERE
+                            marker.scale.x *= props
+                            marker.scale.y *= props
+                            marker.scale.z *= props
+
+                        elif link_has_shape(child_link) == "Box" :
+                            marker.type = visualization_msgs.msg.Marker.CUBE
+                            marker.scale.x *= props['xyz'][0]
+                            marker.scale.y *= props['xyz'][1]
+                            marker.scale.z *= props['xyz'][2]
+
+                        elif link_has_shape(child_link) == "Cylinder" :
+                            marker.type = visualization_msgs.msg.Marker.CYLINDER
+                            marker.scale.x *= props[0]
+                            marker.scale.y *= props[0]
+                            marker.scale.z *= props[1]
+
+
                 marker.action = visualization_msgs.msg.Marker.ADD
                 marker.mesh_use_embedded_materials = True
                 markers.append(marker)
+
+                # print joint
+                # print joint_val
+                # print marker.mesh_resource
 
         return markers, T_acc, child_link.name
 

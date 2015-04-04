@@ -64,7 +64,9 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
         self.walk_controller_client = actionlib.SimpleActionClient('/path_walker', walk_controller.msg.WalkPathAction)
-   
+
+        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
+      
         self.get_joint_names()
 
         rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
@@ -1122,7 +1124,61 @@ class AtlasPathPlanner(PathPlanner) :
         self.groups[group_name].joint_mask.mask = mask
         self.srdf_model.set_joint_mask(group_name, mask)
 
-       
+    def planner_feedback(self, data) :
+        if data.feedback.planning_progress < 1.0 :
+            return
+
+        print "got final planner feedback"
+
+        jt = data.feedback.visualization_plan.trajectory
+        joint_names = data.feedback.visualization_plan.trajectory.joint_names
+        group = self.get_group_from_names(joint_names)
+        if group != "" :
+            rospy.loginfo(str("AtlasPathPlanner::planner_feedback() -- trajectory for " + group))
+     
+            jm = self.groups[group].joint_map           
+            jt_ordered = trajectory_msgs.msg.JointTrajectory()
+            new_map = {}
+
+            # print "group joints: ", self.get_group_joints(group) 
+            # print "traj joints:  ", joint_names
+            for j in self.get_group_joints(group) :
+                try :
+                    if j in joint_names :
+                        idx = joint_names.index(j)
+                        new_map[j] = idx
+                        jt_ordered.joint_names.append(j)
+                except :
+                    pass
+
+            print new_map
+            for p in jt.points :
+                if len(p.positions) != len(jt_ordered.joint_names) :
+                    continue
+                # print p.positions
+                ordered_p = trajectory_msgs.msg.JointTrajectoryPoint()
+                for j in jt_ordered.joint_names :
+                    # print j
+                    # print new_map[j]
+                    # print p.positions[new_map[j]]
+                    ordered_p.positions.append(p.positions[new_map[j]])
+                jt_ordered.points.append(ordered_p)
+
+            self.publish_path_data(jt_ordered, group)
+
+    def get_group_from_names(self, joint_names) :
+        if len(joint_names) > 0 :
+            for g in self.groups.keys() :
+                joints = self.get_group_joints(g)
+                found = True
+                for j in joint_names :
+                    if j not in joints: 
+                        found = False
+                if found: 
+                    return g
+        rospy.logwarn("AtlasPathPlanner::get_group_from_names() -- couldn't find group from feedback joints")
+        return ""
+
 if __name__=="__main__":
 
     rospy.init_node("atlas_planner_client")
