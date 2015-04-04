@@ -75,6 +75,7 @@ add_message_files(
   JointNameMap.msg
   JointMask.msg
   ToleranceInfo.msg
+  ToleranceInfoArray.msg
   StringArray.msg
 )
 

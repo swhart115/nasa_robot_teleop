@@ -38,10 +38,12 @@ class Tolerance(object) :
                 rt = "CENTIMETER"
             else :       
                 rt = "SPHERE"
+            return rt
         for tol_type in self.tolerances[mode] :
             for t in tol_type.keys() :
                 v2 = [round(tol_type[t][0],round_digits), round(tol_type[t][1],round_digits), round(tol_type[t][2],round_digits)]
-                if v1==v2 : rt = t  
+                if v1==v2 : 
+                    rt = t  
         return rt
 
     def get_tolerance_vals(self, mode, tol_type) :

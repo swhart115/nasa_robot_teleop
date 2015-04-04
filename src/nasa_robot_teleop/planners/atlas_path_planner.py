@@ -548,14 +548,13 @@ class AtlasPathPlanner(PathPlanner) :
 
         # rospy.loginfo("AtlasPathPlanner::plan_to_cartesian_goal() -- waiting for result")
         # finished_before_timeout = self.cartesian_reach_client.wait_for_result(rospy.Duration(20))
-
+    
         return None
 
         rospy.loginfo("AtlasPathPlanner::plan_to_cartesian_goal() -- got result")
         resp = self.cartesian_reach_client.get_feedback()
         
-        # print resp
-
+        
         # print resp.visualization_plan.trajectory
 
         return resp.visualization_plan.trajectory

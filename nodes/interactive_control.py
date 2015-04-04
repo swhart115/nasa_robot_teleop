@@ -170,6 +170,7 @@ class InteractiveControl:
             self.tolerances = Tolerance(filename)
 
     def set_tolerances(self, group, tolerance_mode, tolerance) :
+        # print "set tol[", group, "] for ", tolerance_mode, " to ", tolerance
         vals = self.tolerances.get_tolerance_vals(tolerance_mode, tolerance)
         if tolerance_mode == "Position Tolerance" :
             self.path_planner.set_goal_position_tolerances(group, vals)
@@ -177,6 +178,8 @@ class InteractiveControl:
             self.path_planner.set_goal_orientation_tolerances(group, vals)
         else :
             rospy.logerr("InteractiveControl::set_tolerances() -- unknown tolerance mode!")
+        # print self.get_tolerance_setting(group, tolerance_mode)
+
 
     def get_tolerance_setting(self, group, tolerance_mode) :
         v = [0]*3
@@ -184,6 +187,7 @@ class InteractiveControl:
             v = self.path_planner.get_goal_position_tolerances(group)
         elif tolerance_mode == "Angle Tolerance" :
             v = self.path_planner.get_goal_orientation_tolerances(group)
+            # print "---------------\nGetting tol type for ", group
         m = self.tolerances.get_tolerance_type(tolerance_mode, v)
         return m
 
@@ -403,13 +407,17 @@ class InteractiveControl:
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with stored_poses")
 
-            try :
+            try :               
+                ta = ToleranceInfoArray()
                 for m in self.tolerances.get_tolerance_modes() :
                     ts = ToleranceInfo()
                     ts.mode = m
                     t = self.get_tolerance_setting(g,m)
                     ts.types.append(t)
-                    resp.tolerance_setting.append(ts)
+                    ta.tolerance_info.append(ts)
+                    # print "  ", g, " -- ts: ", m, ": ", t 
+                resp.tolerance_setting.append(ta)
+
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerance settings")
             
@@ -554,15 +562,19 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting execute_on_plan")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_TOLERANCES :
+            # print "SET_TOLERANCES"
             try :
                 for idx in range(len(req.group_name)) :
                     g = req.group_name[idx]                    
                     if g in self.get_groups('cartesian') :
                         try :
                             for tol in req.tolerance :
+                                # print "Getting current setting (", tol.mode, ")"
                                 cur_type = self.get_tolerance_setting(g, tol.mode)
                                 new_type = tol.types[0]                         
                                 if cur_type != new_type :
+                                    # print "new tolerance, need to set to ", new_type  
+                                    # print "  (unchecking ", cur_type, ")"    
                                     self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,cur_type)], MenuHandler.UNCHECKED )
                                     self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,new_type)], MenuHandler.CHECKED )
                                     self.set_tolerances(g,tol.mode,new_type)
@@ -747,14 +759,17 @@ class InteractiveControl:
                     for p in self.tolerances.get_tolerances(m) :
                         if handle == self.group_menu_handles[(feedback.marker_name, m, p)] :
                             state = self.marker_menus[feedback.marker_name].getCheckState( handle )
-                            if state == MenuHandler.CHECKED:
-                                self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.UNCHECKED )
-                            elif state == MenuHandler.UNCHECKED:
+                            if state == MenuHandler.UNCHECKED:
                                 self.marker_menus[feedback.marker_name].setCheckState( handle, MenuHandler.CHECKED )
+                                # print "setting toelrance from menu: ", m, " , ", p, ", ", feedback.marker_name
                                 self.set_tolerances(feedback.marker_name, m, p)
-                        else :
-                            h = self.group_menu_handles[(feedback.marker_name, m, p)]
+                    for p in self.tolerances.get_tolerances(m) :
+                        h = self.group_menu_handles[(feedback.marker_name, m, p)]
+                        if self.get_tolerance_setting(feedback.marker_name,m) != p :
                             self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.UNCHECKED )
+                        # else :
+                        #     self.marker_menus[feedback.marker_name].setCheckState( h, MenuHandler.CHECKED )
+
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
                                

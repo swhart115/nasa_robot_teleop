@@ -46,8 +46,8 @@ namespace rviz_interactive_controls_panel
 
         void planOnMoveClicked(int d);
         void executeOnPlanClicked(int d);
-        bool positionToleranceChanged(const QString&);
-        bool rotationToleranceChanged(const QString&);
+        bool positionToleranceChanged(const QString& text);
+        bool rotationToleranceChanged(const QString& text);
         
     private:
 
@@ -61,6 +61,8 @@ namespace rviz_interactive_controls_panel
         ros::NodeHandle nh_;
 
         ros::ServiceClient *service_client_;
+
+        bool initialized;
 
      public:
 

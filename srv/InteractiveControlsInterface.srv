@@ -74,7 +74,7 @@ string[] path_visualization_mode
 ToleranceInfo[] tolerance
 
 # current tolerance settings for each group
-ToleranceInfo[] tolerance_setting
+ToleranceInfoArray[] tolerance_setting
 
 # current setting of flags
 bool[] execute_on_plan

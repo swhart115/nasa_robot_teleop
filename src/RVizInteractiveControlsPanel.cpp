@@ -51,8 +51,9 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
             ui->GroupTabs->show();
         }
     }
-
+    
     for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
+
         std::string group_name = resp.active_group_name[idx];
         ui->active_group_list->addItem(QString(group_name.c_str()));
 
@@ -102,11 +103,12 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
             }
         }
 
-        for (auto& tol_mode: resp.tolerance_setting) {
-            if(tol_mode.mode == "Position Tolerance") {
-                group_widgets[group_name]->position_tolerance = tol_mode.types[0];
-            } else if(tol_mode.mode == "Angle Tolerance") {
-                group_widgets[group_name]->orientation_tolerance = tol_mode.types[0];
+        for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
+            if(tol_info.mode == "Position Tolerance") {
+                group_widgets[group_name]->position_tolerance = tol_info.types[0];
+            } 
+            if(tol_info.mode == "Angle Tolerance") {
+                group_widgets[group_name]->orientation_tolerance = tol_info.types[0];
             }
         }
         
@@ -116,6 +118,10 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
                 group_widgets[group_name]->stored_poses.push_back(stored_pose);
             }
         }       
+    }
+
+    for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
+        std::string group_name = resp.active_group_name[idx];
         group_widgets[group_name]->setupDisplay();
     }   
 
@@ -206,16 +212,12 @@ bool RVizInteractiveControlsPanel::removeGroupRequest() {
     for (auto& g: items) {
         std::string group_name = g->text().toStdString();
         srv.request.group_name.push_back(group_name);
-
         int idx = ui->GroupTabs->indexOf(group_widgets[group_name]);
         ui->GroupTabs->removeTab(idx);
         ui->GroupTabs->show();
         group_widgets.erase(group_name);
-
     }
-        
-
-    
+          
     if (interactive_control_client_.call(srv))
     {
                 

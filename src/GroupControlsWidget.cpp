@@ -5,7 +5,8 @@ using namespace std;
 
 GroupControlsWidget::GroupControlsWidget(QWidget *parent) :
     QWidget(parent),
-    ui(new Ui::GroupControls)
+    ui(new Ui::GroupControls),
+    initialized(false)
 {
     ui->setupUi(this);
     setupWidgets();
@@ -65,7 +66,6 @@ void GroupControlsWidget::setupDisplay() {
             ui->plan_on_move->setCheckState(Qt::Unchecked);
         }
 
-        //ui->pos_tol->clear();
         for (auto& pt: position_tolerances) {
             index = ui->pos_tol->findText(QString(pt.c_str()));
             if( index == -1 ) {
@@ -82,15 +82,11 @@ void GroupControlsWidget::setupDisplay() {
 
         index = ui->pos_tol->findText(QString(position_tolerance.c_str()));
         if ( index != -1 ) { // -1 for not found
-            if (ui->pos_tol->currentText().toStdString() != position_tolerance) {
-               ui->pos_tol->setCurrentIndex(index);
-            }
+            ui->pos_tol->setCurrentIndex(index);
         }
         index = ui->rot_tol->findText(QString(orientation_tolerance.c_str()));
         if ( index != -1 ) { // -1 for not found
-            if (ui->rot_tol->currentText().toStdString() != orientation_tolerance) {
-                ui->rot_tol->setCurrentIndex(index);
-            }
+            ui->rot_tol->setCurrentIndex(index);
         }
 
     } else {
@@ -111,7 +107,9 @@ void GroupControlsWidget::setupDisplay() {
     } else {
         ui->execute_on_plan->setCheckState(Qt::Unchecked);
     }
-    
+
+    initialized = true;
+
 }
 
 bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
@@ -162,14 +160,17 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                 }
             }
            
-            for (auto& tol_mode: resp.tolerance_setting) {
-                if(tol_mode.mode == "Position Tolerance") {
-                    position_tolerance = tol_mode.types[0];
-                } else if(tol_mode.mode == "Angle Tolerance") {
-                    orientation_tolerance = tol_mode.types[0];
+            for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
+                if(tol_info.mode == "Position Tolerance") {
+                    position_tolerance = tol_info.types[0];
+                } 
+                if(tol_info.mode == "Angle Tolerance") {
+                    orientation_tolerance = tol_info.types[0];
                 }
             }
+        
 
+            
             stored_poses.clear();
             if(idx < resp.stored_pose_list.size()) {
                 for (auto& stored_pose: resp.stored_pose_list[idx].data) {  
@@ -177,9 +178,11 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                 }
             }       
             setupDisplay();
+
         }   
     }
-    return true;
+
+    return initialized;
 
 }
 
@@ -231,23 +234,22 @@ void GroupControlsWidget::executeOnPlanClicked(int d) {
 
 }
 
-bool GroupControlsWidget::positionToleranceChanged(const QString&) {
+bool GroupControlsWidget::positionToleranceChanged(const QString& text) {
 
     ROS_INFO("GroupControlsWidget::positionToleranceChanged()");    
-
+    if(!initialized) {
+        return true;
+    }
+    
     nasa_robot_teleop::InteractiveControlsInterface srv;
-
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_TOLERANCES;
-
     srv.request.group_name.push_back(group_name);
 
     nasa_robot_teleop::ToleranceInfo pos_tol_info;
     pos_tol_info.mode = "Position Tolerance";
     pos_tol_info.types.push_back(ui->pos_tol->currentText().toStdString());
-
-
+   
     srv.request.tolerance.push_back(pos_tol_info);
-
     position_tolerance = ui->pos_tol->currentText().toStdString();
     
     if (service_client_->call(srv))
@@ -262,22 +264,22 @@ bool GroupControlsWidget::positionToleranceChanged(const QString&) {
     }
 }
       
-bool GroupControlsWidget::rotationToleranceChanged(const QString&) {
+bool GroupControlsWidget::rotationToleranceChanged(const QString& text) {
 
     ROS_INFO("GroupControlsWidget::rotationToleranceChanged()");    
+    if(!initialized) {
+        return true;
+    }
 
     nasa_robot_teleop::InteractiveControlsInterface srv;
-
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_TOLERANCES;
-
     srv.request.group_name.push_back(group_name);
 
     nasa_robot_teleop::ToleranceInfo rot_tol_info;
     rot_tol_info.mode = "Angle Tolerance";
     rot_tol_info.types.push_back(ui->rot_tol->currentText().toStdString());
-
+    
     srv.request.tolerance.push_back(rot_tol_info);
-
     orientation_tolerance = ui->rot_tol->currentText().toStdString();
     
     if (service_client_->call(srv))
