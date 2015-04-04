@@ -58,7 +58,8 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Request Footstep Plan")
         self.waypoint_menu_options.append("Execute Footstep Plan")
 
-        
+        self.use_footstep_planner = True
+
         self.last_waypoint_height = 2.0
 
     def activate_navigation_markers(self, v) :
@@ -335,8 +336,11 @@ class NavigationWaypointControl(object) :
     def direct_move(self, data) :
         rospy.logwarn("NavigationControl::direct_move() -- not implemented yet!!")
 
+    def get_waypoints(self) :
+        return self.waypoint_markers
 
-
+    def planning_footsteps(self) :
+        return self.use_footstep_planner
 
     def waypoint_menu_callback(self, feedback):
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:

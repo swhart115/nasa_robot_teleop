@@ -249,6 +249,10 @@ class AtlasPathPlanner(PathPlanner) :
     def get_start_foot(self) :
         return rospy.get_param("~start_foot")
 
+    def set_start_foot(self, foot) :
+        rospy.set_param("~start_foot", foot)
+
+
     def get_foot_display_pose_offset(self, foot_name) :
         p = Pose()
         p.orientation.w=1
@@ -263,16 +267,18 @@ class AtlasPathPlanner(PathPlanner) :
     ###################################
 
     def execute_plan(self, group_name, from_stored=False, wait=True) :
-        rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name+ ")"))
+        rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ")"))
 
         # hack to send individual foot goal to robot
         if "_leg" in group_name :
             rospy.logwarn("AtlasPathPlanner::execute_plan() -- can't execute leg command directly; use \'execute_on_plan\' instead")
             return False
 
+        req = ExecuteManipulationPlanRequest()
+        req.joint_names = self.get_group_joints(group_name)
         try :
             executor = rospy.ServiceProxy("/planned_manipulation/execute", ExecuteManipulationPlan)
-            resp = executor()
+            resp = executor(req)
             # for p in resp.progress :
             #     rospy.loginfo(str("AtlasPathPlanner::execute_plan(" + group_name + ") progress: " + str(p)))
             return True
@@ -1114,7 +1120,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def set_joint_mask(self, group_name, mask) :
         self.groups[group_name].joint_mask.mask = mask
-        self.srdf_model.set_joint_mask[group_name, mask]
+        self.srdf_model.set_joint_mask(group_name, mask)
 
        
 if __name__=="__main__":

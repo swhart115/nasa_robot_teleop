@@ -5,7 +5,8 @@ using namespace std;
 
 RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent) :
     rviz::Panel(parent),
-    ui(new Ui::RVizInteractiveControlsPanel)
+    ui(new Ui::RVizInteractiveControlsPanel),
+    initialized(false)
 {
     ui->setupUi(this);
 
@@ -17,7 +18,7 @@ RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent) :
 
     ui->GroupTabs->removeTab(1);
     ui->GroupTabs->show();
-
+    
     getConfigData();
 }
 
@@ -35,6 +36,15 @@ void RVizInteractiveControlsPanel::setupWidgets() {
 
 bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
 
+    // set up navigation controls widget if applicable
+    if(resp.has_navigation_controls) {
+        if(!initialized) {
+            addNavigationControls();
+        }
+        navigation_widget->setDataFromResponse(resp);
+    }
+    
+    // set up widgets for all the groups
     ui->all_group_list->clear();
     for (auto& g: resp.group_name) {
         ui->all_group_list->addItem(QString(g.c_str()));
@@ -63,11 +73,13 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         group_widgets[group_name]->group_name = group_name;
         group_widgets[group_name]->joint_names.clear();
         group_widgets[group_name]->joint_mask.clear();
+        group_widgets[group_name]->last_sent_joint_mask.clear();
 
         if(idx < resp.joint_names.size()) {         
             for (auto& j: resp.joint_names[idx].names) {
                 group_widgets[group_name]->joint_names.push_back(j);
                 group_widgets[group_name]->joint_mask.push_back(resp.joint_mask[idx].mask[jdx]);
+                group_widgets[group_name]->last_sent_joint_mask.push_back(resp.joint_mask[idx].mask[jdx]);
                 jdx++;  
             }
         }
@@ -125,10 +137,11 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         group_widgets[group_name]->setupDisplay();
     }   
 
+    initialized = true;
+
     return true;
 }
         
-
 
 bool RVizInteractiveControlsPanel::addGroupControls(std::string group_name) {
 
@@ -144,6 +157,18 @@ bool RVizInteractiveControlsPanel::addGroupControls(std::string group_name) {
     } else {
         return false;
     }
+    return true;
+}
+
+bool RVizInteractiveControlsPanel::addNavigationControls() {
+
+    ROS_INFO("RVizInteractiveControlsPanel::addNavigationControls()");    
+    const QString label("Nav");
+    navigation_widget = new NavigationControlsWidget();
+    navigation_widget->setNodeHandle(nh_);
+    navigation_widget->setServiceClient(&interactive_control_client_);       
+    ui->GroupTabs->addTab((QWidget *)navigation_widget, label);
+    ui->GroupTabs->show();
     return true;
 }
 

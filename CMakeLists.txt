@@ -11,10 +11,14 @@ find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
 include(${QT_USE_FILE})
 add_definitions(-DQT_NO_KEYWORDS)
 
-set(QT_FORMS ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui ${PROJECT_SOURCE_DIR}/ui/group_controls_widget.ui)
+set(QT_FORMS 
+  ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui 
+  ${PROJECT_SOURCE_DIR}/ui/group_controls_widget.ui
+  ${PROJECT_SOURCE_DIR}/ui/navigation_controls_widget.ui)
 
 qt4_wrap_cpp(MOC_FILES
     src/GroupControlsWidget.hpp
+    src/NavigationControlsWidget.hpp
     src/RVizInteractiveControlsPanel.hpp
 )
 qt4_wrap_ui(QT_FORMS_HPP ${QT_FORMS})
@@ -22,6 +26,7 @@ qt4_wrap_ui(QT_FORMS_HPP ${QT_FORMS})
 
 set(SRC_FILES
     src/GroupControlsWidget.cpp
+    src/NavigationControlsWidget.cpp
     src/RVizInteractiveControlsPanel.cpp
     ${MOC_FILES}
 )

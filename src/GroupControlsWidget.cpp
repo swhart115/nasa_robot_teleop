@@ -29,6 +29,8 @@ void GroupControlsWidget::setupWidgets() {
 
     QObject::connect(ui->pos_tol, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(positionToleranceChanged(const QString&)));
     QObject::connect(ui->rot_tol, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(rotationToleranceChanged(const QString&)));
+    
+    QObject::connect(ui->joint_list, SIGNAL(itemClicked(QListWidgetItem *)), this, SLOT(jointMaskChanged(QListWidgetItem*)));
 
 }
 
@@ -43,7 +45,6 @@ void GroupControlsWidget::setupDisplay() {
 
     for (auto& j: joint_names) {
         ui->joint_list->addItem(j.c_str());
-        
         QListWidgetItem *item = ui->joint_list->item(jdx);
         if(joint_mask[jdx]) {
             item->setCheckState(Qt::Checked);
@@ -125,6 +126,7 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                 for (auto& j: resp.joint_names[idx].names) {
                     joint_names.push_back(j);
                     joint_mask.push_back(resp.joint_mask[idx].mask[jdx]);
+                    last_sent_joint_mask.push_back(resp.joint_mask[idx].mask[jdx]);
                     jdx++;  
                 }
             }
@@ -186,6 +188,40 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
 
 }
 
+
+void GroupControlsWidget::jointMaskChanged(QListWidgetItem* item) {
+
+    ROS_INFO("GroupControlsWidget::jointMaskChanged()");       
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_JOINT_MAP;
+    srv.request.group_name.push_back(group_name);
+
+    nasa_robot_teleop::JointMask jm;
+    for (int jdx=0; jdx<ui->joint_list->count(); jdx++) {
+        if(item->text() != ui->joint_list->item(jdx)->text()) {
+            jm.mask.push_back(joint_mask[jdx]);
+            continue;
+        }
+        joint_mask[jdx] = (item->checkState()==Qt::Checked);
+        jm.mask.push_back(joint_mask[jdx]);
+    }
+    srv.request.joint_mask.push_back(jm); 
+
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("GroupControlsWidget::jointMaskChanged() -- success");
+        for (int jdx=0; jdx<ui->joint_list->count(); jdx++) {
+            last_sent_joint_mask[jdx] = joint_mask[jdx];
+        }
+        setGroupDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("GroupControlsWidget::jointMaskChanged() -- failed to call service");
+    }
+
+}
 
 void GroupControlsWidget::planOnMoveClicked(int d) {
     
@@ -322,6 +358,7 @@ bool GroupControlsWidget::planRequest() {
     for (int jdx=0; jdx<ui->joint_list->count(); jdx++) {
         QListWidgetItem *item = ui->joint_list->item(jdx);       
         joint_mask[jdx] = (item->checkState()==Qt::Checked);
+        last_sent_joint_mask[jdx] = joint_mask[jdx];
         jm.mask.push_back(joint_mask[jdx]);
     }
     srv.request.joint_mask.push_back(jm); 

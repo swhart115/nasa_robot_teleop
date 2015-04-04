@@ -87,7 +87,8 @@ class InteractiveControl:
         if self.navigation_frame and navigation_frame != "":
             rospy.loginfo("InteractiveControl::init() -- setting up NavigationWaypointControl")
             self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame, self.tf_listener)
-
+        else :
+            self.navigation_controls = None
         # joint state sub
         rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
 
@@ -372,6 +373,7 @@ class InteractiveControl:
                 jm.mask = self.path_planner.get_joint_mask(g)
                 resp.joint_mask.append(jm)
                 resp.joint_names.append(self.path_planner.get_joint_map(g))
+                # print "Setting joint mask for: ", g, " to: ", resp.joint_mask
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with joint_mask")
             
@@ -433,9 +435,32 @@ class InteractiveControl:
                     t.vals.append(Vector3(v[0],v[1],v[2]))
                 resp.tolerance.append(t)
 
-                
         except :
             rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerances")
+
+        if self.navigation_controls :
+
+            resp.has_navigation_controls = True
+
+            try :            
+                for nwp in self.navigation_controls.get_waypoints() :
+                    resp.navigation_waypoint_name.append(nwp)
+            except :
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with nav waypoints settings")
+
+            try :            
+                resp.left_foot_first = (self.path_planner.get_start_foot() == "left")
+            except :
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+
+            try :            
+                resp.plan_footsteps = self.navigation_controls.planning_footsteps()
+            except :
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+
+        else :
+            resp.has_navigation_controls = False
+
 
         return resp
 
@@ -493,7 +518,6 @@ class InteractiveControl:
 
                     try :
                         self.path_planner.set_joint_mask(g, req.joint_mask[idx].mask)
-                        print "setting joint mask for ", g, " to: ", req.joint_mask[idx].mask
                     except :
                         pass
 
@@ -514,6 +538,25 @@ class InteractiveControl:
 
                     self.server.applyChanges()
 
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_JOINT_MAP :
+            print req
+            for idx in range(len(req.group_name)) :
+                g = req.group_name[idx]
+                try :
+                    self.path_planner.set_joint_mask(g, req.joint_mask[idx].mask)
+                    joint_names = self.path_planner.get_all_group_joints(g)
+                    for jdx in range(len(joint_names)) :
+                        jnt = joint_names[jdx]
+                        handle = self.group_menu_handles[(g,"Joint Mask", jnt)]
+                        if req.joint_mask[idx].mask[jdx]:
+                            self.marker_menus[g].setCheckState( handle, MenuHandler.CHECKED )
+                        else:
+                            self.marker_menus[g].setCheckState( handle, MenuHandler.UNCHECKED )                                                      
+                    self.marker_menus[g].reApply( self.server )
+                except :
+                    pass
+            self.server.applyChanges()
 
         elif req.action_type == InteractiveControlsInterfaceRequest.ADD_GROUP :
             try :
@@ -563,19 +606,15 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting execute_on_plan")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_TOLERANCES :
-            # print "SET_TOLERANCES"
             try :
                 for idx in range(len(req.group_name)) :
                     g = req.group_name[idx]                    
                     if g in self.get_groups('cartesian') :
                         try :
                             for tol in req.tolerance :
-                                # print "Getting current setting (", tol.mode, ")"
                                 cur_type = self.get_tolerance_setting(g, tol.mode)
                                 new_type = tol.types[0]                         
                                 if cur_type != new_type :
-                                    # print "new tolerance, need to set to ", new_type  
-                                    # print "  (unchecking ", cur_type, ")"    
                                     self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,cur_type)], MenuHandler.UNCHECKED )
                                     self.marker_menus[g].setCheckState(self.group_menu_handles[(g,tol.mode,new_type)], MenuHandler.CHECKED )
                                     self.set_tolerances(g,tol.mode,new_type)
@@ -584,7 +623,58 @@ class InteractiveControl:
                             pass
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting tolerances")
-           
+
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_FIRST_FOOT :
+            try :
+                if req.left_foot_first :
+                    self.path_planner.set_start_foot("left")
+                else :
+                    self.path_planner.set_start_foot("right")
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting start foot")
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_FOOTSTEPS_IN_PATH :
+            try :
+                rospy.logwarn("InteractiveControl::handle_configure() -- Can't plan without footsteps yet")
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting start foot")
+
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.ADD_NAVIGATION_WAYPOINT :
+            try :
+                for wp in req.navigation_waypoint_name :
+                    self.navigation_controls.add_waypoint(wp)
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem adding nav waypoint")
+
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.DELETE_NAVIGATION_WAYPOINT :
+            try :
+                for wp in req.navigation_waypoint_name :
+                    self.navigation_controls.delete_waypoint(wp)
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem deleting nav waypoint")
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH :
+            try :
+                if len(req.navigation_waypoint_name) > 0 :
+                    self.navigation_controls.request_navigation_plan(req.navigation_waypoint_name[0])
+                else :
+                    rospy.logwarn("InteractiveControl::handle_configure() -- no waypoint goal specified")
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem planning to nav waypoint")
+
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH :
+            try :
+                if req.plan_footsteps :
+                    self.navigation_controls.footstep_controls.execute_footstep_path()
+                else :
+                    rospy.logwarn("InteractiveControl::handle_configure() --can only execute footstep plan right now")
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
+
         self.server.applyChanges()
         resp = self.populate_service_response()
             

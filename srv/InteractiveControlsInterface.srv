@@ -17,7 +17,9 @@ int8 action_type
   int8 DELETE_NAVIGATION_WAYPOINT = 15
   int8 PLAN_NAVIGATION_PATH = 16
   int8 EXECUTE_NAVIGATION_PATH = 17
-
+  int8 PLAN_FOOTSTEPS_IN_PATH = 18
+  int8 SET_FIRST_FOOT = 19
+  
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
 string[] group_name
 
@@ -39,12 +41,16 @@ JointMask[] joint_mask
 # the different tolerance modes to set
 ToleranceInfo[] tolerance
 
-# the names of the navigation_points that will be deleted
-string[] navigation_waypoint_name
-
 # current setting of flags
 bool[] execute_on_plan
 bool[] plan_on_move
+
+# the names of the navigation_points that will be deleted
+string[] navigation_waypoint_name
+
+# current setting of navigation waypoint flags
+bool left_foot_first
+bool plan_footsteps
 
 ----
 
@@ -69,7 +75,7 @@ JointNameMap[] joint_names
 
 # current path visualization modes
 string[] path_visualization_mode
-
+         
 # the different tolerance modes (applicable to all groups)
 ToleranceInfo[] tolerance
 
@@ -82,3 +88,13 @@ bool[] plan_on_move
 
 # the stored poses for each group
 StringArray[] stored_pose_list
+
+# if navigation controls exist
+bool has_navigation_controls
+
+# new setting of navigation waypoint flags
+bool left_foot_first
+bool plan_footsteps
+
+# the names of the navigation_points to be deleted, added from, or planned/executed to
+string[] navigation_waypoint_name

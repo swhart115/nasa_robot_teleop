@@ -46,6 +46,7 @@ namespace rviz_interactive_controls_panel
 
         void planOnMoveClicked(int d);
         void executeOnPlanClicked(int d);
+        void jointMaskChanged(QListWidgetItem* item);
         bool positionToleranceChanged(const QString& text);
         bool rotationToleranceChanged(const QString& text);
         
@@ -73,6 +74,7 @@ namespace rviz_interactive_controls_panel
         
         std::vector<std::string> joint_names;
         std::vector<bool> joint_mask;
+        std::vector<bool> last_sent_joint_mask;
         
         std::vector<std::string> position_tolerances;
         std::vector<std::string> orientation_tolerances;

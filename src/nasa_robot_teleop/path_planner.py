@@ -793,6 +793,14 @@ class PathPlanner(object):
         rospy.logwarn("PathPlanner::get_feet_names() -- not implemented")
         raise NotImplementedError
 
+    def get_start_foot(self) :
+        rospy.logwarn("PathPlanner::get_start_foot() -- not implemented")
+        raise NotImplementedError
+
+    def set_start_foot(self, foot) :
+        rospy.logwarn("PathPlanner::set_start_foot() -- not implemented")
+        raise NotImplementedError
+
     ### planing and execution methods
     def plan_to_cartesian_goal(self, group_name, pt) :
         rospy.logerror("PathPlanner::plan_to_cartesian_point() -- not implemented")
