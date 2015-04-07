@@ -328,13 +328,14 @@ class MoveItPathPlanner(PathPlanner) :
         return r
         
     def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
-        r = []
+        r = {}
         if not len(group_names) == len(pt_lists) == len(frame_ids):
             rospy.logerr("MoveItPathPlanner::plan_cartesian_paths() -- input arg size mismatch")
-            r.append(False)
+            for g in group_names :
+                r[g] = None
         else :
-            for i in len(group_names) :
-                r.append(self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i]))
+            for i in range(len(group_names)) :
+                r[group_names[i]] = self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i])
         return r
                 
     def clear_goal_targets(self, group_names) :

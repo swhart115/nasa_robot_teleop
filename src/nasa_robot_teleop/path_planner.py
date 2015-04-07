@@ -575,50 +575,80 @@ class PathPlanner(object):
 
     # This will create a path plan from a list of waypoints.
     # It will also transpose these waypoints to the robot's planning frame. 
-    def create_path_plan(self, group_name, frame_id, pt_list) :
+    def create_path_plans(self, group_names, pt_lists) :
 
-        rospy.loginfo(str("PathPlanner::create_path_plan() -- Robot Name: " + self.robot_name))
-        rospy.loginfo(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
-        rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
+        rospy.loginfo(str("PathPlanner::create_path_plans() -- Robot Name: " + self.robot_name))
 
-        waypoints = []
-        rospy.logdebug("PathPlanner::create_path_plan() -- transforming input waypoint list")
-        for p in pt_list :
-            pt = geometry_msgs.msg.PoseStamped()
-            rospy.loginfo(str("PathPlanner::create_path_plan() -- INPUT FRAME: " + frame_id))
-            rospy.loginfo(str("PathPlanner::create_path_plan() -- PLANNING FRAME: " + self.get_group_planning_frame(group_name)))
-            if p.header.frame_id != self.get_group_planning_frame(group_name) :
-                self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time.now(), rospy.Duration(5.0))
-                pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), p)
-            waypoints.append(copy.deepcopy(pt.pose))
-                   
-        # if there is more then one waypoint, use the PathPlanner interface to create a Cartesian trajectory through each.
-        # this necessary as this is the only way to compute trajectories for multiple points.  FIXME
-        if len(waypoints) > 0 :
-            rospy.logwarn("PathPlanner::create_path_plan() -- planning as Cartesian path")
-            self.stored_plans[group_name] = self.plan_cartesian_path(group_name, waypoints)                
-        else :
-            rospy.logwarn("PathPlanner::create_path_plan() -- planning as Joint path")
-            # if there is just one waypoint, call the create_plan_to_target() to create a joint traj to get there
-            pt = geometry_msgs.msg.PoseStamped()
-            pt.header.frame_id = self.get_group_planning_frame(group_name)
-            pt.header.stamp = rospy.get_rostime()
-            pt.pose = waypoints[0]
+        idx = 0
+        waypoints_list = []
+        ret = {}
 
-            self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt)
+        for group_name in group_names :
+            ret[group_name] = False
 
-        try :
-            # check to make sure the plan has a non-0 amount of waypoints
-            if self.stored_plans[group_name] :
-                self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+            rospy.loginfo(str("PathPlanner::create_path_plans() ---- PathPlanner Group Name: " + group_name))
+            rospy.loginfo(str("PathPlanner::create_path_plans() ---- Creating Path Plan"))
 
-            # if the plan was found publish it to be displayed in RViz as a MarkerArray
-            if self.plan_generated[group_name] :
-                self.publish_path_data(self.stored_plans[group_name], group_name)
-        except:
-            rospy.logwarn("PathPlanner::create_path_plan() -- no feedback available")
+            waypoints = []
+            rospy.loginfo(str("PathPlanner::create_path_plans() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
+            for p in pt_lists[idx] :
+                pt = geometry_msgs.msg.PoseStamped()
+                if p.header.frame_id != self.get_group_planning_frame(group_name) :
+                    self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time.now(), rospy.Duration(5.0))
+                    pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), p)
+                waypoints.append(copy.deepcopy(pt))               
+            waypoints_list.append(waypoints)
+            idx += 1
 
-        return self.plan_generated[group_name]
+        rospy.loginfo("PathPlanner::create_path_plans() -- planning as Cartesian path")
+        stored_plan = self.plan_cartesian_paths(group_names, waypoints_list)
+        
+        for group_name in group_names :
+
+            # some planners might reutrn a combined/aggregate plan for all the groups,
+            # if so, tease out the plan for just hte group joints and add it to storage
+            # alternatively, the planne might return a dictionary of plans
+            if type(stored_plan) == dict :
+                self.stored_plans[group_name] = stored_plan[group_name]
+            elif type(stored_plan) == trajectory_msgs.msg.JointTrajectory : 
+                self.stored_plans[group_name] = self.get_subgroup_plan(stored_plan, group_name)
+            else :
+                rospy.logerr("PathPlanner::create_path_plans() -- unknown return type from planner")
+                self.stored_plans[group_name] = None
+
+            try :
+                # check to make sure the plan has a non-0 amount of waypoints
+                if self.stored_plans[group_name] :
+                    self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+
+                # if the plan was found publish it to be displayed in RViz as a MarkerArray
+                if self.plan_generated[group_name] :
+                    self.publish_path_data(self.stored_plans[group_name], group_name)
+            except:
+                rospy.logwarn("PathPlanner::create_path_plans() -- no feedback available")
+
+            ret[group_name] = self.plan_generated[group_name]
+
+        return ret
+
+
+    def get_subgroup_plan(self, plan, group_name) :
+        # extract a trajectory from the plan input that corresponds only to the joints of the group
+        group_joints = self.get_group_joints(group_name)
+        traj = trajectory_msgs.msg.JointTrajectory()
+        jnt_map = {}
+        for jnt in group_joints :
+            if jnt in plan.joint_names :
+                traj.joint_names.append(jnt)
+                jnt_map[jnt] = plan.joint_names.index(jnt)
+        for p in plan.points: 
+            new_p = trajectory_msgs.msg.JointTrajectoryPoint()
+            for jnt in group_joints :
+                new_p.positions.append(p.positions[jnt_map[jnt]])
+            new_p.time_from_start = p.time_from_start
+            traj.points.append(new_p)       
+        return traj
+
 
     def plan_joint_goal_and_execute(self, group_name, js) :
         self.auto_execute[group_name] = True
@@ -859,7 +889,7 @@ class PathPlanner(object):
         raise NotImplementedError
     
     def plan_cartesian_path(self, group_name, frame_id, pt_list) :
-        rospy.logerror("PathPlanner::create_path_plan() -- not implemented")
+        rospy.logerror("PathPlanner::plan_cartesian_path() -- not implemented")
         raise NotImplementedError
 
     def execute_plan(self, group_name, from_stored, wait) :
@@ -892,8 +922,8 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::plan_to_random_goals() -- not implemented")
         raise NotImplementedError
     
-    def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
-        rospy.logerror("PathPlanner::create_path_plans() -- not implemented")
+    def plan_cartesian_paths(self, group_names, pt_lists) :
+        rospy.logerror("PathPlanner::plan_cartesian_paths() -- not implemented")
         raise NotImplementedError
 
     def multigroup_execute_plan(self, group_names, from_stored, wait) :
