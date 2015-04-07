@@ -59,7 +59,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 10
+        self.path_increment = 1
 
         self.gripper_service = None
         self.bridge_topic_map = {}
@@ -383,7 +383,7 @@ class PathPlanner(object):
 
         for joint in full_names :
 
-            # print "getting maker info for joint ", joint
+            # print "Getting maker info for joint ", joint
 
             marker = visualization_msgs.msg.Marker()
             parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].parent]
@@ -409,6 +409,7 @@ class PathPlanner(object):
 
             if link_has_mesh(child_link) or (link_has_shape(child_link) != ""):
 
+                # print "Getting visuals for: ", child_link.name
                 T_viz = fromMsg(link_origin_to_pose(child_link))
                 T_link = T_acc*T_viz
                 marker.pose = toMsg(T_link)
@@ -436,11 +437,17 @@ class PathPlanner(object):
                 if link_has_mesh(child_link) :
                     marker.mesh_resource = child_link.visual.geometry.filename
                     marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+
+                    # print " has mesh: ", marker.mesh_resource
+
                 else :
-                    print child_link.visual
+                    # print child_link.visual
                     props = get_shape_properties(child_link)
+
+                    # print " has shape: ", link_has_shape(child_link)
+
                     if props :
-                        print "size props: ", props
+                        # print "size props: ", props
                         if link_has_shape(child_link) == "Sphere" :
                             marker.type = visualization_msgs.msg.Marker.SPHERE
                             marker.scale.x *= props
@@ -597,6 +604,7 @@ class PathPlanner(object):
             pt.header.frame_id = self.get_group_planning_frame(group_name)
             pt.header.stamp = rospy.get_rostime()
             pt.pose = waypoints[0]
+
             self.stored_plans[group_name] = self.plan_to_cartesian_goal(group_name, pt)
 
         try :

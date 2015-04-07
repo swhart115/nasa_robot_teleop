@@ -636,7 +636,7 @@ class InteractiveControl:
 
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_FOOTSTEPS_IN_PATH :
             try :
-                rospy.logwarn("InteractiveControl::handle_configure() -- Can't plan without footsteps yet")
+                rospy.logwarn("InteractiveControl::handle_configure() -- Can't plan without footsteps yet ")
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting start foot")
 
