@@ -231,18 +231,26 @@ class SRDFModel :
             else :
                 self.full_group_joints[g] = self.group_joints[g]
                 
+            if "right_robotiq" in g :
+                print " joints (full 1): ", self.full_group_joints[g]
+                print " joints (1): ", self.group_joints[g]
+             
             self.joint_mask[g] = self.compute_joint_mask(g)
             
-            # print "===================="
-            # print "Group: ", g
-            # print " base: ", self.base_links[g]
-            # print " tip: ", self.tip_links[g]
-            # print " joints (spec): ", self.group_joints[g]
-            # print " joints (full): ", self.full_group_joints[g]
-            # print " joint mask: ", self.joint_mask[g]
-            # print " links  (spec): ", self.group_links[g]
-            # print " is chain: ", 
-            # print "====================\n"
+            if "right_robotiq" in g :
+                print " joints (full 2): ", self.full_group_joints[g]
+                print " joints (2): ", self.group_joints[g]
+
+            print "===================="
+            print "Group: ", g
+            print " base: ", self.base_links[g]
+            print " tip: ", self.tip_links[g]
+            print " joints (spec): ", self.group_joints[g]
+            print " joints (full): ", self.full_group_joints[g]
+            print " joint mask: ", self.joint_mask[g]
+            print " links  (spec): ", self.group_links[g]
+            print " is chain: ", 
+            print "====================\n"
 
     def compute_joint_masks(self) :
          for g in self.get_groups() :
@@ -255,7 +263,10 @@ class SRDFModel :
 
         if not g in self.full_group_joints or not g in self.group_joints:
             return None
-        
+
+        if len(self.group_joints[g]) > len(self.full_group_joints[g]) :
+            self.full_group_joints[g] = self.group_joints[g]
+
         if not self.is_chain[g] :
             for j in self.group_joints[g] :
                 mask.append(True)

@@ -142,11 +142,12 @@ class InteractiveControl:
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
             exit()
 
-        self.root_frame = self.path_planner.get_robot_planning_frame()
-        # set the control frames for all types of groups
 
         # load the urdf
         self.urdf = self.path_planner.get_urdf_model()
+
+        self.root_frame = self.path_planner.get_robot_planning_frame()
+        # set the control frames for all types of groups
 
         # setup the groups
         self.setup_groups()       
@@ -478,7 +479,7 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
             for g in req.group_name :
                 self.reset_group_marker(g)
-                if not self.path_planner.execute(g) :
+                if not self.path_planner.execute([g]) :
                     rospy.logerr(str("InteractiveControl::handle_configure() -- failed planner execution for group: " + g))
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
@@ -486,8 +487,8 @@ class InteractiveControl:
                 g = req.group_name[idx]
                 p = req.stored_pose_name[idx]
                 self.path_planner.clear_goal_target(g)
-                self.path_planner.create_joint_plan_to_target(g, self.stored_poses[g][p])
-                if not self.path_planner.execute(g): 
+                self.path_planner.create_joint_plan([g], [self.stored_poses[g][p]])
+                if not self.path_planner.execute([g]): 
                     rospy.logerr(str("InteractiveControl::handle_configure(pose) -- failed stored pose execution for group: " + g))
                 self.reset_group_marker(g)
 
@@ -522,12 +523,12 @@ class InteractiveControl:
                         pass
 
                     if self.auto_execute[g] :
-                        if not self.path_planner.plan_cartesian_goal_and_execute(g, pt) :
+                        if not self.path_planner.plan_cartesian_and_execute([g], [[pt]]) :
                             rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + g + ". re-synching..."))
                         self.reset_group_marker(g)
                     else :
                         self.path_planner.clear_goal_target(g)
-                        self.path_planner.create_plan_to_target(g, pt)
+                        self.path_planner.create_path_plan([g], [[pt]])
 
                     try :
                         for tol in req.tolerance :
@@ -540,7 +541,6 @@ class InteractiveControl:
 
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_JOINT_MAP :
-            print req
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]
                 try :
@@ -889,8 +889,8 @@ class InteractiveControl:
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
             if self.group_menu_handles[(feedback.marker_name,"Stored Poses",p)] == feedback.menu_entry_id :
                 self.path_planner.clear_goal_target(feedback.marker_name)
-                self.path_planner.create_joint_plan_to_target(feedback.marker_name, self.stored_poses[feedback.marker_name][p])
-                r = self.path_planner.execute(feedback.marker_name)
+                self.path_planner.create_joint_plan([feedback.marker_name], [self.stored_poses[feedback.marker_name][p]])
+                r = self.path_planner.execute([feedback.marker_name])
                 if not r : rospy.logerr(str("InteractiveControl::process_feedback(pose) -- failed execution for group: " + feedback.marker_name + ". re-synching..."))
                 self.reset_group_marker(feedback.marker_name)
 
@@ -920,12 +920,12 @@ class InteractiveControl:
                 else :
                     js.position.append(self.get_current_jpos(j))
             if self.auto_execute[group] :
-                self.path_planner.create_joint_plan_to_target(group, js)
-                r = self.path_planner.execute(group)
+                self.path_planner.create_joint_plan([group], [js])
+                r = self.path_planner.execute([group])
                 if not r : rospy.logerr(str("InteractiveControl::posture_feedback(pose) -- failed moveitplanner execution for group: " + feedback.marker_name))
             else :
                 self.path_planner.clear_goal_target(group)
-                self.path_planner.create_joint_plan_to_target(group, js)
+                self.path_planner.create_joint_plan([group], [js])
         
     def process_feedback(self, feedback) :
 
@@ -936,13 +936,13 @@ class InteractiveControl:
                     pt.header = feedback.header
                     pt.pose = feedback.pose
                     if self.auto_execute[feedback.marker_name] :
-                        r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                        r = self.path_planner.plan_cartesian_and_execute([feedback.marker_name], [[pt]])
                         self.reset_group_marker(feedback.marker_name)
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                     else :
                         self.path_planner.clear_goal_target(feedback.marker_name)
-                        self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                        self.path_planner.create_path_plan([feedback.marker_name], [[pt]])
             self.server.applyChanges()
         
         elif feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
@@ -983,7 +983,7 @@ class InteractiveControl:
                 if (feedback.marker_name,"Execute") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
                         self.reset_group_marker(feedback.marker_name)
-                        r = self.path_planner.execute(feedback.marker_name)
+                        r = self.path_planner.execute([feedback.marker_name])
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 if (feedback.marker_name,"Plan") in self.group_menu_handles:
@@ -992,13 +992,13 @@ class InteractiveControl:
                         pt.header = feedback.header
                         pt.pose = feedback.pose
                         if self.auto_execute[feedback.marker_name] :
-                            r = self.path_planner.plan_cartesian_goal_and_execute(feedback.marker_name, pt)
+                            r = self.path_planner.plan_cartesian_and_execute([feedback.marker_name], [[pt]])
                             self.reset_group_marker(feedback.marker_name)
                             if not r :
                                 rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                         else :
-                            self.path_planner.clear_goal_target (feedback.marker_name)
-                            self.path_planner.create_plan_to_target(feedback.marker_name, pt)
+                            self.path_planner.clear_goal_target(feedback.marker_name)
+                            self.path_planner.create_path_plan([feedback.marker_name], [[pt]])
                 if (feedback.marker_name,"Toggle Joint Control") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
                         self.toggle_posture_control(feedback.marker_name)
