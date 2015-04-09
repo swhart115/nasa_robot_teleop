@@ -593,7 +593,7 @@ class PathPlanner(object):
             for p in goals[idx] :
                 pt = geometry_msgs.msg.PoseStamped()
                 if p.header.frame_id != self.get_group_planning_frame(group_name) :
-                    self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time.now(), rospy.Duration(5.0))
+                    self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
                     pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), p)
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
