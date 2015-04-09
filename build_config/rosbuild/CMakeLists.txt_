@@ -18,16 +18,21 @@ pkg_check_modules(OGRE OGRE)
 include_directories(${OGRE_INCLUDE_DIRS})
 link_directories(${OGRE_LIBRARY_DIRS})
 add_definitions(-DQT_NO_KEYWORDS)
-set(QT_FORMS ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui ${PROJECT_SOURCE_DIR}/ui/group_controls_widget.ui)
+set(QT_FORMS 
+  ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui 
+  ${PROJECT_SOURCE_DIR}/ui/group_controls_widget.ui
+  ${PROJECT_SOURCE_DIR}/ui/navigation_controls_widget.ui)
 
 qt4_wrap_cpp(MOC_FILES
     src/GroupControlsWidget.hpp
+    src/NavigationControlsWidget.hpp
     src/RVizInteractiveControlsPanel.hpp
 )
 qt4_wrap_ui(QT_FORMS_HPP ${QT_FORMS})
 
-set(SOURCE_FILES
+set(SRC_FILES
     src/GroupControlsWidget.cpp
+    src/NavigationControlsWidget.cpp
     src/RVizInteractiveControlsPanel.cpp
     ${MOC_FILES}
 )
@@ -38,5 +43,5 @@ include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-rosbuild_add_library(${PROJECT_NAME} ${SOURCE_FILES} ${QT_FORMS_HPP})
+rosbuild_add_library(${PROJECT_NAME} ${SRC_FILES} ${QT_FORMS_HPP})
 target_link_libraries(${PROJECT_NAME} ${QT_LIBRARIES} ${OGRE_LIBRARIES})
