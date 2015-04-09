@@ -589,7 +589,6 @@ class AtlasPathPlanner(PathPlanner) :
                     if mask[jdx] :
                         masked_group_joints.append(group_joints[jdx])
                 joints = list(set(motion.available_joints + masked_group_joints))
-                print "adding available joints: ", masked_group_joints
                 motion.available_joints = joints
 
                 final_region = matec_msgs.msg.GoalRegion()

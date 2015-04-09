@@ -552,6 +552,7 @@ class PathPlanner(object):
         stored_plan = self.plan_joint_goals(planning_group_names, goals) 
         self.stored_plans = self.get_stored_plans_from_result(stored_plan, planning_group_names)
 
+
         for group_name in planning_group_names :
             try :
                 # check to make sure the plan has a non-0 amount of waypoints
@@ -566,7 +567,7 @@ class PathPlanner(object):
             except:
                 rospy.logwarn("PathPlanner::create_joint_plan() -- no feedback available")
 
-        rospy.logdebug("PathPlanner::create_joint_plan() -- finished")
+        rospy.loginfo("PathPlanner::create_joint_plan() -- finished")
 
         return ret
 
