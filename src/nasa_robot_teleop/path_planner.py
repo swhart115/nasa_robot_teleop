@@ -572,43 +572,6 @@ class PathPlanner(object):
         return ret
 
 
-    # computes a PathPlanner JointTrajectory to a random Joint goal in the workspace. 
-    def create_random_target(self, group_names) :
-
-        rospy.loginfo(str("PathPlanner::create_random_target() == Robot Name: " + self.robot_name))
-
-        ret = {}
-        
-        # clear flags
-        for group_name in group_names :
-            rospy.loginfo(str("PathPlanner::create_random_target() ===== PathPlanner Group Name: " + group_name))
-            rospy.loginfo(str("PathPlanner::create_random_target() ===== Generating Joint Plan "))
-            self.plan_generated[group_name] = False
-            ret[group_name] = False
-        
-        # call the abstract method
-        stored_plan = self.plan_to_random_goal(group_names) 
-        self.stored_plans = self.get_stored_plans_from_result(stored_plan, group_names)
-
-        for group_name in group_names :
-            try :
-                # check to make sure the plan has a non-0 amount of waypoints
-                if self.stored_plans[group_name] :
-                    self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
-
-                # if the plan was found publish it to be displayed in RViz as a MarkerArray
-                if self.plan_generated[group_name] :
-                    self.publish_path_data(self.stored_plans[group_name], group_name)
-
-                ret[group_name] = self.plan_generated[group_name]
-            except:
-                rospy.logwarn("PathPlanner::create_random_target() -- no feedback available")
-
-        rospy.logdebug("PathPlanner::create_random_target() -- finished")
-
-        return ret
-
-
     # This will create a path plan from a list of waypoints.
     # It will also transpose these waypoints to the robot's planning frame. 
     def create_path_plan(self, group_names, goals) :
@@ -669,36 +632,6 @@ class PathPlanner(object):
             self.auto_execute[group_name] = True
         return self.create_path_plan(group_names, goals)
 
-        # rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() -- Robot Name: " + self.robot_name))
-
-        # for group_name in group_names :
-        #     rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() ---- PathPlanner Group Name: " + group_name))
-        #     rospy.loginfo(str("PathPlanner::plan_cartesian_goal_and_execute() ---- Creating & Executing Path Plan"))
-
-        #     for pt in pts :
-        #         # transform the goal to the robot/group planning frame 
-        #         if pt.header.frame_id != self.get_group_planning_frame(group_name) :
-        #             self.tf_listener.waitForTransform(pt.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
-        #             pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), pt)
-        #         pt.header.stamp = rospy.Time.now()
-        #         pt.header.seq = int(random.random()*10000000) # needs a unique ID for MoveIt not to get confused (dumb PathPlanner thing)
-
-        # stored_plan = self.plan_cartesian(group_names,pts)
-
-        # self.stored_plans = self.get_stored_plans_from_result(stored_plan, group_names)
-
-        # try :
-        #     # check to make sure the plan has a non-0 amount of waypoints
-        #     if self.stored_plans[group_name] :
-        #         self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
-
-        #     # if the plan was found publish it to be displayed in RViz as a MarkerArray
-        #     if self.plan_generated[group_name] :
-        #         self.publish_path_data(self.stored_plans[group_name], group_name)
-        # except:
-        #     rospy.logwarn("PathPlanner::plan_cartesian_goal_and_execute() -- no feedback available")
-
-        # return self.stored_plans[group_name]
 
     def execute(self, group_names, from_stored=True, wait=False) :
         rospy.loginfo("PathPlanner::execute()")

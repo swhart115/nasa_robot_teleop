@@ -201,6 +201,30 @@ class MoveItPathPlanner(PathPlanner) :
     ######## EXECUTION METHODS ########
     ###################################
   
+
+    def execute_plans(self, group_names, from_stored=False, wait=True) :
+
+
+    def execute_plans(self, group_names, from_stored=False, wait=True) :
+        for group_name in group_names :
+            if self.plan_generated[group_name] and self.stored_plans[group_name] :
+                rospy.loginfo(str("MoveItPathPlanner::execute_plan() -- executing plan for group: " + group_name))
+                if self.actionlib :
+                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
+                    r = self.go(group_name, wait)
+                else :
+                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- publishing to topic")
+                    jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
+                    N = len(jt.goal.trajectory.points)
+                    rospy.logwarn(str("executing path of " + str(N) + " points"))
+                    self.command_topics[group_name].publish(jt)
+                    self.plan_generated[group_name] = False
+                    r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+            else :
+                rospy.logwarn(str("MoveItPathPlanner::execute_plan() -- no plan for group " + group_name + " yet generated."))
+                r = False
+            rospy.logdebug(str("MoveItPathPlanner::execute_plan() -- plan execution: " + str(r)))
+
     # This is the main execution function for sending trajectories to the robot.
     # This will only return True if the plan has been previously (successfully) generated.
     # It will allow the goal to be published using actionlib (which doesnt work for commanding multiple groups at once cause the pything moveit api blocks)
@@ -234,109 +258,108 @@ class MoveItPathPlanner(PathPlanner) :
         else :
             return self.groups[group_name].go(wait)
 
-    def multigroup_execute(self, group_names, from_stored=False, wait=True) :
-        r = []
-        for g in group_names:
-            r.append(self.execute(g,from_stored,wait))
-        return r
+    
 
 
     ##################################
     ######## PLANNING METHODS ########
     ##################################    
     
-    def plan_to_cartesian_goal(self, group_name, pt) :
-        if not group_name in self.groups.keys() :
-            rospy.logerr(str("MoveItPathPlanner::go() -- group name \'" + str(group_name) + "\' not found"))
-        else :
+
+    def plan_joint_goals(self, group_names, goals) :
+        
+        rospy.loginfo("AtlasPathPlanner::plan_joint_goals()")
+
+        traj_results = {}
+        for group_name in group_names :
+            traj_results[group_name] = None
+
+        if not len(group_names) == len(goals) :
+            rospy.logerr(str("MoveItPathPlanner::plan_joint_goals() -- size mismatch: " 
+                + str(len(group_names)) + " groups vs. " + str(len(goals)) + " goals"))
+            return traj_results 
+
+        idx = 0
+        for group_name in group_names :
             try :
-                self.groups[group_name].set_pose_target(pt)       
+                self.groups[group_name].set_joint_value_target(goals[idx])       
                 plan = self.groups[group_name].plan()
-                if self.auto_execute[group_name] :
-                    self.stored_plans[group_name] = plan.joint_trajectory
-                    self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
-                    self.publish_path_data(self.stored_plans[group_name], group_name)
-                    self.execute(group_name, from_stored=True)
-                return plan.joint_trajectory
+                traj_results[group_name] = plan.joint_trajectory
             except :
-                rospy.logwarn(str("MoveItPathPlanner::plan_to_cartesian_point(" + group_name + ") -- failed"))
-                return None
+                rospy.logwarn(str("MoveItPathPlanner::plan_joint_goals(" + group_name + ") -- failed"))                
+            idx += 1
 
-    def plan_to_joint_goal(self, group_name, js) :
-        try :
-            self.groups[group_name].set_joint_value_target(js)       
-            plan = self.groups[group_name].plan()
-            return plan.joint_trajectory
-        except :
-            rospy.logwarn(str("MoveItPathPlanner::plan_to_joint_goal(" + group_name + ") -- failed"))
-            return None
-
-    def plan_to_random_goal(self, group_name) :
-        try :
-            self.groups[group_name].set_random_target()
-            plan = self.groups[group_name].plan()
-            return plan.joint_trajectory
-        except :
-            rospy.logwarn(str("MoveItPathPlanner::plan_to_random_goal(" + group_name + ") -- failed"))
-            return None
-
-    def plan_cartesian_path(self, group_name, waypoints) :
-        try :
-
-            fraction = 0
-            try :
-                # this jump parameter often makes it fail---more investigation needed here.
-                # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
-                (plan, fraction) = self.groups[group_name].compute_cartesian_path(waypoints, 0.01, 0)  
-            except :
-                rospy.logerr("MoveItInterface::plan_cartesian_path() -- Generating Cartesian Path Plan Failed")
-
-            if fraction < 0 :
-                rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_path(" + group_name + ") -- failed, fraction: " + str(fraction)))
-                return None
-            return plan.joint_trajectory
-        except :
-            rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_path(" + group_name + ") -- failed"))
-            return None
+        return traj_results
 
 
-    # multigroup stuff, not tested yet
-    def plan_to_cartesian_goals(self, group_names, pts) :
-        r = []
-        if not len(group_names) == len(pts) :
-            rospy.logerr("MoveItPathPlanner::plan_to_cartesian_goals() -- input arg size mismatch")
-            r.append(False)
-        else :
-            for i in len(group_names) :
-                r.append(self.plan_to_cartesian_goal(group_names[i], pts[i]))
-        return r
+    def plan_joint_paths(self, group_names, paths) :
+        rospy.logerror("MoveItPathPlanner::plan_joint_paths() -- not implemented")
+        raise NotImplementedError
 
-    def plan_to_joint_goals(self, group_names, jss) :
-        r = []
-        if not len(group_names) == len(jss) :
-            rospy.logerr("MoveItPathPlanner::plan_to_joint_goals() -- input arg size mismatch")
-            r.append(False)
-        else :
-            for i in len(group_names) :
-                r.append(self.plan_to_joint_goal(group_names[i], jss[i]))
-        return r
-        
-    def plan_to_random_goals(self, group_names) :
-        r = []
-        for i in len(group_names) :
-            r.append(self.plan_to_random_goal(group_names[i]))
-        return r
-        
-    def plan_cartesian_paths(self, group_names, frame_ids, pt_lists) :
-        r = {}
-        if not len(group_names) == len(pt_lists) == len(frame_ids):
-            rospy.logerr("MoveItPathPlanner::plan_cartesian_paths() -- input arg size mismatch")
-            for g in group_names :
-                r[g] = None
-        else :
-            for i in range(len(group_names)) :
-                r[group_names[i]] = self.plan_cartesian_path(group_names[i],frame_ids[i], pt_lists[i])
-        return r
+
+    def plan_cartesian_goals(self, group_names, goals) :
+
+        traj_results = {}
+        for group_name in group_names :
+            traj_results[group_name] = None
+
+        if not len(group_names) == len(goals) :
+            rospy.logerr(str("MoveItPathPlanner::plan_cartesian_goals() -- size mismatch: " 
+                + str(len(group_names)) + " groups vs. " + str(len(goals)) + " goals"))
+            return traj_results 
+
+        idx = 0
+        for group_name in group_names :
+            if not group_name in self.groups.keys() :
+                rospy.logerr(str("MoveItPathPlanner::plan_cartesian_goals() -- group name \'" + str(group_name) + "\' not found"))
+            else :
+                try :
+                    self.groups[group_name].set_pose_target(goals[idx])       
+                    plan = self.groups[group_name].plan()
+                    # if self.auto_execute[group_name] :
+                    #     self.execute(group_name, from_stored=True)
+                    traj_results[group_name] = plan.joint_trajectory
+                except :
+                    rospy.logwarn(str("MoveItPathPlanner::plan_to_cartesian_point(" + group_name + ") -- failed"))
+            idx += 1
+
+        return traj_results
+
+    def plan_cartesian_paths(self, group_names, paths) :
+
+        traj_results = {}
+        for group_name in group_names :
+            traj_results[group_name] = None
+
+        if not len(group_names) == len(paths) :
+            rospy.logerr(str("MoveItPathPlanner::plan_cartesian_paths() -- size mismatch: " 
+                + str(len(group_names)) + " groups vs. " + str(len(paths)) + " paths"))
+            return traj_results 
+
+        idx = 0
+        for group_name in group_names :
+            if not group_name in self.groups.keys() :
+                rospy.logerr(str("MoveItPathPlanner::plan_cartesian_goals() -- group name \'" + str(group_name) + "\' not found"))
+            else :
+                try :
+                    fraction = 0
+                    try :
+                        # this jump parameter often makes it fail---more investigation needed here.
+                        # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
+                        (plan, fraction) = self.groups[group_name].compute_cartesian_path(paths[idx], 0.01, 0)  
+
+                        if fraction < 0 :
+                            rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed, fraction: " + str(fraction)))
+                        else :
+                            traj_results[group_name] =  plan.joint_trajectory
+            
+                    except :
+                        rospy.logerr("MoveItInterface::plan_cartesian_paths() -- Generating Cartesian Path Plan Failed")
+                except :
+                    rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed"))
+            
+        return traj_results
+
                 
     def clear_goal_targets(self, group_names) :
         for g in group_names :

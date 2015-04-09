@@ -664,10 +664,6 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
 
-    def plan_random_goals(self, group_names) :
-        rospy.logwarn("AtlasPathPlanner::plan_to_random_goal() -- NOT IMPLEMENETED YET")
-        return None
-
 
     def plan_navigation_path(self, waypoints) :
 
