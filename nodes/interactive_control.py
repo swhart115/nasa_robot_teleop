@@ -491,8 +491,7 @@ class InteractiveControl:
                 if not self.path_planner.execute([g]): 
                     rospy.logerr(str("InteractiveControl::handle_configure(pose) -- failed stored pose execution for group: " + g))
                 self.reset_group_marker(g)
-
-
+              
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]

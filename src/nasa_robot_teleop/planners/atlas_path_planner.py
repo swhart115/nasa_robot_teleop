@@ -17,6 +17,7 @@ import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
 import std_msgs.msg
+from drc_msgs.msg import Pose2D
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
@@ -66,7 +67,7 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
         self.walk_controller_client = actionlib.SimpleActionClient('/path_walker', walk_controller.msg.WalkPathAction)
-
+        
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
         # self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
@@ -317,123 +318,84 @@ class AtlasPathPlanner(PathPlanner) :
     def execute_navigation_plan(self, footsteps) :
 
         rospy.loginfo("AtlasPathPlanner::execute_navigation_plan()")
-        req = CartesianPlanCommandRequest()
 
-        interpolation_type = rospy.get_param("~interpolation_type")
-        duration = rospy.get_param("~duration")
-        num_visualizaton_points = rospy.get_param("~num_visualizaton_points")
+        if not self.walk_controller_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("AtlasPathPlanner::execute_navigation_plan() -- wait for server timeout")
+            return False
 
-        req.return_trajectories = rospy.get_param("~visualize_path")
-        req.maintain_hand_pose_offsets = rospy.get_param("~maintain_hand_pose_offsets")
-        req.move_as_far_as_possible = rospy.get_param("~move_as_far_as_possible")
-
-        start_foot = self.get_start_foot()
-        if start_foot=="left" :
-            indicator = 0
-        else :
-            indicator = 1
-
-        try :
-        
-            idx = 0
-            for foot in footsteps :
-                spec = CartesianPlanRequestSpecification()
-                
-                if idx%2 == indicator :
-                    spec.group_name = "left_leg" 
-                else :
-                    spec.group_name = "right_leg"
-
-                spec.control_frame = foot.header.frame_id
-
-                spec.waypoints.append(foot)
-                spec.duration.append(duration)
-                # spec.angle_variance.append(0)
-                # spec.maximum_angle_variance.append(0)
-                # spec.position_variance.append(0)
-                # spec.maximum_position_variance.append(0)
-
-                spec.interpolation_type = interpolation_type
-                spec.num_visualizaton_points = num_visualizaton_points
-                req.group_plan_specs.append(spec)
-
-                idx += 1
-        except :
-            rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan()"))
-            return None
-
-        # print "==================================================="
-        # print "Footstep plan:"
-        # print req
-        # print "==================================================="
-        try :
-            rospy.wait_for_service("/interactive_controls_bridge/navigation_plan_command", self.wait_for_service_timeout)
-        except rospy.ROSException as e:
-            rospy.logerr("AtlasPathPlanner::execute_navigation_plan(): " + str(e))
-            return None
-
-        try :
-            rospy.loginfo(str("AtlasPathPlanner::execute_navigation_plan() -- calling service"))
-            planner = rospy.ServiceProxy("/interactive_controls_bridge/navigation_plan_command", CartesianPlanCommand)
-            resp = planner(req)
-
-            if len(resp.result) > 0 :
-                return resp.result[0]
-            else :
-                rospy.logwarn(str("AtlasPathPlanner::execute_navigation_plan() -- failed to get footstep plan to goal"))
-                return None
-        except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan()" + str(e)))
-            return None
-
-
-
-    def execute_leg_plan(self, group_name, wp) :
-        rospy.loginfo("AtlasPathPlanner::execute_leg_plan() -- waiting for walking server")
-        self.walk_controller_client.wait_for_server()
-        
         # Creates a goal to send to the action server.
         goal = walk_controller.msg.WalkPathGoal()
 
-        goal.left_foot_start == (group_name == "left_leg")
+        # just use config stuff from first plan request until we allow stuff to be different across waypoints/groups
+        for step in footsteps :
 
-        p = geometry_msgs.msg.Pose2D()
-        p.x = wp.pose.position.x
-        p.y = wp.pose.position.y
+                self.tf_listener.waitForTransform("/global", step.header.frame_id, rospy.Time(0), rospy.Duration(5.0))
+                    
+                step = self.tf_listener.transformPose("/global", step)
+                p = Pose2D()
+                p.x = step.pose.position.x
+                p.y = step.pose.position.y
 
-        q = [0]*4
-        q[0] = wp.pose.orientation.x
-        q[1] = wp.pose.orientation.y
-        q[2] = wp.pose.orientation.z
-        q[3] = wp.pose.orientation.w
+                q = [0]*4
+                q[0] = step.pose.orientation.x
+                q[1] = step.pose.orientation.y
+                q[2] = step.pose.orientation.z
+                q[3] = step.pose.orientation.w
 
-        R = kdl.Rotation.Quaternion(q[0],q[1],q[2],q[3])
-        rpy = R.GetRPY()
-        p.theta = rpy[2] 
+                R = kdl.Rotation.Quaternion(q[0],q[1],q[2],q[3])
+                rpy = R.GetRPY()
+                p.theta = rpy[2] 
 
-        n = geometry_msgs.msg.Vector3(R[0,2],R[1,2],R[2,2])
-        
-        goal.path.append(p)
-        goal.heights.append(wp.pose.position.z)
-        goal.normals.append(n)
+                n = geometry_msgs.msg.Vector3(R[0,2],R[1,2],R[2,2])
+
+                goal.path.append(p)
+                goal.heights.append(step.pose.position.z)
+                goal.normals.append(n)
     
-        
-        goal.step_duration = rospy.get_param("~duration")
+        goal.left_foot_start = ("left" in self.get_start_foot())
+          
+        goal.step_duration = 0.6
         goal.step_mode = True
         goal.relative_height = False
         goal.mode = 4
+        goal.params_set = False
+        goal.linear_stride_length = 0.25
+        goal.side_stride_length = 0.02
+        goal.rotational_stride_length = 0.01
+        goal.stride_width = 0.2
+        goal.swing_height = 0.1
+        goal.turn_out = 0.0
+        goal.final_turn_out = 0.0
+        goal.final_stride_width = 0.2
+        goal.stamp_in_place_before = False
+        goal.stamp_in_place_after = False
+        goal.back_up_distance = 0.0
 
-        rospy.loginfo("AtlasPathPlanner::execute_leg_plan() -- sending walk path goal")
+        # print goal
+
+        rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- sending walk path goal")
         # Sends the goal to the action server.
         self.walk_controller_client.send_goal(goal)
 
         # Waits for the server to finish performing the action.
-        rospy.loginfo("AtlasPathPlanner::execute_leg_plan() -- waiting for walk path result")
-        self.walk_controller_client.wait_for_result()
+        # rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- waiting for walk path result")
+        # self.walk_controller_client.wait_for_result()
+
+        try :
+            fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+            while not fb_msg.feedback.planning_complete:
+                fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        except :
+            rospy.logwarn("AtlasPathPlanner::execute_navigation_plan() -- timeout on sending goal to walk")
+        
+        rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- COMPLETE(?)")
 
         # Prints out the result of executing the action
-        # print self.walk_controller_client.get_state()
-        return self.walk_controller_client.get_state() == GoalStatus.SUCCEEDED
+        # print self.walk_controller_client.get_result()  
+        status = self.walk_controller_client.get_state() == GoalStatus.SUCCEEDED
+
+        return status
+
 
 
     ##################################
@@ -499,8 +461,10 @@ class AtlasPathPlanner(PathPlanner) :
             goal.trajectory.points.append(p)
        
         rospy.loginfo("AtlasPathPlanner::plan_joint_paths() -- waiting for server")
-        self.joint_action_client.wait_for_server()
-        
+        if not self.joint_action_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("AtlasPathPlanner::plan_joint_paths() -- wait for server timeout")
+            return False
+
         # Creates a goal to send to     the action server.
         rospy.loginfo("AtlasPathPlanner::plan_joint_paths() -- sending goal")
 
@@ -542,7 +506,10 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths()")
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- waiting for server")
-        self.cartesian_reach_client.wait_for_server()
+        if not self.cartesian_reach_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("AtlasPathPlanner::plan_cartesian_paths() -- wait for server timeout")
+            return False
+
 
         goal = matec_actions.msg.PlannedManipulationGoal()
         goal.visualize_on_plan = rospy.get_param("~visualize_on_plan")
