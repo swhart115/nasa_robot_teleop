@@ -74,6 +74,7 @@ namespace rviz_interactive_controls_panel {
         void getCheckedGroups(bool andVal, std::vector<std::string> &gnvec,
                               std::vector<unsigned char> &gcvec);
         bool getChecked(const std::string &gn);
+		  std::string interfaceServiceReqStr(const nasa_robot_teleop::InteractiveControlsInterface &msg);
 
         bool initialized;
 

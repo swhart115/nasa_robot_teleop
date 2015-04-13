@@ -1,5 +1,6 @@
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
+#include <iostream>
 
 using namespace rviz_interactive_controls_panel;
 using namespace std;
@@ -54,6 +55,8 @@ bool MultiGroupControlsWidget::planRequest() {
             git->second->fillPlanRequest(srv);
         }
     }
+    std::cout << "MultiGroupControlsWidget: InterfaceRequest:" << std::endl;
+    std::cout << interfaceServiceReqStr(srv) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planRequest() -- success");
@@ -163,5 +166,17 @@ bool MultiGroupControlsWidget::getChecked(const std::string &gn) {
         }
     }
     return retval;
+}
+
+std::string MultiGroupControlsWidget::interfaceServiceReqStr(const nasa_robot_teleop::InteractiveControlsInterface &msg) {
+    std::ostringstream oss;
+    for (uint ix=0; ix<msg.request.group_name.size(); ++ix) {
+        oss << "group_name [" << msg.request.group_name[ix] << "]: ";
+        oss << "type: " << msg.request.group_type[ix] << ", ";
+        oss << "viz_mode: " << msg.request.path_visualization_mode[ix] << std::endl;
+        oss << "  exOnPlan: " << (msg.request.execute_on_plan[ix] ? "true" : "false");
+        oss << " planOnMv: " << (msg.request.plan_on_move[ix] ? "true" : "false");
+    }
+    return oss.str();
 }
 
