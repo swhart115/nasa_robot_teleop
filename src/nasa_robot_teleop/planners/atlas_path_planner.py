@@ -50,19 +50,19 @@ class AtlasPathPlanner(PathPlanner) :
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
 
-        rospy.set_param("~interpolation_type", 1)
-        rospy.set_param("~num_visualizaton_points", 5)
-        rospy.set_param("~visualize_path", True)
-        rospy.set_param("~maintain_hand_pose_offsets", False)
-        rospy.set_param("~move_as_far_as_possible", False)
+        rospy.set_param("~atlas/interpolation_type", 1)
+        rospy.set_param("~atlas/num_visualizaton_points", 5)
+        rospy.set_param("~atlas/visualize_path", True)
+        rospy.set_param("~atlas/maintain_hand_pose_offsets", False)
+        rospy.set_param("~atlas/move_as_far_as_possible", False)
 
-        rospy.set_param("~duration", 2.0)
-        rospy.set_param("~allow_incomplete_planning", True)
-        rospy.set_param("~num_acceptable_consecutive_failures", 0)
-        rospy.set_param("~plan_visualization_density", 0.5)
-        rospy.set_param("~visualize_on_plan", True)
-        rospy.set_param("~max_angular_velocity", 0.4)
-        rospy.set_param("~max_linear_velocity", 0.1)
+        rospy.set_param("~atlas/duration", 2.0)
+        rospy.set_param("~atlas/allow_incomplete_planning", True)
+        rospy.set_param("~atlas/num_acceptable_consecutive_failures", 0)
+        rospy.set_param("~atlas/plan_visualization_density", 0.5)
+        rospy.set_param("~atlas/visualize_on_plan", True)
+        rospy.set_param("~atlas/max_angular_velocity", 0.4)
+        rospy.set_param("~atlas/max_linear_velocity", 0.1)
 
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
@@ -265,10 +265,10 @@ class AtlasPathPlanner(PathPlanner) :
             return self.groups[group_name].joint_map.names
 
     def get_start_foot(self) :
-        return rospy.get_param("~start_foot")
+        return rospy.get_param("~atlas/start_foot")
 
     def set_start_foot(self, foot) :
-        rospy.set_param("~start_foot", foot)
+        rospy.set_param("~atlas/start_foot", foot)
 
 
     def get_foot_display_pose_offset(self, foot_name) :
@@ -512,10 +512,10 @@ class AtlasPathPlanner(PathPlanner) :
 
 
         goal = matec_actions.msg.PlannedManipulationGoal()
-        goal.visualize_on_plan = rospy.get_param("~visualize_on_plan")
-        goal.allow_incomplete_planning = rospy.get_param("~allow_incomplete_planning")
-        goal.num_acceptable_consecutive_failures = rospy.get_param("~num_acceptable_consecutive_failures")
-        goal.plan_visualization_density = rospy.get_param("~plan_visualization_density")
+        goal.visualize_on_plan = rospy.get_param("~atlas/visualize_on_plan")
+        goal.allow_incomplete_planning = rospy.get_param("~atlas/allow_incomplete_planning")
+        goal.num_acceptable_consecutive_failures = rospy.get_param("~atlas/num_acceptable_consecutive_failures")
+        goal.plan_visualization_density = rospy.get_param("~atlas/plan_visualization_density")
         goal.execute_on_plan = True in [self.auto_execute[g] for g in group_names]
        
         goal.plan_name = ""
@@ -538,8 +538,8 @@ class AtlasPathPlanner(PathPlanner) :
         for segment in segments :
 
             motion = matec_msgs.msg.GoalMotion()
-            motion.max_angular_velocity = rospy.get_param("~max_angular_velocity")
-            motion.max_linear_velocity = rospy.get_param("~max_linear_velocity")
+            motion.max_angular_velocity = rospy.get_param("~atlas/max_angular_velocity")
+            motion.max_linear_velocity = rospy.get_param("~atlas/max_linear_velocity")
             motion.stable_frame = self.get_robot_planning_frame()
             motion.segment_duration = 0.0
             motion.available_joints = []
@@ -661,9 +661,9 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
 
         if resp.left_foot_start :            
-            rospy.set_param("~start_foot", "left")
+            rospy.set_param("~atlas/start_foot", "left")
         else :
-            rospy.set_param("~start_foot", "right")
+            rospy.set_param("~atlas/start_foot", "right")
         
         return resp.steps
 
@@ -705,7 +705,7 @@ class AtlasPathPlanner(PathPlanner) :
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
             req.plans_in_parallel = False
-            req.plan_visualization_density = rospy.get_param("~plan_visualization_density")
+            req.plan_visualization_density = rospy.get_param("~atlas/plan_visualization_density")
             get_plan = rospy.ServiceProxy('/planned_manipulation/visualize', VisualizeManipulationPlan)
             resp = get_plan(req)
         except rospy.ServiceException, e:

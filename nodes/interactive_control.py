@@ -470,7 +470,9 @@ class InteractiveControl:
         resp = None
         
         if req.action_type == InteractiveControlsInterfaceRequest.GET_INFO :
-            return self.populate_service_response()
+            resp = self.populate_service_response()
+            # print resp
+            return resp
 
         elif req.action_type == InteractiveControlsInterfaceRequest.TOGGLE_POSTURE_CONTROLS :
             for g in req.group_name :
@@ -675,8 +677,8 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
 
         self.server.applyChanges()
+
         resp = self.populate_service_response()
-            
         return resp
 
 
