@@ -90,6 +90,12 @@ class PathPlanner(object):
         get_all_tips(self.urdf_model)
         self.srdf_model.set_urdf(self.urdf_model)
 
+        print "SRDF groups:" 
+        print self.srdf_model.groups
+        for g in self.srdf_model.groups :
+            print g, " names:"
+            self.joint_names = self.srdf_model.get_joint_names(g)
+
         try :
             rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
             if self.srdf_model.parse_from_file(config_file) :

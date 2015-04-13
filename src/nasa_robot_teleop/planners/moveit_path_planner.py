@@ -16,6 +16,8 @@ import actionlib_msgs.msg
 
 from nasa_robot_teleop.path_planner import *
 
+from nasa_robot_teleop.msg import *
+from nasa_robot_teleop.srv import *
 
 class MoveItPathPlanner(PathPlanner) :
 
@@ -196,15 +198,29 @@ class MoveItPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItPathPlanner::get_group_joints() -- group name \'" + str(group_name) + "\' not found"))
             return [] 
 
+    def get_joint_map(self, group_name) :
+       
+        root = self.srdf_model.get_base_link(group_name)
+        tip = self.srdf_model.get_tip_link(group_name)
+        joint_list = []
+
+        joint_list = self.srdf_model.get_group_joints(group_name)
+
+        joint_name_map = nasa_robot_teleop.msg.JointNameMap()
+
+        idx = 0
+        for j in joint_list :
+            joint_name_map.names.append(j)
+            joint_name_map.ids.append(idx)
+            idx += 1
+
+        return joint_name_map
+
 
     ###################################
     ######## EXECUTION METHODS ########
     ###################################
   
-
-    def execute_plans(self, group_names, from_stored=False, wait=True) :
-
-
     def execute_plans(self, group_names, from_stored=False, wait=True) :
         for group_name in group_names :
             if self.plan_generated[group_name] and self.stored_plans[group_name] :
@@ -330,7 +346,7 @@ class MoveItPathPlanner(PathPlanner) :
         traj_results = {}
         for group_name in group_names :
             traj_results[group_name] = None
-
+      
         if not len(group_names) == len(paths) :
             rospy.logerr(str("MoveItPathPlanner::plan_cartesian_paths() -- size mismatch: " 
                 + str(len(group_names)) + " groups vs. " + str(len(paths)) + " paths"))
@@ -344,20 +360,23 @@ class MoveItPathPlanner(PathPlanner) :
                 try :
                     fraction = 0
                     try :
+                        stripped_path = []
+                        for p in paths[idx] :
+                            stripped_path.append(p.pose)
                         # this jump parameter often makes it fail---more investigation needed here.
                         # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
-                        (plan, fraction) = self.groups[group_name].compute_cartesian_path(paths[idx], 0.01, 0)  
-
+                        (plan, fraction) = self.groups[group_name].compute_cartesian_path(stripped_path, 0.01, 0)  
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
-                            traj_results[group_name] =  plan.joint_trajectory
-            
+                            traj_results[group_name] =  plan.joint_trajectory            
                     except :
                         rospy.logerr("MoveItInterface::plan_cartesian_paths() -- Generating Cartesian Path Plan Failed")
                 except :
                     rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed"))
-            
+
+        print "traj_results"
+        print traj_results            
         return traj_results
 
                 

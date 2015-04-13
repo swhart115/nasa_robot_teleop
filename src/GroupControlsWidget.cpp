@@ -162,15 +162,16 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                 }
             }
            
-            for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
-                if(tol_info.mode == "Position Tolerance") {
-                    position_tolerance = tol_info.types[0];
-                } 
-                if(tol_info.mode == "Angle Tolerance") {
-                    orientation_tolerance = tol_info.types[0];
+            if (resp.tolerance_setting.size() > 0) {
+                for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
+                    if(tol_info.mode == "Position Tolerance") {
+                        position_tolerance = tol_info.types[0];
+                    } 
+                    if(tol_info.mode == "Angle Tolerance") {
+                        orientation_tolerance = tol_info.types[0];
+                    }
                 }
             }
-        
 
             
             stored_poses.clear();
@@ -342,6 +343,7 @@ bool GroupControlsWidget::planRequest() {
     std::string viz_type = ui->viz_type->currentText().toStdString();
     srv.request.path_visualization_mode.push_back(viz_type);
     srv.request.execute_on_plan.push_back(ui->execute_on_plan->checkState()==Qt::Checked);
+
 
     nasa_robot_teleop::ToleranceInfo pos_tol_info;
     pos_tol_info.mode = "Position Tolerance";
