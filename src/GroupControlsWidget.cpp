@@ -338,6 +338,18 @@ bool GroupControlsWidget::planRequest() {
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_TO_MARKER;
+    fillPlanRequest(srv);
+    if (service_client_->call(srv)) {
+        ROS_INFO("GroupControlsWidget::planRequest() -- success");
+        return setGroupDataFromResponse(srv.response);
+    } else {
+        ROS_ERROR("GroupControlsWidget::planRequest() -- failed to call service");
+        return false;
+    }
+}
+
+
+void GroupControlsWidget::fillPlanRequest(nasa_robot_teleop::InteractiveControlsInterface &srv) {
     srv.request.group_name.push_back(group_name);
     std::string viz_type = ui->viz_type->currentText().toStdString();
     srv.request.path_visualization_mode.push_back(viz_type);
@@ -362,19 +374,7 @@ bool GroupControlsWidget::planRequest() {
         jm.mask.push_back(joint_mask[jdx]);
     }
     srv.request.joint_mask.push_back(jm); 
-
-    if (service_client_->call(srv))
-    {
-        ROS_INFO("GroupControlsWidget::planRequest() -- success");
-        return setGroupDataFromResponse(srv.response);
-    }
-    else
-    {
-        ROS_ERROR("GroupControlsWidget::planRequest() -- failed to call service");
-        return false;
-    }
 }
-
 
 bool GroupControlsWidget::executeRequest() {
 

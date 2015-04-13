@@ -10,6 +10,7 @@
 
 #include "ui_rviz_interactive_controls_panel.h"
 #include "GroupControlsWidget.hpp"
+#include "MultiGroupControlsWidget.hpp"
 #include "NavigationControlsWidget.hpp"
 
 namespace Ui {
@@ -49,6 +50,7 @@ namespace rviz_interactive_controls_panel
         
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
+		  MultiGroupControlsWidget *multi_group_widget;
         NavigationControlsWidget *navigation_widget;
 
         // setup widget function
@@ -56,7 +58,14 @@ namespace rviz_interactive_controls_panel
 
         // function add a new group controls tab
         bool addGroupControls(std::string group_name);
+		  // multi-group controls
+		  void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        bool addMultiGroupControls();
+		  bool removeMultiGroupControls();
+		  // navigation controls
+		  void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
         bool addNavigationControls();
+		  bool removeNavigationControls();
 
         bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
 

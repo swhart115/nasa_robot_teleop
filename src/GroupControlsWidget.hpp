@@ -36,6 +36,7 @@ namespace rviz_interactive_controls_panel
 
         void setupDisplay();
         bool setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        void fillPlanRequest(nasa_robot_teleop::InteractiveControlsInterface &srv);
 
     public Q_SLOTS:
 
