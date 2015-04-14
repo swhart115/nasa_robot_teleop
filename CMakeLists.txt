@@ -26,7 +26,8 @@ set(QT_FORMS
 
 qt4_wrap_cpp(MOC_FILES
     src/GroupControlsWidget.hpp
-	 src/MultiGroupControlsWidget.hpp
+    src/InteractiveControlsInterfaceUtils.hpp
+    src/MultiGroupControlsWidget.hpp
     src/NavigationControlsWidget.hpp
     src/RVizInteractiveControlsPanel.hpp
 )
@@ -34,7 +35,8 @@ qt4_wrap_ui(QT_FORMS_HPP ${QT_FORMS})
 
 set(SRC_FILES
     src/GroupControlsWidget.cpp
-	 src/MultiGroupControlsWidget.cpp
+    src/InteractiveControlsInterfaceUtils.cpp
+    src/MultiGroupControlsWidget.cpp
     src/NavigationControlsWidget.cpp
     src/RVizInteractiveControlsPanel.cpp
     ${MOC_FILES}

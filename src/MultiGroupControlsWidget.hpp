@@ -9,7 +9,6 @@
 #include <ros/package.h>
 
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
-//#include "nasa_robot_teleop/ToleranceInfo.h"
 
 #include "ui_multi_group_controls_widget.h"
 
@@ -46,7 +45,7 @@ namespace rviz_interactive_controls_panel {
         bool addGroup(const std::string &group_name,
                       GroupControlsWidget* group_widget);
 
-        //bool removeGroup(std::string group_name);
+        void removeGroup(const std::string &group_name);
 
         //void setupDisplay();
 
@@ -73,8 +72,8 @@ namespace rviz_interactive_controls_panel {
         //   use unsigned char
         void getCheckedGroups(bool andVal, std::vector<std::string> &gnvec,
                               std::vector<unsigned char> &gcvec);
-        bool getChecked(const std::string &gn);
-		  std::string interfaceServiceReqStr(const nasa_robot_teleop::InteractiveControlsInterface &msg);
+        bool getChecked(const QString &gn);
+        QListWidgetItem* getListItem(const QString &gn);
 
         bool initialized;
 

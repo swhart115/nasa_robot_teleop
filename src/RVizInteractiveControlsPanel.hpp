@@ -17,8 +17,7 @@ namespace Ui {
 class RVizInteractiveControlsPanel;
 }
 
-namespace rviz_interactive_controls_panel
-{
+namespace rviz_interactive_controls_panel {
 
     class RVizInteractiveControlsPanel : public rviz::Panel
     {
@@ -28,8 +27,7 @@ namespace rviz_interactive_controls_panel
         explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
         ~RVizInteractiveControlsPanel();
 
-       public Q_SLOTS:
-        
+      public Q_SLOTS:  
          bool getConfigData();
          bool addGroupRequest();
          bool removeGroupRequest();
@@ -50,7 +48,7 @@ namespace rviz_interactive_controls_panel
         
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
-		  MultiGroupControlsWidget *multi_group_widget;
+        MultiGroupControlsWidget *multi_group_widget;
         NavigationControlsWidget *navigation_widget;
 
         // setup widget function
@@ -58,17 +56,18 @@ namespace rviz_interactive_controls_panel
 
         // function add a new group controls tab
         bool addGroupControls(std::string group_name);
-		  // multi-group controls
-		  void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+
+        // multi-group controls
+        void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
         bool addMultiGroupControls();
-		  bool removeMultiGroupControls();
-		  // navigation controls
-		  void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        bool removeMultiGroupControls();
+
+        // navigation controls
+        void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
         bool addNavigationControls();
-		  bool removeNavigationControls();
+        bool removeNavigationControls();
 
         bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
-
 
     };
 

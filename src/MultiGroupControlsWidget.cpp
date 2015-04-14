@@ -1,5 +1,6 @@
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
+#include "InteractiveControlsInterfaceUtils.hpp"
 #include <iostream>
 
 using namespace rviz_interactive_controls_panel;
@@ -29,6 +30,9 @@ void MultiGroupControlsWidget::setupWidgets() {
                      this, SLOT(planOnMoveClicked(int)));
     QObject::connect(ui->execute_on_plan, SIGNAL(stateChanged(int)),
                      this, SLOT(executeOnPlanClicked(int)));
+    
+    //QObject::connect(ui->group_list, SIGNAL(itemClicked(QListWidgetItem *)),
+    //                 this, SLOT(groupMaskChanged(QListWidgetItem*)));
 }
 
 bool MultiGroupControlsWidget::addGroup(const std::string &group_name,
@@ -39,10 +43,31 @@ bool MultiGroupControlsWidget::addGroup(const std::string &group_name,
         const QString label(group_name.c_str());
         group_map[group_name] = group_widget;
         ui->group_list->addItem(label);
+        QListWidgetItem* item = getListItem(label);
+        if (item != NULL) {
+            item->setCheckState(Qt::Checked);
+        } else {
+            item->setCheckState(Qt::Unchecked);
+        }
     } else {
         return false;
     }
     return true;
+}
+
+void MultiGroupControlsWidget::removeGroup(const std::string &group_name) {
+    if (group_map.count(group_name) > 0) {
+        std::map<std::string, GroupControlsWidget*>::iterator it;
+        it = group_map.find(group_name);
+        group_map.erase(it);
+    }
+    for (int gdx=0; gdx<ui->group_list->count(); ++gdx) {
+        QListWidgetItem* listItem = ui->group_list->item(gdx);
+        if (group_name == listItem->text().toStdString()) {
+            ui->group_list->removeItemWidget(listItem);
+            break;
+        }
+    }
 }
 
 bool MultiGroupControlsWidget::planRequest() {
@@ -51,15 +76,17 @@ bool MultiGroupControlsWidget::planRequest() {
     nasa_robot_teleop::InteractiveControlsInterface srv;
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_TO_MARKER;
     for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
-        if (getChecked(git->first)) {
+        if (getChecked(QString::fromStdString(git->first))) {
             git->second->fillPlanRequest(srv);
         }
     }
-    std::cout << "MultiGroupControlsWidget: InterfaceRequest:" << std::endl;
-    std::cout << interfaceServiceReqStr(srv) << std::endl;
+    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    std::cout << rviz_interactive_controls_panel::InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planRequest() -- success");
+        std::cout << "MultiGroupControlsWidget: response:" << std::endl;
+        std::cout << InteractiveControlsInterfaceUtils::responseStr(srv.response) << std::endl;
         // return value is boolean && of all groups' setGroupData
         bool retval = false;
         for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
@@ -104,12 +131,20 @@ void MultiGroupControlsWidget::planOnMoveClicked(int d) {
     ROS_INFO("MultiGroupControlsWidget::planOnMoveClicked()");    
     plan_on_move = (d == Qt::Checked);
     nasa_robot_teleop::InteractiveControlsInterface srv;
-
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_PLAN_ON_MOVE;
-    getCheckedGroups(plan_on_move, srv.request.group_name, srv.request.plan_on_move);
+
+    //getCheckedGroups(plan_on_move, srv.request.group_name, srv.request.plan_on_move);
+    for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
+        srv.request.group_name.push_back(git->first);
+        srv.request.plan_on_move.push_back(getChecked(QString::fromStdString(git->first)) && plan_on_move);
+    }
+    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planOnMoveClicked() -- success");
+        //std::cout << "MultiGroupControlsWidget: response:" << std::endl;
+        //std::cout << InteractiveControlsInterfaceUtils::responseStr(srv.response) << std::endl;
         for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
             std::string group_name(srv.response.group_name[idx]);
             if (group_map.count(group_name) > 0) {
@@ -127,7 +162,13 @@ void MultiGroupControlsWidget::executeOnPlanClicked(int d) {
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_EXECUTE_ON_PLAN;
-    getCheckedGroups(execute_on_plan, srv.request.group_name, srv.request.execute_on_plan);
+    //getCheckedGroups(execute_on_plan, srv.request.group_name, srv.request.execute_on_plan);
+    for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
+        srv.request.group_name.push_back(git->first);
+        srv.request.plan_on_move.push_back(getChecked(QString::fromStdString(git->first)) && execute_on_plan);
+    }
+    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::executeOnPlanClicked() -- success");
@@ -149,34 +190,32 @@ void MultiGroupControlsWidget::getCheckedGroups(bool andVal,
     
     for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
         gnvec.push_back(git->first);
-        gcvec.push_back((unsigned char)(andVal && getChecked(git->first)));
+        gcvec.push_back((unsigned char)(andVal &&
+                                        getChecked(QString::fromStdString(git->first))));
     }
 }
 
-bool MultiGroupControlsWidget::getChecked(const std::string &gn) {
+bool MultiGroupControlsWidget::getChecked(const QString &gn) {
     bool retval = false;
+    QListWidgetItem* listItem = getListItem(gn);
+    if (listItem != NULL) {
+        retval = (listItem->checkState() == Qt::Checked);
+    }
+    return retval;
+}
+
+QListWidgetItem* MultiGroupControlsWidget::getListItem(const QString &gn) {
+    QListWidgetItem* retval = NULL;
     // holy schmoley, either me or (Qt) is dumb in this respect...there's
     // really no way to get an item via it's text? fine, loop over all...
     // TODO: set up a map to keep track of the check state
     for (int gdx=0; gdx<ui->group_list->count(); ++gdx) {
         QListWidgetItem* listItem = ui->group_list->item(gdx);
-        if (gn == listItem->text().toStdString()) {
-            retval = (listItem->checkState() == Qt::Checked);
+        if (gn == listItem->text()) {
+            retval = listItem;
             break;
         }
     }
     return retval;
-}
-
-std::string MultiGroupControlsWidget::interfaceServiceReqStr(const nasa_robot_teleop::InteractiveControlsInterface &msg) {
-    std::ostringstream oss;
-    for (uint ix=0; ix<msg.request.group_name.size(); ++ix) {
-        oss << "group_name [" << msg.request.group_name[ix] << "]: ";
-        oss << "type: " << msg.request.group_type[ix] << ", ";
-        oss << "viz_mode: " << msg.request.path_visualization_mode[ix] << std::endl;
-        oss << "  exOnPlan: " << (msg.request.execute_on_plan[ix] ? "true" : "false");
-        oss << " planOnMv: " << (msg.request.plan_on_move[ix] ? "true" : "false");
-    }
-    return oss.str();
 }
 
