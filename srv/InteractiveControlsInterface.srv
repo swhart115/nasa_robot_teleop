@@ -19,6 +19,8 @@ int8 action_type
   int8 EXECUTE_NAVIGATION_PATH = 17
   int8 PLAN_FOOTSTEPS_IN_PATH = 18
   int8 SET_FIRST_FOOT = 19
+  int8 SET_NAVIGATION_MODE = 20
+  int8 SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION = 21
   
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
 string[] group_name
@@ -49,8 +51,13 @@ bool[] plan_on_move
 string[] navigation_waypoint_name
 
 # current setting of navigation waypoint flags
-bool left_foot_first
 bool plan_footsteps
+
+# current setting of accommodate_terrain for navigation flag
+bool accommodate_terrain_in_navigation
+
+# the navigation mode to use
+string navigation_mode
 
 ----
 
@@ -98,3 +105,12 @@ bool plan_footsteps
 
 # the names of the navigation_points to be deleted, added from, or planned/executed to
 string[] navigation_waypoint_name
+
+# the navigation modes
+string[] navigation_modes
+
+# the current navigation_mode
+string navigation_mode
+
+# current setting of accommodate_terrain for navigation flag
+bool accommodate_terrain_in_navigation

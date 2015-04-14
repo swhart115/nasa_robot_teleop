@@ -63,6 +63,10 @@ class FootstepControl(object) :
         self.foot_color_map = {}
         self.feet_names = []
 
+        self.lift_heights = None
+        self.feet = None
+
+
         random.seed(rospy.Time.now().secs)
 
 
@@ -77,15 +81,17 @@ class FootstepControl(object) :
                 c = ColorRGBA()
                 c.r = 0.5
                 c.b = 0.5
-                c.g = 0.25+0.5*(float(self.feet_names.index(foot))/float(len(self.feet_names)-1))
+                c.g = 0.75-0.5*(float(self.feet_names.index(foot))/float(len(self.feet_names)-1))
                 c.a = 1.0
                 self.foot_color_map[foot] = c
     
 
-    def set_footstep_poses(self, poses) :
+    def set_footstep_poses(self, poses, lift_heights=None, feet=None) :
         self.clear_footsteps()
-        if self.translate_poses_to_markers(poses) :
+        if self.translate_poses_to_markers(poses, lift_heights, feet) :
             self.create_foot_interactive_markers()
+            self.lift_heights = lift_heights
+            self.feet = feet
 
 
     def footstep_callback(self, data) :
@@ -94,7 +100,7 @@ class FootstepControl(object) :
         self.create_foot_interactive_markers()
 
 
-    def translate_poses_to_markers(self, poses) :       
+    def translate_poses_to_markers(self, poses, lift_heights, feet) :       
 
         if not poses :
             rospy.logwarn("FootstepControl::translate() -- can't make markers no poses given!")
@@ -105,8 +111,22 @@ class FootstepControl(object) :
         self.footstep_array = MarkerArray()
         num_feet = len(self.feet_names)
 
-        start_foot = self.path_planner.get_start_foot()
-        start_foot_id = self.feet_names.index(start_foot)
+        if feet != None :
+            if len(feet) != len(poses) :
+                rospy.logerr("FootstepControl::translate_poses_to_markers() -- size mismatch between foot lables and poses!!")
+                return False
+
+        try :
+            if len(feet) > 0 :
+                if feet[0] == 0: 
+                    start_foot == "left"
+                else :
+                    start_foot == "right"
+                start_foot_id == feet[0]
+        except :
+            start_foot = self.path_planner.get_start_foot()
+            start_foot_id = self.feet_names.index(start_foot)
+    
         
         for id in range(len(poses)) :
             
@@ -120,12 +140,19 @@ class FootstepControl(object) :
             except :
                 rospy.logerr(str("FootstepControl::translate() -- error translating pose from " + poses[id].header.frame_id + " to " + self.frame_id))
                 return False
-
             m.id = id
             # this assumes the feet order in the names is the order assoicated 
             # with the input pose array (modulated by the start foot. probably 
             # a bad assumption in general)
-            m.text = self.feet_names[(id+start_foot_id)%num_feet] + "/" + str(id/2)            
+            try :
+                if feet[id] == 0: 
+                    foot_name == "left"
+                else :
+                    foot_name == "right"
+                m.text = foot_name + "/" + str(id/2)            
+            except :
+                m.text = self.feet_names[(id+start_foot_id)%num_feet] + "/" + str(id/2)            
+
             rospy.loginfo(str("FootstepControl::translate() -- Adding foot[" + str(m.text) + "] at (" + str(m.pose.position.x) + ", " + str(m.pose.position.y) + ")_[" + str(m.header.frame_id) + "]"))
             self.footstep_array.markers.append(m)
 
@@ -296,7 +323,7 @@ class FootstepControl(object) :
             # print "==== FINAL STEP POSES ==="
             # print step_poses
             # print "======="
-            self.path_planner.execute_navigation_plan(step_poses)
+            self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
             self.footstep_plan_valid = False
 
 
