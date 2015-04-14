@@ -8,13 +8,12 @@ include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-rosbuild_find_ros_package(actionlib)
-include(${actionlib_PACKAGE_PATH}/cmake/actionbuild.cmake)
+rosbuild_find_ros_package(actionlib_msgs)
+include(${actionlib_msgs_PACKAGE_PATH}/cmake/actionbuild.cmake)
 genaction()
+rosbuild_init()
 rosbuild_genmsg()
 rosbuild_gensrv()
-
-rosbuild_init()
 
 find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
 include(${QT_USE_FILE})
@@ -23,8 +22,8 @@ pkg_check_modules(OGRE OGRE)
 include_directories(${OGRE_INCLUDE_DIRS})
 link_directories(${OGRE_LIBRARY_DIRS})
 add_definitions(-DQT_NO_KEYWORDS)
-set(QT_FORMS 
-  ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui 
+set(QT_FORMS
+  ${PROJECT_SOURCE_DIR}/ui/rviz_interactive_controls_panel.ui
   ${PROJECT_SOURCE_DIR}/ui/group_controls_widget.ui
   ${PROJECT_SOURCE_DIR}/ui/navigation_controls_widget.ui)
 
