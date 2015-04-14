@@ -73,10 +73,13 @@ class AtlasPathPlanner(PathPlanner) :
         # self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
         # self.planner_viz_feedback_sub = rospy.Subscriber('/planned_manipulation/plan_visual', control_msgs.msg.FollowJointTrajectoryGoal, self.planner_viz_feedback)
       
-        rospy.loginfo("AtlasPathPlanner::init() -- waiting for visualization service")
-        self.connected_to_plan_viz = rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
-        if not self.connected_to_plan_viz :
-            rospy.logwarn("AtlasPathPlanner::init() -- timeout out waitin for visualization service")  
+        try :
+            rospy.loginfo("AtlasPathPlanner::init() -- waiting for visualization service")
+            self.connected_to_plan_viz = rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
+            if not self.connected_to_plan_viz :
+                rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service")  
+        except :
+            rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service")  
 
         self.last_plan_name = ""
         self.get_joint_names()
@@ -697,18 +700,17 @@ class AtlasPathPlanner(PathPlanner) :
         jt = data.trajectory
         self.process_plan_viz(jt)
 
-    def get_plan(self) :
-        
-        rospy.wait_for_service('/planned_manipulation/visualize')
-        
+    def get_plan(self) :    
+
         try:
+            rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
             req.plans_in_parallel = False
             req.plan_visualization_density = rospy.get_param("~atlas/plan_visualization_density")
             get_plan = rospy.ServiceProxy('/planned_manipulation/visualize', VisualizeManipulationPlan)
             resp = get_plan(req)
-        except rospy.ServiceException, e:
+        except :
             rospy.logerr("AtlasPathPlanner::get_plan_viz() -- service call failed")
             return None
         
