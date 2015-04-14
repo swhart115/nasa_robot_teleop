@@ -140,11 +140,40 @@ class SRDFModel :
 
         if self.urdf :
             self.expand_with_urdf()
+            self.validate_groups_with_urdf()
 
         # self.print_groups()
 
         return True
 
+    def validate_groups_with_urdf(self) :
+        rospy.loginfo("SRDFModel::validate_groups_with_urdf()")
+        groups = copy.deepcopy(self.get_groups())
+        for g in groups :
+            rospy.loginfo("SRDFModel::validate_groups_with_urdf() -- checking group " + g)
+            if len(self.group_joints[g]) == 0 :
+                rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (no joints)" + g)
+                self.remove_group(g)
+            elif len(self.group_links[g]) == 0 :
+                rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (no links)" + g)
+                self.remove_group(g)
+            else :
+                try :
+                    for jnt in self.group_joints[g] :
+                        if not jnt in self.urdf.joint_map.keys() :
+                            rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (unknown joints) " + g)
+                            self.remove_group(g)
+                            break
+                except :
+                    pass
+                try :
+                    for lnk in self.group_links[g] :
+                        if not lnk in self.urdf.link_map.keys() :
+                            rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (unknown links) " + g)
+                            self.remove_group(g)
+                            break
+                except :
+                    pass
 
     def expand_with_urdf(self) :
         rospy.loginfo("SRDFModel::expanding_with_urdf()")
@@ -248,7 +277,7 @@ class SRDFModel :
         if group in self.tip_links and self.tip_links[group] != None :
             return self.tip_links[group]
         else :
-            rospy.logerr(str("No Tip Link for Group " + group))
+            rospy.loginfo(str("No Tip Link for Group " + group))
             return ""
 
     def get_base_link(self, group) :
@@ -257,6 +286,25 @@ class SRDFModel :
         else :
             rospy.logerr(str("No base Link for Group " + group))
             return ""
+
+    def remove_group(self, group) :
+        try:
+            self.groups.remove(group)
+            del self.base_links[group]
+            del self.tip_links[group]
+            del self.group_links[group]
+            del self.group_joints[group]
+            del self.group_states[group]
+            del self.virtual_joints[group]
+            del self.end_effectors[group]
+            del self.group_end_effectors[group]
+            del self.disable_collisions[group]
+            del self.is_chain[group]
+            del self.full_group_joints[group]
+            # del self.full_group_links[group]
+            del self.joint_mask[group]
+        except :
+            pass
 
     def get_groups(self) :
         return self.groups

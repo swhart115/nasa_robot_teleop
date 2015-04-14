@@ -11,38 +11,40 @@ class Tolerance(object) :
             rospy.logwarn("No Tolerance File given!!")
             return
 
+        self.defaults = {}
+
         try :
             f = open(filename)
             self.tolerances = yaml.load(f.read())
             f.close()    
-            # print yaml.dump(self.tolerances)
         except :
             self.tolerances = None
-            print "bad tolerance file!"
+            rospy.logerr(str("Tolerance() -- bad tolerance file: " + str(filename)))
+
+        if 'Defaults' in self.tolerances.keys() :
+            for default in self.tolerances['Defaults'] :
+                self.defaults[default['mode']] = default['type']
+            del self.tolerances['Defaults']
 
         return None
   
-    def get_tolerance_mode(self, mode, vals) :
+    def get_tolerance_type(self, mode, vals) :
         round_digits = 4
         v1 = [round(vals[0],round_digits), round(vals[1],round_digits), round(vals[2],round_digits)]   
-        if not mode in self.tolerances : 
-            rospy.logerr(str("Tolerance::get_tolerance_mode() -- " + mode + " not in Tolerance set: " + self.tolerances.keys()))
+        rt = ""
+        if not mode in self.tolerances.keys() : 
+            rospy.logerr(str("Tolerance::get_tolerance_type() -- " + mode + " not in Tolerance set: " + self.tolerances.keys()))
             if "Position" in mode:
-                return "CENTIMETER"
+                rt = "CENTIMETER"
             else :       
-                return "EXACT_ANGLE"
-
+                rt = "SPHERE"
+            return rt
         for tol_type in self.tolerances[mode] :
             for t in tol_type.keys() :
-                v2 = [round(v,round_digits) for v in tol_type[t]]   
-                if v1==v2 :
-                    return t  
-
-        if "Position" in mode:
-            return "CENTIMETER"
-        else :       
-            return "EXACT_ANGLE"
-
+                v2 = [round(tol_type[t][0],round_digits), round(tol_type[t][1],round_digits), round(tol_type[t][2],round_digits)]
+                if v1==v2 : 
+                    rt = t  
+        return rt
 
     def get_tolerance_vals(self, mode, tol_type) :
         if not mode in self.tolerances : 
@@ -65,5 +67,12 @@ class Tolerance(object) :
                 r.append(k)
         return r
 
+    def get_default_tolerance(self, mode) :
+        if mode in self.defaults.keys() :
+            return self.defaults[mode]
+        else :
+            rospy.logwarn(str("tolerance::get_default_tolerance(" + str(mode) +") not found!"))
+            return ""
+
 if __name__=="__main__":
-    t = Tolerance(None)
+    t = Tolerance("/home/swhart/ros/catkin_workspace/src/nasa_robot_teleop/config/tolerances.yaml")

@@ -11,5 +11,9 @@
   <depend package="sensor_msgs"/>
   <depend package="trajectory_msgs"/>
   <depend package="control_msgs"/>
+  <depend package="rviz"/>
+  <export>
+      <rviz plugin="${prefix}/plugin_description.xml"/>
+  </export>
 
 </package>

@@ -21,3 +21,9 @@ Position Tolerance:
   - MILLIMETER : [0.001, 0.001, 0.001]
   - CENTIMETER : [0.01, 0.01, 0.01]
   - DECIMETER :  [0.1, 0.1, 0.1]
+
+Defaults:
+  - mode: "Angle Tolerance"
+    type: SPHERE
+  - mode: "Position Tolerance"
+    type: CENTIMETER

@@ -5,20 +5,21 @@ int8 action_type
   int8 SET_MARKER_POSE = 3
   int8 SET_SHOW_PATH = 4
   int8 SET_PLAN_ON_MOVE = 5
-  int8 SET_EXECUTE_ON_MOVE = 6
-  int8 SET_POSITION_TOLERANCE = 7
-  int8 SET_ORIENTATION_TOLERANCE = 8
-  int8 SET_JOINT_MAP = 9
-  int8 EXECUTE_STORED_POSE = 10
-  int8 TOGGLE_POSTURE_CONTROLS = 11
-  int8 SYNC_MARKERS_TO_ROBOT = 12
-  int8 PLAN_TO_MARKER = 13
-  int8 EXECUTE_PLAN = 14
-  int8 ADD_NAVIGATION_WAYPOINT = 15
-  int8 DELETE_NAVIGATION_WAYPOINT = 16
-  int8 PLAN_NAVIGATION_PATH = 17
-  int8 EXECUTE_NAVIGATION_PATH = 18
-
+  int8 SET_EXECUTE_ON_PLAN = 6
+  int8 SET_TOLERANCES = 7
+  int8 SET_JOINT_MAP = 8
+  int8 EXECUTE_STORED_POSE = 9
+  int8 TOGGLE_POSTURE_CONTROLS = 10
+  int8 SYNC_MARKERS_TO_ROBOT = 11
+  int8 PLAN_TO_MARKER = 12
+  int8 EXECUTE_PLAN = 13
+  int8 ADD_NAVIGATION_WAYPOINT = 14
+  int8 DELETE_NAVIGATION_WAYPOINT = 15
+  int8 PLAN_NAVIGATION_PATH = 16
+  int8 EXECUTE_NAVIGATION_PATH = 17
+  int8 PLAN_FOOTSTEPS_IN_PATH = 18
+  int8 SET_FIRST_FOOT = 19
+  
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
 string[] group_name
 
@@ -40,12 +41,16 @@ JointMask[] joint_mask
 # the different tolerance modes to set
 ToleranceInfo[] tolerance
 
-# the names of the navigation_points that will be deleted
-string[] navigation_waypoint_name
-
 # current setting of flags
 bool[] execute_on_plan
 bool[] plan_on_move
+
+# the names of the navigation_points that will be deleted
+string[] navigation_waypoint_name
+
+# current setting of navigation waypoint flags
+bool left_foot_first
+bool plan_footsteps
 
 ----
 
@@ -70,12 +75,12 @@ JointNameMap[] joint_names
 
 # current path visualization modes
 string[] path_visualization_mode
-
+         
 # the different tolerance modes (applicable to all groups)
 ToleranceInfo[] tolerance
 
 # current tolerance settings for each group
-ToleranceInfo[] tolerance_setting
+ToleranceInfoArray[] tolerance_setting
 
 # current setting of flags
 bool[] execute_on_plan
@@ -83,3 +88,13 @@ bool[] plan_on_move
 
 # the stored poses for each group
 StringArray[] stored_pose_list
+
+# if navigation controls exist
+bool has_navigation_controls
+
+# new setting of navigation waypoint flags
+bool left_foot_first
+bool plan_footsteps
+
+# the names of the navigation_points to be deleted, added from, or planned/executed to
+string[] navigation_waypoint_name

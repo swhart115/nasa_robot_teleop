@@ -10,6 +10,7 @@
 
 #include "ui_rviz_interactive_controls_panel.h"
 #include "GroupControlsWidget.hpp"
+#include "NavigationControlsWidget.hpp"
 
 namespace Ui {
 class RVizInteractiveControlsPanel;
@@ -43,14 +44,19 @@ namespace rviz_interactive_controls_panel
         // ros node handle
         ros::NodeHandle nh_;
 
+        // init flag
+        bool initialized;
+        
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
+        NavigationControlsWidget *navigation_widget;
 
         // setup widget function
         void setupWidgets();
 
         // function add a new group controls tab
         bool addGroupControls(std::string group_name);
+        bool addNavigationControls();
 
         bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
 

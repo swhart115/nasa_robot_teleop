@@ -59,7 +59,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 1
+        self.path_increment = 10
 
         self.gripper_service = None
         self.bridge_topic_map = {}
@@ -111,7 +111,7 @@ class PathPlanner(object):
             self.active_groups.remove(group_name)
         except :
             pass
-            
+
     def get_group_type(self, group_name) :
         if self.has_group(group_name) :
             return self.group_types[group_name]
@@ -159,7 +159,13 @@ class PathPlanner(object):
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
 
-        if not group_name in self.active_groups :
+        if not group_name in self.srdf_model.get_groups() :
+            rospy.logwarn(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
+            if group_name in self.active_groups :
+                self.active_groups.remove(group_name)
+            return False
+
+        if not group_name in self.active_groups  :
             self.active_groups.append(group_name)
     
         self.plan_generated[group_name] = False
@@ -292,7 +298,8 @@ class PathPlanner(object):
             # only do it if it is NOT an end-effector
             if self.group_types[group] != "endeffector" :
                 path_visualization_marker_array = self.joint_trajectory_to_marker_array(jt, group, self.display_modes[group])
-                self.path_visualization.publish(path_visualization_marker_array)
+                if len(path_visualization_marker_array.markers) > 0 :
+                    self.path_visualization.publish(path_visualization_marker_array)
                 
 
     # publish a dummy MarkerArray so that RViz clears things out
@@ -334,20 +341,23 @@ class PathPlanner(object):
             idx += self.group_id_offset[group]
             idx += len(waypoint_markers)
             for m in waypoint_markers: markers.markers.append(m)
-            if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
-                ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
-                ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
-                if last_link != ee_root_frame :
-                    self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
-                    (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
-                    rot = normalize_vector(rot)
-                    ee_offset = toPose(trans, rot)
+            try :
+                if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
+                    ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
+                    ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
+                    if last_link != ee_root_frame :
+                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
+                        (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
+                        rot = normalize_vector(rot)
+                        ee_offset = toPose(trans, rot)
 
-                offset_pose = toMsg(end_pose*fromMsg(ee_offset))
-                end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
-                for m in end_effector_markers.markers: markers.markers.append(m)
-                idx += len(end_effector_markers.markers)
-            
+                    offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                    end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
+                    for m in end_effector_markers.markers: markers.markers.append(m)
+                    idx += len(end_effector_markers.markers)
+            except :
+                rospy.logwarn("PathPlanner::joint_trajectory_to_marker_array() -- problem getting end-effector markers")
+
         self.marker_store[group] = markers
         self.trajectory_display_markers[group] = copy.deepcopy(markers)
 
@@ -373,6 +383,8 @@ class PathPlanner(object):
 
         for joint in full_names :
 
+            # print "getting maker info for joint ", joint
+
             marker = visualization_msgs.msg.Marker()
             parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].parent]
             child_link = self.urdf_model.link_map[self.urdf_model.joint_map[joint].child]
@@ -395,7 +407,8 @@ class PathPlanner(object):
             T_kin = fromMsg(joint_origin_to_pose(model_joint))
             T_acc = T_acc*T_kin*T_joint
 
-            if link_has_mesh(child_link) :
+            if link_has_mesh(child_link) or (link_has_shape(child_link) != ""):
+
                 T_viz = fromMsg(link_origin_to_pose(child_link))
                 T_link = T_acc*T_viz
                 marker.pose = toMsg(T_link)
@@ -404,6 +417,7 @@ class PathPlanner(object):
                 marker.ns = self.robot_name
                 marker.text = joint
                 marker.id = self.group_id_offset[group] + idx
+
                 try :
                     marker.scale.x = child_link.visual.geometry.scale[0]
                     marker.scale.y = child_link.visual.geometry.scale[1]
@@ -412,16 +426,47 @@ class PathPlanner(object):
                     marker.scale.x = 1
                     marker.scale.y = 1
                     marker.scale.z = 1
+
                 marker.color.r = self.plan_color[0]
                 marker.color.g = self.plan_color[1]
                 marker.color.b = self.plan_color[2]
                 marker.color.a = self.plan_color[3]
                 idx += 1
-                marker.mesh_resource = child_link.visual.geometry.filename
-                marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+
+                if link_has_mesh(child_link) :
+                    marker.mesh_resource = child_link.visual.geometry.filename
+                    marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+                else :
+                    print child_link.visual
+                    props = get_shape_properties(child_link)
+                    if props :
+                        print "size props: ", props
+                        if link_has_shape(child_link) == "Sphere" :
+                            marker.type = visualization_msgs.msg.Marker.SPHERE
+                            marker.scale.x *= props
+                            marker.scale.y *= props
+                            marker.scale.z *= props
+
+                        elif link_has_shape(child_link) == "Box" :
+                            marker.type = visualization_msgs.msg.Marker.CUBE
+                            marker.scale.x *= props['xyz'][0]
+                            marker.scale.y *= props['xyz'][1]
+                            marker.scale.z *= props['xyz'][2]
+
+                        elif link_has_shape(child_link) == "Cylinder" :
+                            marker.type = visualization_msgs.msg.Marker.CYLINDER
+                            marker.scale.x *= props[0]
+                            marker.scale.y *= props[0]
+                            marker.scale.z *= props[1]
+
+
                 marker.action = visualization_msgs.msg.Marker.ADD
                 marker.mesh_use_embedded_materials = True
                 markers.append(marker)
+
+                # print joint
+                # print joint_val
+                # print marker.mesh_resource
 
         return markers, T_acc, child_link.name
 
@@ -782,6 +827,14 @@ class PathPlanner(object):
   
     def get_feet_names(self) :
         rospy.logwarn("PathPlanner::get_feet_names() -- not implemented")
+        raise NotImplementedError
+
+    def get_start_foot(self) :
+        rospy.logwarn("PathPlanner::get_start_foot() -- not implemented")
+        raise NotImplementedError
+
+    def set_start_foot(self, foot) :
+        rospy.logwarn("PathPlanner::set_start_foot() -- not implemented")
         raise NotImplementedError
 
     ### planing and execution methods
