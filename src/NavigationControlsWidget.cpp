@@ -24,36 +24,44 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->plan_button, SIGNAL(clicked()), this, SLOT(planRequest()));
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
 
-    QObject::connect(ui->left_foot_first, SIGNAL(stateChanged(int)), this, SLOT(leftFootFirstClicked(int)));
-    QObject::connect(ui->plan_footsteps, SIGNAL(stateChanged(int)), this, SLOT(planFootstepsClicked(int)));
+    QObject::connect(ui->accommodate_terrain, SIGNAL(stateChanged(int)), this, SLOT(accommodateTerrainClicked(int)));
 
 }
 
 void NavigationControlsWidget::setupDisplay() {
 
+    int index;
+
     ui->waypoint_list->clear();
-    
     for (auto& wp: waypoint_list) {
         ui->waypoint_list->addItem(wp.c_str());
     }
     
+    ui->nav_mode_box->clear();
+    for (auto& nm: navigation_modes) {
+        index = ui->nav_mode_box->findText(QString(nm.c_str()));
+        if( index == -1 ) {
+            ui->nav_mode_box->addItem(QString(nm.c_str()));
+        }
+    }
+
+    index = ui->nav_mode_box->findText(QString(navigation_mode.c_str()));
+    if ( index != -1 ) { // -1 for not found
+        ui->nav_mode_box->setCurrentIndex(index);
+    }
+
     if(plan_found) {
         ui->plan_label->setText(QString("PLAN FOUND"));
     } else {
         ui->plan_label->setText(QString("NO PLAN"));
     }
 
-    if(left_foot_first) {
-        ui->left_foot_first->setCheckState(Qt::Checked);
+    if(accommodate_terrain) {
+        ui->accommodate_terrain->setCheckState(Qt::Checked);
     } else {    
-        ui->left_foot_first->setCheckState(Qt::Unchecked);
+        ui->accommodate_terrain->setCheckState(Qt::Unchecked);
     }
 
-    if(plan_footsteps) {
-        ui->plan_footsteps->setCheckState(Qt::Checked);
-    } else {
-        ui->plan_footsteps->setCheckState(Qt::Unchecked);
-    }
 
     initialized = true;
 
@@ -66,8 +74,13 @@ bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::Interactiv
         waypoint_list.push_back(resp.navigation_waypoint_name[idx]);
     }
 
-    plan_footsteps = resp.plan_footsteps;
-    left_foot_first = resp.left_foot_first;
+    navigation_modes.clear();
+    for(uint idx=0; idx<resp.navigation_modes.size(); idx++) {
+        navigation_modes.push_back(resp.navigation_modes[idx]);
+    }
+    navigation_mode = resp.navigation_mode;
+
+    accommodate_terrain = resp.accommodate_terrain_in_navigation;
 
     setupDisplay();
     return initialized;
@@ -75,46 +88,26 @@ bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::Interactiv
 }
 
 
-void NavigationControlsWidget::planFootstepsClicked(int d) {
+
+void NavigationControlsWidget::accommodateTerrainClicked(int d) {
     
-    ROS_INFO("NavigationControlsWidget::planFootstepsClicked()");    
-    plan_footsteps = (d == Qt::Checked);
+    ROS_INFO("NavigationControlsWidget::accommodateTerrainClicked()");    
+    accommodate_terrain = (d == Qt::Checked);
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
-    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_FOOTSTEPS_IN_PATH;
-    srv.request.plan_footsteps = plan_footsteps;
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION;
+    srv.request.accommodate_terrain_in_navigation = accommodate_terrain;
 
     if (service_client_->call(srv))
     {
-        ROS_INFO("NavigationControlsWidget::planFootstepsClicked() -- success");
+        ROS_INFO("NavigationControlsWidget::accommodateTerrainClicked() -- success");
         setDataFromResponse(srv.response);
     }
     else
     {
-        ROS_ERROR("NavigationControlsWidget::planFootstepsClicked() -- failed to call service");
+        ROS_ERROR("NavigationControlsWidget::accommodateTerrainClicked() -- failed to call service");
     }
 
-}
-
-void NavigationControlsWidget::leftFootFirstClicked(int d) {
-    
-    ROS_INFO("NavigationControlsWidget::leftFootFirstClicked()");    
-    left_foot_first = (d == Qt::Checked);
-    nasa_robot_teleop::InteractiveControlsInterface srv;
-
-    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_FIRST_FOOT;
-    srv.request.left_foot_first = left_foot_first;
-
-    if (service_client_->call(srv))
-    {
-        ROS_INFO("NavigationControlsWidget::leftFootFirstClicked() -- success");
-        setDataFromResponse(srv.response);
-    }
-    else
-    {
-        ROS_ERROR("NavigationControlsWidget::leftFootFirstClicked() -- failed to call service");
-    }
-    
 }
 
 
@@ -126,9 +119,9 @@ bool NavigationControlsWidget::planRequest() {
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_NAVIGATION_PATH;
-    srv.request.left_foot_first = left_foot_first;
-    srv.request.plan_footsteps = plan_footsteps;
-
+    srv.request.accommodate_terrain_in_navigation = accommodate_terrain;
+    srv.request.navigation_mode = ui->nav_mode_box->currentText().toStdString();
+   
     QList<QListWidgetItem *> items = ui->waypoint_list->selectedItems();
     if(items.size()==0) {
         int n = ui->waypoint_list->count();

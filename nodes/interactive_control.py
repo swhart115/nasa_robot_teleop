@@ -53,7 +53,7 @@ class InteractiveControl:
         self.group_map = []
         self.group_config = {}
         self.tolerances = None
-        self.gripper_service = None
+        self.gripper_action = None
         self.config_parser = None
 
         self.tf_listener = tf.TransformListener()
@@ -70,7 +70,7 @@ class InteractiveControl:
         self.group_pose_data = {}
         self.control_frames = {}
 
-        self.end_effector_link_data = {}
+        self.end_effector_display = {}
 
         self.stored_poses = {}
 
@@ -449,10 +449,17 @@ class InteractiveControl:
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with nav waypoints settings")
 
+            # try :            
+            #     resp.left_foot_first = (self.path_planner.get_start_foot() == "left")
+            # except :
+            #     rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+
             try :            
-                resp.left_foot_first = (self.path_planner.get_start_foot() == "left")
+                resp.navigation_modes = self.path_planner.get_navigation_modes()
+                resp.navigation_mode = self.path_planner.get_navigation_mode()                
+                resp.accommodate_terrain_in_navigation = self.path_planner.accommodate_terrain_in_navigation()
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting navigation modes")
 
             try :            
                 resp.plan_footsteps = self.navigation_controls.planning_footsteps()
@@ -540,7 +547,6 @@ class InteractiveControl:
 
                     self.server.applyChanges()
 
-
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_JOINT_MAP :
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]
@@ -626,20 +632,20 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem setting tolerances")
 
 
-        elif req.action_type == InteractiveControlsInterfaceRequest.SET_FIRST_FOOT :
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION :
             try :
-                if req.left_foot_first :
-                    self.path_planner.set_start_foot("left")
+                if req.accommodate_terrain_in_navigation :
+                    self.path_planner.set_accommodate_terrain_in_navigation(True)
                 else :
-                    self.path_planner.set_start_foot("right")
+                    self.path_planner.set_accommodate_terrain_in_navigation(False)
             except :
-                rospy.logerr("InteractiveControl::handle_configure() -- problem setting start foot")
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting use_perception_in_navigation")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_FOOTSTEPS_IN_PATH :
             try :
                 rospy.logwarn("InteractiveControl::handle_configure() -- Can't plan without footsteps yet ")
             except :
-                rospy.logerr("InteractiveControl::handle_configure() -- problem setting start foot")
+                rospy.logerr("InteractiveControl::handle_configure() -- problem setting plan with footsetps")
 
 
         elif req.action_type == InteractiveControlsInterfaceRequest.ADD_NAVIGATION_WAYPOINT :
@@ -660,6 +666,8 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH :
             try :
                 if len(req.navigation_waypoint_name) > 0 :
+                    self.path_planner.set_navigation_mode(req.navigation_mode)
+                    self.path_planner.set_accommodate_terrain_in_navigation(req.accommodate_terrain_in_navigation)
                     self.navigation_controls.request_navigation_plan(req.navigation_waypoint_name[0])
                 else :
                     rospy.logwarn("InteractiveControl::handle_configure() -- no waypoint goal specified")
@@ -669,12 +677,13 @@ class InteractiveControl:
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH :
             try :
-                if req.plan_footsteps :
-                    self.navigation_controls.footstep_controls.execute_footstep_path()
-                else :
-                    rospy.logwarn("InteractiveControl::handle_configure() --can only execute footstep plan right now")
+                self.navigation_controls.footstep_controls.execute_footstep_path()
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
+
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
+            self.path_planner.set_navigation_mode = req.navigation_mode
 
         self.server.applyChanges()
 
@@ -719,13 +728,13 @@ class InteractiveControl:
         rospy.loginfo(str("InteractiveControl::handle_remove_group() -- removed " + req.name + " -- " + str(resp.success)))
         return resp
 
-    def set_gripper_service(self, srv) :
-        self.gripper_service = srv
-        self.path_planner.set_gripper_service(srv)
+    def set_gripper_action(self, act) :
+        self.gripper_action = act
+        self.path_planner.set_gripper_action(act)
 
-    def clear_gripper_service(self) :
-        self.gripper_service = None
-        self.path_planner.clear_gripper_service()
+    def clear_gripper_action(self) :
+        self.gripper_action = None
+        self.path_planner.clear_gripper_action()
 
     def toggle_posture_control(self, group) :
         joint_names = self.path_planner.get_all_group_joints(group)
@@ -1019,13 +1028,13 @@ if __name__=="__main__":
     planner_config_file = rospy.get_param("~planner_config_file", None)   
     tolerance_file = rospy.get_param("~tolerance_file", None)   
     navigation_frame = rospy.get_param("~navigation_frame", None)
-    gripper_service = rospy.get_param("~gripper_service", None)
+    gripper_action = rospy.get_param("~gripper_action", None)
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
-    if gripper_service and gripper_service != "" :
-       rospy.loginfo(str("Setting Gripper Service: " + gripper_service))
-       control.set_gripper_service(gripper_service)
+    if gripper_action and gripper_action != "" :
+       rospy.loginfo(str("Setting Gripper Service: " + gripper_action))
+       control.set_gripper_action(gripper_action)
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():

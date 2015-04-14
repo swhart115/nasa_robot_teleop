@@ -3,13 +3,18 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 endif()
 include($ENV{ROS_ROOT}/core/rosbuild/rosbuild.cmake)
-rosbuild_init()
+
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
+rosbuild_find_ros_package(actionlib)
+include(${actionlib_PACKAGE_PATH}/cmake/actionbuild.cmake)
+genaction()
 rosbuild_genmsg()
 rosbuild_gensrv()
+
+rosbuild_init()
 
 find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
 include(${QT_USE_FILE})
