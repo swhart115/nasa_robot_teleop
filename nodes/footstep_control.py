@@ -323,7 +323,8 @@ class FootstepControl(object) :
             # print "==== FINAL STEP POSES ==="
             # print step_poses
             # print "======="
-            self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
+            ret = self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
+            rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
 
 
