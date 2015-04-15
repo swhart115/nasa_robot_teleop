@@ -331,7 +331,7 @@ class AtlasPathPlanner(PathPlanner) :
             #     rospy.loginfo(str("AtlasPathPlanner::execute_plans(" + group_name + ") progress: " + str(p)))
             return True
         except rospy.ServiceException, e:
-            rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + group_name 
+            rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
                 + ") -- ExecuteCommand service call failed for plan: " + str(plan_name) 
                 + " -- possibly a joint plan"))
             return False
@@ -471,7 +471,9 @@ class AtlasPathPlanner(PathPlanner) :
         # # print self.explicit_walk_client.get_result()  
         # status = self.explicit_walk_client.get_state() == GoalStatus.SUCCEEDED
 
-        return True
+        status = self.explicit_walk_client.get_state() == GoalStatus.SUCCEEDED
+
+        return status
 
 
     def execute_reflexive_walker(self) :

@@ -4,3 +4,7 @@ msg_gen
 srv_gen
 build
 lib
+CMakeLists.txt
+package.xml
+manifest.xml
+Makefile
