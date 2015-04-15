@@ -48,6 +48,7 @@ namespace rviz_interactive_controls_panel {
         
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
+        std::map<std::string, int> previous_groups;
         MultiGroupControlsWidget *multi_group_widget;
         NavigationControlsWidget *navigation_widget;
 
