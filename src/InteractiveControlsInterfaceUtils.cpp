@@ -45,8 +45,9 @@ std::string InteractiveControlsInterfaceUtils::requestStr(
     oss << "execute_on_plan[]: " << vecBool2Str(srv.execute_on_plan) << std::endl;
     oss << "plan_on_move[]: " << vecBool2Str(srv.plan_on_move) << std::endl;
     oss << "navigation_waypoint_name[]: " << vecString2Str(srv.navigation_waypoint_name) << std::endl;
-    oss << "left_foot_first: " << (srv.left_foot_first ? "true" : "false") << std::endl;
     oss << "plan_footsteps: " << (srv.plan_footsteps ? "true" : "false") << std::endl;
+    oss << "accommodate_terrain_in_navigation: " << (srv.accommodate_terrain_in_navigation ? "true" : "false") << std::endl;
+    oss << "navigation_mode: " << srv.navigation_mode << std::endl;
     return oss.str();
 }
 
@@ -69,9 +70,10 @@ std::string InteractiveControlsInterfaceUtils::responseStr(
     oss << "stored_pose_list[]: *skipping output*" << std::endl;
     //oss << "stored_pose_list[]: " << vecStringArray2Str(srv.response.stored_pose_list) << std::endl;
     oss << "has_navigation_controls: " << (srv.has_navigation_controls ? "true" : "false") << std::endl;
-    oss << "left_foot_first: " << (srv.left_foot_first ? "true" : "false") << std::endl;
     oss << "plan_footsteps: " << (srv.plan_footsteps ? "true" : "false") << std::endl;
     oss << "navigation_waypoint_name[]: " << vecString2Str(srv.navigation_waypoint_name) << std::endl;
+    oss << "navigation_mode: " << srv.navigation_mode << std::endl;
+    oss << "accommodate_terrain_in_navigation: " << (srv.accommodate_terrain_in_navigation ? "true" : "false") << std::endl;
     return oss.str();
 }
 
