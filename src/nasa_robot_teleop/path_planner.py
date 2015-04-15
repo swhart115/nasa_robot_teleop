@@ -1,16 +1,16 @@
 #! /usr/bin/env python
 
-import rospy
-
-import copy
-import random
 
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
+import actionlib
 from rospkg import RosPack
 
 import tf
 import PyKDL as kdl
+
+import copy
+import random
 
 import geometry_msgs.msg
 import visualization_msgs.msg
@@ -18,6 +18,7 @@ import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
 
+from nasa_robot_teleop.msg import *
 from nasa_robot_teleop.srv import *
 from nasa_robot_teleop.group_config import *
 
@@ -61,7 +62,9 @@ class PathPlanner(object):
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 1
 
-        self.gripper_service = None
+        self.gripper_action = None
+        self.gripper_client = None
+
         self.bridge_topic_map = {}
 
         self.joint_tolerance = {}
@@ -89,6 +92,9 @@ class PathPlanner(object):
 
         get_all_tips(self.urdf_model)
         self.srdf_model.set_urdf(self.urdf_model)
+
+        for g in self.srdf_model.groups :
+            self.joint_names = self.srdf_model.get_joint_names(g)
 
         try :
             rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
@@ -475,21 +481,35 @@ class PathPlanner(object):
 
 
     def get_subgroup_plan(self, plan, group_name) :
+
         # extract a trajectory from the plan input that corresponds only to the joints of the group
         group_joints = self.get_group_joints(group_name)
         traj = trajectory_msgs.msg.JointTrajectory()
         jnt_map = {}
-        for jnt in group_joints :
-            if jnt in plan.joint_names :
-                traj.joint_names.append(jnt)
-                jnt_map[jnt] = plan.joint_names.index(jnt)
+        print "group_joints: ", group_joints
+        print "plan.joint_names: ", plan.joint_names
+        
+        for jnt in plan.joint_names :
+            traj.joint_names.append(jnt)
+            jnt_map[jnt] = plan.joint_names.index(jnt)
         for p in plan.points: 
             new_p = trajectory_msgs.msg.JointTrajectoryPoint()
-            for jnt in group_joints :
-                if jnt in plan.joint_names :
-                    new_p.positions.append(p.positions[jnt_map[jnt]])
+            for jnt in plan.joint_names :
+                new_p.positions.append(p.positions[jnt_map[jnt]])
             new_p.time_from_start = p.time_from_start
             traj.points.append(new_p)       
+        # for jnt in group_joints :
+        #     if jnt in plan.joint_names :
+        #         traj.joint_names.append(jnt)
+        #         jnt_map[jnt] = plan.joint_names.index(jnt)
+        # for p in plan.points: 
+        #     new_p = trajectory_msgs.msg.JointTrajectoryPoint()
+        #     for jnt in group_joints :
+        #         if jnt in plan.joint_names :
+        #             new_p.positions.append(p.positions[jnt_map[jnt]])
+        #     new_p.time_from_start = p.time_from_start
+        #     traj.points.append(new_p)       
+
         return traj
 
 
@@ -536,8 +556,8 @@ class PathPlanner(object):
             rospy.loginfo(str("PathPlanner::create_joint_plan() ===== Generating Joint Plan "))
             self.plan_generated[group_name] = False
             ret[group_name] = False
-        
-            if not (self.group_types[group_name] == "endeffector" and self.gripper_service):
+                   
+            if not (self.group_types[group_name] == "endeffector" and self.gripper_action):
                 planning_group_names.append(group_name)
             else :
                 ret[group_name] = True
@@ -551,8 +571,7 @@ class PathPlanner(object):
         # call the abstract method
         stored_plan = self.plan_joint_goals(planning_group_names, goals) 
         self.stored_plans = self.get_stored_plans_from_result(stored_plan, planning_group_names)
-
-
+        
         for group_name in planning_group_names :
             try :
                 # check to make sure the plan has a non-0 amount of waypoints
@@ -639,9 +658,9 @@ class PathPlanner(object):
         ret = {}
         for group_name in group_names :
             rospy.loginfo("PathPlanner::execute() -- " + group_name)
-            if self.group_types[group_name] == "endeffector" and self.gripper_service:
+            if self.group_types[group_name] == "endeffector" and self.gripper_client:
                 rospy.loginfo("PathPlanner::execute() -- using gripper service")
-                ret[group_name] = self.execute_gripper_service(group_name)
+                ret[group_name] = self.execute_gripper_action(group_name)
             else :
                 planner_groups.append(group_name)
         for group_name in planner_groups :
@@ -687,46 +706,85 @@ class PathPlanner(object):
     ##### gripper service methods ######
     ####################################
 
-    def set_gripper_service(self, srv) :
+    def set_gripper_action(self, act) :
         
         try :
-            rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- looking for service")
-            rospy.wait_for_service(srv,5.0)
-            rospy.loginfo("PathPlanner::set_gripper_service() -- set_gripper_service(" + srv + ") -- service found")
-            self.gripper_service = rospy.ServiceProxy(srv, EndEffectorCommand)
+            
+            self.gripper_client = actionlib.SimpleActionClient(act, GripperCommandAction)
+            
+            # rospy.wait_for_service(act,2.0)
+            # rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- service found")
+            # self.gripper_action = rospy.ServiceProxy(act, EndEffectorCommand)
+
+            rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- looking for server")
+            if not self.gripper_client.wait_for_server(rospy.Duration(2.0)) :
+                rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
+                self.clear_gripper_action()
+                return 
+            else :
+                rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- server found")
+            
         except rospy.ROSException as e:
-            rospy.logerr("PathPlanner::set_gripper_service(): " + str(e))
-            self.clear_gripper_service()
+            rospy.logerr("PathPlanner::set_gripper_action(): " + str(e))
+            self.clear_gripper_action()
 
-    def clear_gripper_service(self) :
-        self.gripper_service = None   
+    def clear_gripper_action(self) :
+        self.gripper_client = None   
+        self.gripper_action = None
 
-    def execute_gripper_service(self, group_name, from_stored=False, wait=True) :
+    def execute_gripper_action(self, group_name, from_stored=False, wait=True) :
         r = False
-        rospy.loginfo(str("PathPlanner::execute_gripper_service() -- executing plan for group: " + group_name))                
+        rospy.loginfo(str("PathPlanner::execute_gripper_action() -- executing plan for group: " + group_name))                
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
-            if self.group_types[group_name] == "endeffector" and self.gripper_service:
-                r = self.publish_to_gripper_service(group_name, self.stored_plans[group_name])
+            if self.group_types[group_name] == "endeffector" and self.gripper_client:
+                r = self.run_gripper_action(group_name, self.stored_plans[group_name])
         else :
-            rospy.logerr(str("PathPlanner::execute_gripper_service() -- no plan for group" + group_name + " yet generated."))
+            rospy.logerr(str("PathPlanner::execute_gripper_action() -- no plan for group" + group_name + " yet generated."))
             r = False
-        rospy.logdebug(str("PathPlanner::execute_gripper_service() -- plan execution: " + str(r)))
+        rospy.logdebug(str("PathPlanner::execute_gripper_action() -- plan execution: " + str(r)))
         return r
 
     # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
     # to send a service call to any custom node that will interpret the JT as whatever is necessary
-    def publish_to_gripper_service(self, group, traj) :
+    def run_gripper_action(self, group, traj) :
         
-        if not self.gripper_service :
-            rospy.logwarn("PathPlanner::publish_to_gripper_service() -- trying to publish, but no gripper service set!")
+        if not self.gripper_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
             return False
-        try:
-            rospy.loginfo("PathPlanner::publish_to_gripper_service() -- calling gripper service")
-            resp = self.gripper_service(traj, group, "end_effector_pose")
-            return resp.result
-        except rospy.ServiceException, e:
-            rospy.logerr("PathPlanner::publish_to_gripper_service() -- gripper service call failed")
-            return False
+
+        goal = GripperCommandGoal()
+        goal.name = group
+        goal.pose_name = "end_effector_pose"
+        goal.goal_trajectory = traj
+
+        # Fill in the goal here
+        self.gripper_client.send_goal(goal)
+
+        return True
+        # rospy.loginfo("PathPlanner::run_gripper_action() -- polling feedback")
+        # fb_msg = rospy.wait_for_message("/run_gripper/server/feedback", GripperCommandActionFeedback, 3.0)
+
+        # while not fb_msg.feedback.planning_complete:
+        #     fb_msg = rospy.wait_for_message("/run_gripper/server/feedback", GripperCommandActionFeedback, 3.0)
+
+        # rospy.loginfo("PathPlanner::run_gripper_action() -- PLANNING COMPLETE(?)")
+        # if fb_msg.feedback.planning_progress > 0.0 :            
+        #     p = self.get_plan()
+        #     return p
+        # else :
+        #     return None
+
+
+        # if not self.gripper_action :
+        #     rospy.logwarn("PathPlanner::run_gripper_action() -- trying to publish, but no gripper service set!")
+        #     return False
+        # try:
+        #     rospy.loginfo("PathPlanner::run_gripper_action() -- calling gripper service")
+        #     resp = self.gripper_action(traj, group, "end_effector_pose")
+        #     return resp.result
+        # except rospy.ServiceException, e:
+        #     rospy.logerr("PathPlanner::run_gripper_action() -- gripper service call failed")
+        #     return False
  
 
     ##############################
@@ -835,6 +893,25 @@ class PathPlanner(object):
         rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
         raise NotImplementedError
 
+    def get_navigation_modes(self) :
+        rospy.logerror("PathPlanner::get_navigation_modes() -- not implemented")
+        raise NotImplementedError
+
+    def get_navigation_mode(self) :
+        rospy.logerror("PathPlanner::get_navigation_mode() -- not implemented")
+        raise NotImplementedError
+
+    def set_navigation_mode(self, mode) :
+        rospy.logerror("PathPlanner::set_navigation_mode() -- not implemented")
+        raise NotImplementedError
+
+    def accommodate_terrain_in_navigation(self) :
+        rospy.logerror("PathPlanner::accommodate_terrain_in_navigation() -- not implemented")
+        raise NotImplementedError
+
+    def set_accommodate_terrain_in_navigation(self, val) :
+        rospy.logerror("PathPlanner::set_accommodate_terrain_in_navigation() -- not implemented")
+        raise NotImplementedError
 
     #### NAVIGATION FUNCTIONS  
     def plan_navigation_path(self, waypoints) :

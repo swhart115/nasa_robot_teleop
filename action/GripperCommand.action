@@ -1,0 +1,8 @@
+# Define the goal
+trajectory_msgs/JointTrajectory goal_trajectory
+string name
+string pose_name
+---
+#no result
+---
+float32 progress

@@ -12,6 +12,8 @@
   <depend package="trajectory_msgs"/>
   <depend package="control_msgs"/>
   <depend package="rviz"/>
+  <depend package="actionlib"/>
+  <depend package="actionlib_msgs"/>
   <export>
       <rviz plugin="${prefix}/plugin_description.xml"/>
   </export>

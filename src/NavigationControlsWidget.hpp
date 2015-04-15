@@ -44,8 +44,7 @@ namespace rviz_interactive_controls_panel
         bool addWaypointRequest();
         bool deleteWaypointRequest();
 
-        void leftFootFirstClicked(int d);
-        void planFootstepsClicked(int d);
+        void accommodateTerrainClicked(int d);
         
     private:
 
@@ -62,13 +61,15 @@ namespace rviz_interactive_controls_panel
 
         bool initialized;
 
+
      public:
 
         // group storage info
-        bool left_foot_first;
-        bool plan_footsteps;
-        
+        bool accommodate_terrain;
+
         std::vector<std::string> waypoint_list;
+        std::vector<std::string> navigation_modes;
+        std::string navigation_mode;
         
         bool plan_found;
     };

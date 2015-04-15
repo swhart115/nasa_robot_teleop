@@ -1,6 +1,5 @@
 #include "RVizInteractiveControlsPanel.hpp"
 #include "InteractiveControlsInterfaceUtils.hpp"
-//#include <unordered_set>
 
 using namespace rviz_interactive_controls_panel;
 using namespace std;
@@ -12,8 +11,6 @@ RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent)
     , multi_group_widget(NULL)
     , navigation_widget(NULL)
 {
-    // register message for use in signal/slot
-    //qRegisterMetaType<InteractiveControlsInterface>("InteractiveControlsInterface");
     ui->setupUi(this);
 
     // setup service clients
@@ -76,7 +73,7 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
 
         addGroupControls(group_name);
         ROS_INFO("RVizInteractiveControlsPanel: added group [%s]", group_name.c_str());
-        
+
         int jdx=0;
         group_widgets[group_name]->group_name = group_name;
         group_widgets[group_name]->joint_names.clear();
@@ -91,7 +88,6 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
                 jdx++;  
             }
         }
-
         if(idx < resp.group_type.size()) {
             group_widgets[group_name]->group_type = resp.group_type[idx];
         }
@@ -123,15 +119,17 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
             }
         }
 
-        for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
-            if(tol_info.mode == "Position Tolerance") {
-                group_widgets[group_name]->position_tolerance = tol_info.types[0];
-            } 
-            if(tol_info.mode == "Angle Tolerance") {
-                group_widgets[group_name]->orientation_tolerance = tol_info.types[0];
+        if (resp.tolerance_setting.size() > 0) {
+            for (auto& tol_info: resp.tolerance_setting[idx].tolerance_info) {
+                if(tol_info.mode == "Position Tolerance") {
+                    group_widgets[group_name]->position_tolerance = tol_info.types[0];
+                } 
+                if(tol_info.mode == "Angle Tolerance") {
+                    group_widgets[group_name]->orientation_tolerance = tol_info.types[0];
+                }
             }
         }
-        
+
         group_widgets[group_name]->stored_poses.clear();
         if(idx < resp.stored_pose_list.size()) {
             for (auto& stored_pose: resp.stored_pose_list[idx].data) {  

@@ -309,32 +309,32 @@ class NavigationWaypointControl(object) :
         self.waypoint_markers = self.waypoint_markers[:index+1]
 
 
-    def request_navigation_plan(self, data) :
+    def request_navigation_plan(self, waypoint_name) :
 
-        waypoint_name = data.marker_name      
         rospy.loginfo(str("NavigationWaypointControl::request_navigation_plan() -- requesting plan to " + str(waypoint_name)))
 
         # translate IMs to an array of PoseStamped() types
         waypoints = []
         for id in self.waypoint_markers :
             n = self.get_waypoint_name(id)
-            data = self.server.get(n)  
+            p = self.server.get(n)  
             wp = PoseStamped()
-            wp.pose = data.pose
-            wp.header = data.header
+            wp.pose = p.pose
+            wp.header = p.header
             waypoints.append(wp)
             if self.get_waypoint_name(id) == waypoint_name: 
                 break        
 
         if self.path_planner :
-            poses = self.path_planner.plan_navigation_path(waypoints)
-            self.footstep_controls.set_footstep_poses(poses)
+            poses, lift_heights, feet = self.path_planner.plan_navigation_path(waypoints)
+            self.footstep_controls.set_footstep_poses(poses, lift_heights, feet)
         else :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
 
     def direct_move(self, data) :
         rospy.logwarn("NavigationControl::direct_move() -- not implemented yet!!")
+
 
     def get_waypoints(self) :
         return self.waypoint_markers
@@ -350,7 +350,7 @@ class NavigationWaypointControl(object) :
             elif handle == self.waypoint_menu_handles["Delete Waypoint"] :
                 self.delete_waypoint(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Request Footstep Plan"] :
-                self.request_navigation_plan(feedback)
+                self.request_navigation_plan(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
             elif handle == self.waypoint_menu_handles["Execute Footstep Plan"] :
@@ -361,7 +361,7 @@ class NavigationWaypointControl(object) :
 
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
-        
+       
 
 
 if __name__=="__main__":
