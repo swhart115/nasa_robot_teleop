@@ -46,11 +46,12 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         ui->all_group_list->addItem(QString(g.c_str()));
         // reconcile resp.groups with previous_groups map (for tabs)
         // - groups in map also in resp stay around
-        if ((pgit=previous_groups.find(g)) == previous_groups.end()) {
+        if ((pgit=previous_groups.find(g)) != previous_groups.end()) {
             previous_groups.erase(pgit);
         }
     }
     ui->active_group_list->clear();
+    ROS_INFO("RVizInteractiveControlsPanel: got [%lu] removed groups", previous_groups.size());
     // remove/delete groups still in previous_groups
     for (auto pg : previous_groups) {
         const std::string &g = pg.first;
