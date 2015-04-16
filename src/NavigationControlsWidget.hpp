@@ -45,7 +45,8 @@ namespace rviz_interactive_controls_panel
         bool deleteWaypointRequest();
 
         void accommodateTerrainClicked(int d);
-        
+        bool navModeChanged(const QString&);
+
     private:
 
         // the ui

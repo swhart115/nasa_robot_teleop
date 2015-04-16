@@ -68,10 +68,10 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/max_angular_velocity", 0.4)
         rospy.set_param("~atlas/max_linear_velocity", 0.1)
 
-        rospy.set_param("~atlas/navigation_mode", "WALK_CONTROLLER")
+        rospy.set_param("~atlas/navigation_mode", "AUTO_WALKER")
         rospy.set_param("~atlas/plan_footsteps", True)
         rospy.set_param("~atlas/plan_through_unknown_cells", True)
-        rospy.set_param("~atlas/assume_flat_ground", False)
+        rospy.set_param("~atlas/assume_flat_ground", True)
         rospy.set_param("~atlas/auto_walker_timeout", 10.0)
 
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)

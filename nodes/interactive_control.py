@@ -474,6 +474,7 @@ class InteractiveControl:
 
     def handle_configure(self, req) :
         
+        print req
         resp = None
         
         if req.action_type == InteractiveControlsInterfaceRequest.GET_INFO :
@@ -633,6 +634,9 @@ class InteractiveControl:
 
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION :
+            print req.navigation_mode
+            if req.navigation_mode in self.path_planner.get_navigation_modes() :
+                self.path_planner.set_navigation_mode(req.navigation_mode)
             try :
                 if req.accommodate_terrain_in_navigation :
                     self.path_planner.set_accommodate_terrain_in_navigation(True)
@@ -666,7 +670,8 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH :
             try :
                 if len(req.navigation_waypoint_name) > 0 :
-                    self.path_planner.set_navigation_mode(req.navigation_mode)
+                    if req.navigation_mode in self.path_planner.get_navigation_modes() :
+                        self.path_planner.set_navigation_mode(req.navigation_mode)
                     self.path_planner.set_accommodate_terrain_in_navigation(req.accommodate_terrain_in_navigation)
                     self.navigation_controls.request_navigation_plan(req.navigation_waypoint_name[0])
                 else :
@@ -683,7 +688,8 @@ class InteractiveControl:
 
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
-            self.path_planner.set_navigation_mode = req.navigation_mode
+            print req.navigation_mode
+            self.path_planner.set_navigation_mode(req.navigation_mode)
 
         self.server.applyChanges()
 
