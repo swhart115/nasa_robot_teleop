@@ -18,7 +18,11 @@ namespace rviz_interactive_controls_panel {
 
     // typedef for using message in Qt signal/slot; registered in .cpp
     typedef nasa_robot_teleop::InteractiveControlsInterface ICInterface;
-            
+    //typedef nasa_robot_teleop::InteractiveControlsInterface::Request InteractiveControlsInterfaceRequest;
+    //typedef nasa_robot_teleop::InteractiveControlsInterface::Response InteractiveControlsInterfaceResponse;
+    typedef nasa_robot_teleop::InteractiveControlsInterfaceRequest ICInterfaceRequest;
+    typedef nasa_robot_teleop::InteractiveControlsInterfaceResponse ICInterfaceResponse;
+    
     // TODO: need a service call thread object
     
     class InteractiveControlsInterfaceUtils {
@@ -29,13 +33,13 @@ namespace rviz_interactive_controls_panel {
                                 //std::vector<std::string> &inactive);
             
             static
-            std::string srvStr(const ICInterface &srv);
+            std::string srvStr(const ICInterface &srv, bool suppress=true);
             
             static
-            std::string requestStr(const ICInterface::Request &srv);
+            std::string requestStr(const ICInterfaceRequest &srv, bool suppress=true);
             
             static
-            std::string responseStr(const ICInterface::Response &srv);
+            std::string responseStr(const ICInterfaceResponse &srv, bool suppress=true);
             
         private:
             static

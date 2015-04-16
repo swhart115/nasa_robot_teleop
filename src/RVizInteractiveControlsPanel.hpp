@@ -9,6 +9,7 @@
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
 
 #include "ui_rviz_interactive_controls_panel.h"
+#include "InteractiveControlsInterfaceUtils.hpp"
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
 #include "NavigationControlsWidget.hpp"

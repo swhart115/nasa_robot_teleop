@@ -1,5 +1,4 @@
 #include "RVizInteractiveControlsPanel.hpp"
-#include "InteractiveControlsInterfaceUtils.hpp"
 
 using namespace rviz_interactive_controls_panel;
 using namespace std;
@@ -39,19 +38,24 @@ void RVizInteractiveControlsPanel::setupWidgets() {
 
 bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
     ROS_INFO("RVizInteractiveControlsPanel::setupFromConfigResponse()");
+    ROS_DEBUG("RVizInteractiveControlsPanel: have [%lu] previous groups", previous_groups.size());
     // set up widgets for all the groups
+    // TODO: what if a non-active group was removed? do we care?
     ui->all_group_list->clear();
-    std::map<std::string, int>::iterator pgit;
     for (auto& g: resp.group_name) {
         ui->all_group_list->addItem(QString(g.c_str()));
+    }
+    // set up widget for active groups
+    ui->active_group_list->clear();
+    std::map<std::string, int>::iterator pgit;
+    for (auto& g: resp.active_group_name) {
         // reconcile resp.groups with previous_groups map (for tabs)
         // - groups in map also in resp stay around
         if ((pgit=previous_groups.find(g)) != previous_groups.end()) {
             previous_groups.erase(pgit);
         }
     }
-    ui->active_group_list->clear();
-    ROS_INFO("RVizInteractiveControlsPanel: got [%lu] removed groups", previous_groups.size());
+    ROS_DEBUG("RVizInteractiveControlsPanel: got [%lu] removed groups", previous_groups.size());
     // remove/delete groups still in previous_groups
     for (auto pg : previous_groups) {
         const std::string &g = pg.first;
@@ -62,10 +66,12 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
             multi_group_widget->removeGroup(g);
         }
     }
-    ROS_INFO("RVizInteractiveControlsPanel: cleared ui lists");
+    ROS_DEBUG("RVizInteractiveControlsPanel: cleared ui lists");
 
+    //std::cout << "RVizInteractiveControlsPanel: response:" << std::endl;
+    //std::cout << InteractiveControlsInterfaceUtils::responseStr(resp);
     updateNavigationControls(resp);
-    ROS_INFO("RVizInteractiveControlsPanel: nav controls updated");
+    ROS_DEBUG("RVizInteractiveControlsPanel: nav controls updated");
     
     // close old group widgets
     for (auto& gw : group_widgets) {
@@ -73,12 +79,16 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         //if (
         if(result == std::end(resp.active_group_name)) {
             int index = ui->GroupTabs->indexOf(group_widgets[gw.first]);
-            ui->GroupTabs->removeTab(index);
-            delete group_widgets[gw.first];
-            ui->GroupTabs->show();
+            if (index >= 0) {
+                ui->GroupTabs->removeTab(index);
+                ui->GroupTabs->show();
+            }
+            if (group_widgets.count(gw.first) > 0) {
+                delete group_widgets[gw.first];
+            }
         }
     }
-    ROS_INFO("RVizInteractiveControlsPanel: closed old group widgets");
+    ROS_DEBUG("RVizInteractiveControlsPanel: closed old group widgets");
     
     for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
 
@@ -86,7 +96,7 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         ui->active_group_list->addItem(QString(group_name.c_str()));
 
         addGroupControls(group_name);
-        ROS_INFO("RVizInteractiveControlsPanel: added group [%s]", group_name.c_str());
+        ROS_DEBUG("RVizInteractiveControlsPanel: added group [%s]", group_name.c_str());
 
         int jdx=0;
         group_widgets[group_name]->group_name = group_name;
@@ -156,10 +166,10 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         std::string group_name = resp.active_group_name[idx];
         group_widgets[group_name]->setupDisplay();
     }
-    ROS_INFO("RVizInteractiveControlsPanel: group controls updated");
+    ROS_DEBUG("RVizInteractiveControlsPanel: group controls updated");
 
     updateMultiGroupControls(resp);
-    ROS_INFO("RVizInteractiveControlsPanel: multi-group controls updated");
+    ROS_DEBUG("RVizInteractiveControlsPanel: multi-group controls updated");
 
     initialized = true;
 
@@ -169,9 +179,10 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
 
 bool RVizInteractiveControlsPanel::addGroupControls(std::string group_name) {
 
+    previous_groups[group_name] = 0; // TODO: should be tab index
     auto search = group_widgets.find(group_name);
     if(search == group_widgets.end()) {
-        ROS_INFO("RVizInteractiveControlsPanel::addGroupControls(%s)", group_name.c_str());    
+        ROS_DEBUG("RVizInteractiveControlsPanel::addGroupControls(%s)", group_name.c_str());    
         const QString label(group_name.c_str());
         group_widgets[group_name] = new GroupControlsWidget();
         group_widgets[group_name]->setNodeHandle(nh_);
@@ -209,25 +220,27 @@ bool RVizInteractiveControlsPanel::addMultiGroupControls() {
     // removing the tab for non-NULL puts it at the end
     const QString label("MG");
     if (multi_group_widget == NULL) {
-        ROS_INFO("RVizInteractiveControlsPanel: creating MultiGroupControls");
+        ROS_DEBUG("RVizInteractiveControlsPanel: creating MultiGroupControls");
         multi_group_widget = new MultiGroupControlsWidget();
         multi_group_widget->setNodeHandle(nh_);
         multi_group_widget->setServiceClient(&interactive_control_client_);
     } else {
-        ROS_INFO("RVizInteractiveControlsPanel: remove MultiGroupControls tab");
+        ROS_DEBUG("RVizInteractiveControlsPanel: remove MultiGroupControls tab");
         int index = ui->GroupTabs->indexOf(multi_group_widget);
         if (index >= 0) {
             ui->GroupTabs->removeTab(index);
         }
     }
-    ROS_INFO("RVizInteractiveControlsPanel: add MultiGroupControls tab");
-    ui->GroupTabs->addTab((QWidget *)multi_group_widget, label);
-    ui->GroupTabs->show();
-    return true;
+    if (multi_group_widget != NULL) {
+        ROS_DEBUG("RVizInteractiveControlsPanel: add MultiGroupControls tab");
+        ui->GroupTabs->addTab((QWidget *)multi_group_widget, label);
+        ui->GroupTabs->show();
+    }
+    return (multi_group_widget != NULL);
 }
 
 bool RVizInteractiveControlsPanel::removeMultiGroupControls() {
-    ROS_INFO("RVizInteractiveControlsPanel::resetMultiGroupControls()");
+    ROS_INFO("RVizInteractiveControlsPanel::removeMultiGroupControls()");
     if (multi_group_widget != NULL) {
         int index = ui->GroupTabs->indexOf(multi_group_widget);
         if (index >= 0) {
@@ -254,8 +267,8 @@ void RVizInteractiveControlsPanel::updateNavigationControls(nasa_robot_teleop::I
 
 bool RVizInteractiveControlsPanel::addNavigationControls() {
     ROS_INFO("RVizInteractiveControlsPanel::addNavigationControls()");    
-    if (navigation_widget == NULL && initialized) {
-        ROS_INFO("RVizInteractiveControlsPanel: adding NavigationControls");    
+    if (navigation_widget == NULL) {// && initialized) {
+        ROS_DEBUG("RVizInteractiveControlsPanel: adding NavigationControls");    
         const QString label("Nav");
         navigation_widget = new NavigationControlsWidget();
         navigation_widget->setNodeHandle(nh_);
@@ -263,13 +276,13 @@ bool RVizInteractiveControlsPanel::addNavigationControls() {
         ui->GroupTabs->addTab((QWidget *)navigation_widget, label);
         ui->GroupTabs->show();
     }
-    return true;
+    return (navigation_widget != NULL);
 }
 
 bool RVizInteractiveControlsPanel::removeNavigationControls() {
     ROS_INFO("RVizInteractiveControlsPanel::removeNavigationControls()");
     if (navigation_widget != NULL) {
-        ROS_INFO("RVizInteractiveControlsPanel: removing NavigationControls");
+        ROS_DEBUG("RVizInteractiveControlsPanel: removing NavigationControls");
         int index = ui->GroupTabs->indexOf(navigation_widget);
         if (index >= 0) {
             ui->GroupTabs->removeTab(index);
@@ -342,10 +355,10 @@ bool RVizInteractiveControlsPanel::removeGroupRequest() {
     for (auto& g: items) {
         std::string group_name = g->text().toStdString();
         srv.request.group_name.push_back(group_name);
-		  // TODO: this still isn't right...need a list of groups that were
-		  //   there *prior* to the service call so we know what (may have)
-		  //   been deleted. Tab/map removal should be done in the
-		  //   'setupFromConfigResponse' method.
+        // TODO: this still isn't right...need a list of groups that were
+        //   there *prior* to the service call so we know what (may have)
+        //   been deleted. Tab/map removal should be done in the
+        //   'setupFromConfigResponse' method.
         //int idx = ui->GroupTabs->indexOf(group_widgets[group_name]);
         //ui->GroupTabs->removeTab(idx);
         //ui->GroupTabs->show();
@@ -354,7 +367,9 @@ bool RVizInteractiveControlsPanel::removeGroupRequest() {
         //    multi_group_widget->removeGroup(group_name);
         //}
     }
-          
+    //std::cout << "RVizInteractiveControlsPanel: remove group request:" << std::endl;
+    //std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request);
+
     if (interactive_control_client_.call(srv)) {
         setupFromConfigResponse(srv.response);
     } else {

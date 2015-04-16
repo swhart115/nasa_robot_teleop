@@ -23,25 +23,40 @@ void InteractiveControlsInterfaceUtils::inactiveGroups(
 }
 
 std::string InteractiveControlsInterfaceUtils::srvStr(
-                               const ICInterface &srv) {
+                               const ICInterface &srv, bool suppress) {
     std::stringstream oss;
-    oss << requestStr(srv.request) << std::endl;
+    oss << requestStr(srv.request, suppress) << std::endl;
     oss << "---" << std::endl;
-    oss << responseStr(srv.response) << std::endl;
+    oss << responseStr(srv.response, suppress) << std::endl;
     return oss.str();
 }
 
 std::string InteractiveControlsInterfaceUtils::requestStr(
-                               const ICInterface::Request &srv) {
+                           const ICInterface::Request &srv, bool suppress) {
     std::stringstream oss;
     oss << "action_type: " << actionStr(srv.action_type) << std::endl;
     oss << "group_name[]: " << vecString2Str(srv.group_name) << std::endl;
     oss << "group_type[]: " << vecString2Str(srv.group_type) << std::endl;
     oss << "stored_pose_name[]: " << vecString2Str(srv.stored_pose_name) << std::endl;
     oss << "path_visualization_mode[]: " << vecString2Str(srv.path_visualization_mode) << std::endl;
-    oss << "goal_pose[]: " << std::endl << vecPoseStamped2Str(srv.goal_pose) << std::endl;
-    oss << "joint_mask[]: " << vecJointMask2Str(srv.joint_mask) << std::endl;
-    oss << "tolerance[]: " << vecToleranceInfo2Str(srv.tolerance) << std::endl;
+    oss << "goal_pose[]: ";
+    if (!suppress) {
+        oss << std::endl << vecPoseStamped2Str(srv.goal_pose) << std::endl;
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
+    oss << "joint_mask[]: ";
+    if (!suppress) {
+        oss << vecJointMask2Str(srv.joint_mask);
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
+    oss << "tolerance[]: ";
+    if (!suppress) {
+        oss << vecToleranceInfo2Str(srv.tolerance);
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
     oss << "execute_on_plan[]: " << vecBool2Str(srv.execute_on_plan) << std::endl;
     oss << "plan_on_move[]: " << vecBool2Str(srv.plan_on_move) << std::endl;
     oss << "navigation_waypoint_name[]: " << vecString2Str(srv.navigation_waypoint_name) << std::endl;
@@ -52,17 +67,32 @@ std::string InteractiveControlsInterfaceUtils::requestStr(
 }
 
 std::string InteractiveControlsInterfaceUtils::responseStr(
-                               const ICInterface::Response &srv) {
+                           const ICInterface::Response &srv, bool suppress) {
     std::stringstream oss;
     oss << "action_type: " << actionStr(srv.action_type) << std::endl;
     oss << "group_name[]: " << vecString2Str(srv.group_name) << std::endl;
     oss << "group_type[]: " << vecString2Str(srv.group_type) << std::endl;
     oss << "active_group_name[]: " << vecString2Str(srv.active_group_name) << std::endl;
     oss << "plan_found[]: " << vecBool2Str(srv.plan_found) << std::endl;
-    oss << "joint_mask[]: " << vecJointMask2Str(srv.joint_mask) << std::endl;
-    oss << "joint_names[]: " << vecJointNameMap2Str(srv.joint_names) << std::endl;
+    oss << "joint_mask[]: ";
+    if (!suppress) {
+        oss << vecJointMask2Str(srv.joint_mask);
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
+    oss << "joint_names[]: ";
+    if (!suppress) {
+        oss << vecJointNameMap2Str(srv.joint_names);
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
     oss << "path_visualization_mode[]: " << vecString2Str(srv.path_visualization_mode) << std::endl;
-    oss << "tolerance[]: " << vecToleranceInfo2Str(srv.tolerance) << std::endl;
+    oss << "tolerance[]: ";
+    if (!suppress) {
+        oss << vecToleranceInfo2Str(srv.tolerance);
+    } else {
+        oss << "*output suppressed*" << std::endl;
+    }
     oss << "tolerance_setting[]: *skipping output*" << std::endl;
     //oss << "tolerance_setting[]: " << vecToleranceInfoArray2Str(srv.response.tolerance_setting) << std::endl;
     oss << "execute_on_plan[]: " << vecBool2Str(srv.execute_on_plan) << std::endl;
