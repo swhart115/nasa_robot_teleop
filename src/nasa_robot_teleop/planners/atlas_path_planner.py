@@ -487,12 +487,10 @@ class AtlasPathPlanner(PathPlanner) :
         return self.navigation_mode
 
     def set_navigation_mode(self, mode) :
-        if not mode in self.get_navigation_modes() :
-            rospy.logerr(str("AtlasPathPlanner::set_navigation_mode() -- invalid mode " + mode)) 
-        else :
+        if mode in self.get_navigation_modes() :
             self.navigation_mode = mode
             rospy.set_param("~atlas/navigation_mode", mode)
-    
+
     def accommodate_terrain_in_navigation(self) :
         return not rospy.get_param("~atlas/assume_flat_ground")
 

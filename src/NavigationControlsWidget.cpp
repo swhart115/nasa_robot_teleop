@@ -38,7 +38,6 @@ void NavigationControlsWidget::setupDisplay() {
         ui->waypoint_list->addItem(wp.c_str());
     }
     
-    ui->nav_mode_box->clear();
     for (auto& nm: navigation_modes) {
         index = ui->nav_mode_box->findText(QString(nm.c_str()));
         if( index == -1 ) {
@@ -46,6 +45,10 @@ void NavigationControlsWidget::setupDisplay() {
         }
     }
 
+    index = ui->nav_mode_box->findText(QString(navigation_mode.c_str()));
+    if ( index != -1 ) { // -1 for not found
+        ui->nav_mode_box->setCurrentIndex(index);
+    }
 
     if(plan_found) {
         ui->plan_label->setText(QString("PLAN FOUND"));
@@ -96,8 +99,6 @@ void NavigationControlsWidget::accommodateTerrainClicked(int d) {
     srv.request.accommodate_terrain_in_navigation = accommodate_terrain;
     srv.request.navigation_mode = ui->nav_mode_box->currentText().toStdString();
     
-    cout << srv.request.navigation_mode << endl;
-
     if (service_client_->call(srv))
     {
         ROS_INFO("NavigationControlsWidget::accommodateTerrainClicked() -- success");
@@ -237,7 +238,7 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
         if (service_client_->call(srv))
         {
             ROS_INFO("NavigationControlsWidget::navModeChanged() -- success");
-            return setDataFromResponse(srv.response);
+            return true; //setDataFromResponse(srv.response);
         }
         else
         {

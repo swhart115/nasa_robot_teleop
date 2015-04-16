@@ -469,12 +469,11 @@ class InteractiveControl:
         else :
             resp.has_navigation_controls = False
 
-
         return resp
 
     def handle_configure(self, req) :
         
-        print req
+        # print req
         resp = None
         
         if req.action_type == InteractiveControlsInterfaceRequest.GET_INFO :
@@ -679,16 +678,13 @@ class InteractiveControl:
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem planning to nav waypoint")
 
-
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH :
             try :
                 self.navigation_controls.footstep_controls.execute_footstep_path()
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
 
-
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
-            print req.navigation_mode
             self.path_planner.set_navigation_mode(req.navigation_mode)
 
         self.server.applyChanges()
