@@ -23,6 +23,7 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->delete_button, SIGNAL(clicked()), this, SLOT(deleteWaypointRequest()));
     QObject::connect(ui->plan_button, SIGNAL(clicked()), this, SLOT(planRequest()));
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
+    QObject::connect(ui->direct_move_button, SIGNAL(clicked()), this, SLOT(directMoveRequest()));
 
     QObject::connect(ui->accommodate_terrain, SIGNAL(stateChanged(int)), this, SLOT(accommodateTerrainClicked(int)));
     QObject::connect(ui->nav_mode_box, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(navModeChanged(const QString&)));
@@ -168,6 +169,40 @@ bool NavigationControlsWidget::executeRequest() {
 }
 
 
+bool NavigationControlsWidget::directMoveRequest() {
+
+    ROS_INFO("NavigationControlsWidget::directMoveRequest()");    
+
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::EXECUTE_DIRECT_MOVE;
+    srv.request.accommodate_terrain_in_navigation = accommodate_terrain;
+    srv.request.navigation_mode = ui->nav_mode_box->currentText().toStdString();
+   
+    QList<QListWidgetItem *> items = ui->waypoint_list->selectedItems();
+    if(items.size()==0) {
+        int n = ui->waypoint_list->count();
+        QListWidgetItem *last_item = ui->waypoint_list->item(n-1);
+        srv.request.navigation_waypoint_name.push_back(last_item->text().toStdString());
+    } else {
+        for (auto& g: items) {
+            srv.request.navigation_waypoint_name.push_back(g->text().toStdString());
+        }
+    }       
+
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("NavigationControlsWidget::directMoveRequest() -- success");
+        return setDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("NavigationControlsWidget::directMoveRequest() -- failed to call service");
+        return false;
+    }
+}
+
+
 bool NavigationControlsWidget::addWaypointRequest() {
 
     ROS_INFO("NavigationControlsWidget::addWaypointRequest()");    
@@ -238,6 +273,16 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
         if (service_client_->call(srv))
         {
             ROS_INFO("NavigationControlsWidget::navModeChanged() -- success");
+
+            if (srv.request.navigation_mode == "REACTIVE_WALKER") {
+                ui->direct_move_button->setEnabled(true);
+                ui->plan_button->setEnabled(false);
+                ui->execute_button->setEnabled(false);
+            } else {
+                ui->direct_move_button->setEnabled(false);
+                ui->plan_button->setEnabled(true);
+                ui->execute_button->setEnabled(true);
+            }
             return true; //setDataFromResponse(srv.response);
         }
         else

@@ -10,6 +10,8 @@ import PyKDL as kdl
 roslib.load_manifest('step_finder')
 roslib.load_manifest('walk_controller')
 roslib.load_manifest('auto_walker')
+roslib.load_manifest('reactive_walker')
+
 roslib.load_manifest('matec_msgs')
 
 import geometry_msgs.msg
@@ -27,6 +29,7 @@ from matec_actions.msg import *
 
 from walk_controller.msg import *
 from auto_walker.msg import *
+from reactive_walker.msg import *
 
 from matec_msgs.srv import *
 from step_finder.srv import *
@@ -74,11 +77,18 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/assume_flat_ground", True)
         rospy.set_param("~atlas/auto_walker_timeout", 10.0)
 
+        rospy.set_param("~atlas/reactive_walk/success_radius", 0.2)
+        rospy.set_param("~atlas/reactive_walk/max_vel", 0.25)
+        rospy.set_param("~atlas/reactive_walk/max_accel_steps", 8)
+        rospy.set_param("~atlas/reactive_walk/timeout", 5.0)
+        rospy.set_param("~atlas/reactive_walk/enqueue", False)
+
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
         
         self.walk_controller_client = actionlib.SimpleActionClient('/path_walker', walk_controller.msg.WalkPathAction)
         self.auto_walker_client = actionlib.SimpleActionClient('/auto_walker/autonomous_server', auto_walker.msg.AutonomousWalkAction)
+        self.reactive_walker_client = actionlib.SimpleActionClient('/reactive_walk', reactive_walker.msg.ReactiveWalkAction)
         self.explicit_walk_client = actionlib.SimpleActionClient('/auto_walker/explicit_server', auto_walker.msg.ExplicitWalkAction)
         
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
@@ -217,7 +227,6 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr("AtlasPathPlanner::get_joint_names(): " + str(e))
             return None
         
-
         try :
             rospy.loginfo(str("AtlasPathPlanner::get_joint_names() -- calling service"))
             get_names = rospy.ServiceProxy("/interactive_controls_bridge/get_joint_names", GetJointNames)
@@ -336,7 +345,7 @@ class AtlasPathPlanner(PathPlanner) :
                 + " -- possibly a joint plan"))
             return False
 
-    def execute_navigation_plan(self, footsteps, lift_heights=None, feet=None) :
+    def execute_navigation_plan(self, footsteps=None, lift_heights=None, feet=None, goals=None) :
 
         rospy.loginfo("AtlasPathPlanner::execute_navigation_plan()")
 
@@ -346,10 +355,10 @@ class AtlasPathPlanner(PathPlanner) :
             ret = self.execute_walk_controller(footsteps, lift_heights, feet)
         elif mode == "AUTO_WALKER" :
             ret = self.execute_auto_walker(footsteps, lift_heights, feet)
-        elif mode == "REFLEXIVE_WALKER" :
-            ret = self.execute_reflexive_walker()
+        elif mode == "REACTIVE_WALKER" :
+            ret = self.execute_reactive_walker(goals)
         else :
-            rospy.logerr(str("AtlasPathPlanner::plan_navigation_path() -- unknown mode " + str(mode)))
+            rospy.logerr(str("AtlasPathPlanner::execute_navigation_plan() -- unknown mode " + str(mode)))
           
         return ret 
 
@@ -357,7 +366,7 @@ class AtlasPathPlanner(PathPlanner) :
     def execute_walk_controller(self, footsteps, lift_heights, feet) :
 
         if not self.walk_controller_client.wait_for_server(rospy.Duration(2.0)) :
-            rospy.logerr("AtlasPathPlanner::execute_navigation_plan() -- wait for server timeout")
+            rospy.logerr("AtlasPathPlanner::execute_walk_controller() -- wait for server timeout")
             return False
 
         # Creates a goal to send to the action server.
@@ -412,12 +421,12 @@ class AtlasPathPlanner(PathPlanner) :
         goal.stamp_in_place_after = False
         goal.back_up_distance = 0.0
 
-        rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- sending walk path goal")
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- sending walk path goal")
         # Sends the goal to the action server.
         self.walk_controller_client.send_goal(goal)
 
         # Waits for the server to finish performing the action.
-        # rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- waiting for walk path result")
+        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- waiting for walk path result")
         # self.walk_controller_client.wait_for_result()
 
         try :
@@ -425,9 +434,9 @@ class AtlasPathPlanner(PathPlanner) :
             while not fb_msg.feedback.planning_complete:
                 fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
         except :
-            rospy.logwarn("AtlasPathPlanner::execute_navigation_plan() -- timeout on sending goal to walk")
+            rospy.logwarn("AtlasPathPlanner::execute_walk_controller() -- timeout on sending goal to walk")
         
-        rospy.loginfo("AtlasPathPlanner::execute_navigation_plan() -- COMPLETE(?)")
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- COMPLETE(?)")
 
         # Prints out the result of executing the action
         # print self.walk_controller_client.get_result()  
@@ -456,6 +465,7 @@ class AtlasPathPlanner(PathPlanner) :
         goal.feet = copy.deepcopy(feet)
         goal.lift_heights = copy.deepcopy(lift_heights)
 
+        rospy.loginfo("AtlasPathPlanner::execute_auto_walker() -- sending goal")
         self.explicit_walk_client.send_goal(goal)
 
         # try :
@@ -476,12 +486,51 @@ class AtlasPathPlanner(PathPlanner) :
         return status
 
 
-    def execute_reflexive_walker(self) :
-        rospy.logerr("AtlasPathPlanner::execute_reflexive_walker() -- not implemented!!")
-        return False
+    def execute_reactive_walker(self, goals) :
+
+        if len(goals) > 1 :
+            rospy.logwarn("AtlasPathPlanner::execute_reactive_walker() -- too many goals, taking last")
+            goal = goals[len(goals)-1]
+        else :
+            goal = goals[0]
+
+        if not self.reactive_walker_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("AtlasPathPlanner::execute_reactive_walker() -- wait for reactive_walk server timeout")
+            return False
+
+        # Creates a goal to send to the action server.
+        goal = reactive_walker.msg.ReactiveWalkGoal()
+
+        pose = geometry_msgs.msg.Pose2D()
+        pose.x = goal.pose.position.x
+        pose.y = goal.pose.position.y
+
+        q = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
+        r,p,y = q_to_rpy(q)
+        pose.theta = y
+        
+        goal.frame_id = goal.header.frame_id
+        goal.goal = pose  
+        goal.success_radius = rospy.get_param("~atlas/reactive_walk/success_radius")
+        goal.enqueue = rospy.get_param("~atlas/reactive_walk/enqueue")
+        goal.timeout = rospy.Duration(rospy.get_param("~atlas/reactive_walk/timeout"))
+        goal.max_vel = rospy.get_param("~atlas/reactive_walk/max_vel")
+        goal.max_accel_steps = rospy.get_param("~atlas/reactive_walk/max_accel_steps")
+
+        rospy.loginfo("AtlasPathPlanner::execute_reactive_walker() -- sending goal")
+        print goal
+        self.reactive_walker_client.send_goal(goal)
+
+        return True
+
+    def direct_move(self, goal) :
+        try:
+            self.execute_reactive_walker([goal])
+        except :
+            rospy.logerr("AtlasPathPlanner::direct_move() -- problems")
 
     def get_navigation_modes(self) :
-        return ["WALK_CONTROLLER", "AUTO_WALKER", "REFLEXIVE_WALKER"]
+        return ["WALK_CONTROLLER", "AUTO_WALKER", "REACTIVE_WALKER"]
 
     def get_navigation_mode(self) :
         return self.navigation_mode
@@ -609,7 +658,6 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr("AtlasPathPlanner::plan_cartesian_paths() -- wait for server timeout")
             return False
 
-
         goal = matec_actions.msg.PlannedManipulationGoal()
         goal.visualize_on_plan = rospy.get_param("~atlas/visualize_on_plan")
         goal.allow_incomplete_planning = rospy.get_param("~atlas/allow_incomplete_planning")
@@ -730,7 +778,6 @@ class AtlasPathPlanner(PathPlanner) :
             return None
 
 
-
     def plan_navigation_path(self, waypoints) :
 
         mode = rospy.get_param("~atlas/navigation_mode")
@@ -741,8 +788,8 @@ class AtlasPathPlanner(PathPlanner) :
             steps = self.plan_path_walk_controller(waypoints)
         elif mode == "AUTO_WALKER" :
             steps, lift_heights, feet = self.plan_path_auto_walker(waypoints)
-        elif mode == "REFLEXIVE_WALKER" :
-            rospy.logwarn("AtlasPathPlanner::plan_navigation_path() -- no sense planning in REFLEXIVE_WALKER mode ")
+        elif mode == "REACTIVE_WALKER" :
+            rospy.logwarn("AtlasPathPlanner::plan_navigation_path() -- no sense planning in REACTIVE_WALKER mode ")
         else :
             rospy.logerr(str("AtlasPathPlanner::plan_navigation_path() -- unknown mode " + str(mode)))
             
@@ -831,8 +878,8 @@ class AtlasPathPlanner(PathPlanner) :
         
         return resp.steps
 
-    def plan_path_reflexive_walker(self, waypoints) :
-        rospy.logwarn("AtlasPathPlanner::plan_path_reflexive_walker() -- not implemented!")
+    def plan_path_reactive_walker(self, waypoints) :
+        rospy.logwarn("AtlasPathPlanner::plan_path_reactive_walker() -- not implemented!")
         return None
 
 

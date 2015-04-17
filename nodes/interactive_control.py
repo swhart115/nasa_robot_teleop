@@ -684,6 +684,12 @@ class InteractiveControl:
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
+            try :
+                self.navigation_controls.direct_move(req.navigation_waypoint_name[0])
+            except :
+                rospy.logerr("InteractiveControl::handle_configure() -- problem executing direct move")
+
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
             self.path_planner.set_navigation_mode(req.navigation_mode)
 

@@ -41,6 +41,7 @@ namespace rviz_interactive_controls_panel
 
         bool planRequest();
         bool executeRequest();
+        bool directMoveRequest();
         bool addWaypointRequest();
         bool deleteWaypointRequest();
 

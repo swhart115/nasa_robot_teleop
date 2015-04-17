@@ -940,10 +940,14 @@ class PathPlanner(object):
     
 
     #### EXCECUTION FUNCTIONS
-    def execute_navigation_plan(self, footsteps) :
+    def execute_navigation_plan(self, footsteps, lift_heights, feet, goals) :
         rospy.logerror("PathPlanner::execute_navigation_plan() -- not implemented")
         raise NotImplementedError
 
     def execute_plans(self, group_names, from_stored, wait) :
         rospy.logerror("PathPlanner::execute_plans() -- not implemented")
+        raise NotImplementedError
+
+    def direct_move(self, goal) :
+        rospy.logerror("PathPlanner::direct_move() -- not implemented")
         raise NotImplementedError

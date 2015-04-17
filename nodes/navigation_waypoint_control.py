@@ -332,9 +332,19 @@ class NavigationWaypointControl(object) :
             rospy.logwarn("NavigationWaypointControl::request_navigation_plan() no path planner set!")
 
 
-    def direct_move(self, data) :
-        rospy.logwarn("NavigationControl::direct_move() -- not implemented yet!!")
+    def direct_move(self, waypoint_name) :
 
+        rospy.logwarn("NavigationControl::direct_move()")
+
+        ps = PoseStamped()
+
+        for id in self.waypoint_markers :
+            n = self.get_waypoint_name(id)
+            p = self.server.get(n)  
+            ps.pose = p.pose
+            ps.header = p.header
+
+        self.path_planner.direct_move(ps)
 
     def get_waypoints(self) :
         return self.waypoint_markers
@@ -356,7 +366,7 @@ class NavigationWaypointControl(object) :
             elif handle == self.waypoint_menu_handles["Execute Footstep Plan"] :
                 self.footstep_controls.execute_footstep_path()
             elif handle == self.waypoint_menu_handles["Move Directly"] :
-                self.direct_move(feedback)
+                self.direct_move(feedback.marker_name)
 
 
     def navigation_marker_callback(self, feedback) :
