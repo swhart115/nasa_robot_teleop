@@ -266,24 +266,13 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
     
     nasa_robot_teleop::InteractiveControlsInterface srv;
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_NAVIGATION_MODE;
-    
+      
     if(ui->nav_mode_box->currentText().toStdString() != navigation_mode) {
         srv.request.navigation_mode = ui->nav_mode_box->currentText().toStdString();
         
         if (service_client_->call(srv))
         {
             ROS_INFO("NavigationControlsWidget::navModeChanged() -- success");
-
-            if (srv.request.navigation_mode == "REACTIVE_WALKER") {
-                ui->direct_move_button->setEnabled(true);
-                ui->plan_button->setEnabled(false);
-                ui->execute_button->setEnabled(false);
-            } else {
-                ui->direct_move_button->setEnabled(false);
-                ui->plan_button->setEnabled(true);
-                ui->execute_button->setEnabled(true);
-            }
-            return true; //setDataFromResponse(srv.response);
         }
         else
         {
@@ -291,4 +280,14 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
             return false;
         }
     }
+    if (srv.request.navigation_mode == "REACTIVE_WALKER") {
+        ui->direct_move_button->setEnabled(true);
+        ui->plan_button->setEnabled(false);
+        ui->execute_button->setEnabled(false);
+    } else {
+        ui->direct_move_button->setEnabled(false);
+        ui->plan_button->setEnabled(true);
+        ui->execute_button->setEnabled(true);
+    }
+    return true; //setDataFromResponse(srv.response);
 }
