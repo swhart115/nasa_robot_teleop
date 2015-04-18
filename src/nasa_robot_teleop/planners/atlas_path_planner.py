@@ -77,10 +77,10 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/assume_flat_ground", True)
         rospy.set_param("~atlas/auto_walker_timeout", 10.0)
 
-        rospy.set_param("~atlas/reactive_walk/success_radius", 0.2)
-        rospy.set_param("~atlas/reactive_walk/max_vel", 0.25)
-        rospy.set_param("~atlas/reactive_walk/max_accel_steps", 8)
-        rospy.set_param("~atlas/reactive_walk/timeout", 5.0)
+        rospy.set_param("~atlas/reactive_walk/success_radius", 0.4)
+        rospy.set_param("~atlas/reactive_walk/max_vel", 0.15)
+        rospy.set_param("~atlas/reactive_walk/max_accel_steps", 4)
+        rospy.set_param("~atlas/reactive_walk/timeout", 0.0)
         rospy.set_param("~atlas/reactive_walk/enqueue", False)
 
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
@@ -490,9 +490,9 @@ class AtlasPathPlanner(PathPlanner) :
 
         if len(goals) > 1 :
             rospy.logwarn("AtlasPathPlanner::execute_reactive_walker() -- too many goals, taking last")
-            goal = goals[len(goals)-1]
+            goal_pose = goals[len(goals)-1]
         else :
-            goal = goals[0]
+            goal_pose = goals[0]
 
         if not self.reactive_walker_client.wait_for_server(rospy.Duration(2.0)) :
             rospy.logerr("AtlasPathPlanner::execute_reactive_walker() -- wait for reactive_walk server timeout")
@@ -502,14 +502,14 @@ class AtlasPathPlanner(PathPlanner) :
         goal = reactive_walker.msg.ReactiveWalkGoal()
 
         pose = geometry_msgs.msg.Pose2D()
-        pose.x = goal.pose.position.x
-        pose.y = goal.pose.position.y
+        pose.x = goal_pose.pose.position.x
+        pose.y = goal_pose.pose.position.y
 
-        q = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
+        q = [goal_pose.pose.orientation.x, goal_pose.pose.orientation.y, goal_pose.pose.orientation.z, goal_pose.pose.orientation.w]
         r,p,y = q_to_rpy(q)
         pose.theta = y
         
-        goal.frame_id = goal.header.frame_id
+        goal.frame_id = goal_pose.header.frame_id
         goal.goal = pose  
         goal.success_radius = rospy.get_param("~atlas/reactive_walk/success_radius")
         goal.enqueue = rospy.get_param("~atlas/reactive_walk/enqueue")
@@ -518,7 +518,6 @@ class AtlasPathPlanner(PathPlanner) :
         goal.max_accel_steps = rospy.get_param("~atlas/reactive_walk/max_accel_steps")
 
         rospy.loginfo("AtlasPathPlanner::execute_reactive_walker() -- sending goal")
-        print goal
         self.reactive_walker_client.send_goal(goal)
 
         return True
@@ -526,7 +525,8 @@ class AtlasPathPlanner(PathPlanner) :
     def direct_move(self, goal) :
         try:
             self.execute_reactive_walker([goal])
-        except :
+        except Exception as e:
+            print e
             rospy.logerr("AtlasPathPlanner::direct_move() -- problems")
 
     def get_navigation_modes(self) :
