@@ -88,6 +88,10 @@ class FootstepControl(object) :
 
     def set_footstep_poses(self, poses, lift_heights=None, feet=None) :
         self.clear_footsteps()
+        print "set_footstep_poses() --"
+        print "lift_heights: ", lift_heights
+        print "feet: ", feet
+
         if self.translate_poses_to_markers(poses, lift_heights, feet) :
             self.create_foot_interactive_markers()
             self.lift_heights = lift_heights
@@ -110,12 +114,15 @@ class FootstepControl(object) :
         
         self.footstep_array = MarkerArray()
         num_feet = len(self.feet_names)
+        print "num feet: ", num_feet
 
+        print "test 1"
         if feet != None :
             if len(feet) != len(poses) :
                 rospy.logerr("FootstepControl::translate_poses_to_markers() -- size mismatch between foot lables and poses!!")
                 return False
 
+        print "test 2"
         try :
             if len(feet) > 0 :
                 if feet[0] == 0: 
@@ -127,8 +134,13 @@ class FootstepControl(object) :
             start_foot = self.path_planner.get_start_foot()
             start_foot_id = self.feet_names.index(start_foot)
     
+        print "start_foot: ", start_foot 
+        print "start_foot_id: ", start_foot_id
         
+        print "test 3"
         for id in range(len(poses)) :
+
+            print "test a"
             
             m = Marker()
             
@@ -155,6 +167,11 @@ class FootstepControl(object) :
 
             rospy.loginfo(str("FootstepControl::translate() -- Adding foot[" + str(m.text) + "] at (" + str(m.pose.position.x) + ", " + str(m.pose.position.y) + ")_[" + str(m.header.frame_id) + "]"))
             self.footstep_array.markers.append(m)
+
+            print "test b"
+
+        print "final foot markers"
+        print self.footstep_array.markers
 
         return True
         
