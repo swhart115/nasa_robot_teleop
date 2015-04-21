@@ -802,10 +802,15 @@ class AtlasPathPlanner(PathPlanner) :
 
         # if i like, them call execute service, if not, modify, send to explicit
 
-        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- waiting for auto_walker server")
+        step_poses = []
+        lift_heights = []
+        feet = []
+
+
+        rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- waiting for auto_walker server")
         if not self.auto_walker_client.wait_for_server(rospy.Duration(2.0)) :
-            rospy.logerr("AtlasPathPlanner::plan_navigation_path() -- wait for auto_walker server timeout")
-            return None
+            rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- wait for auto_walker server timeout")
+            return step_poses, lift_heights, feet
 
         goal = auto_walker.msg.AutonomousWalkGoal()
         goal.targets = copy.deepcopy(waypoints)
@@ -814,33 +819,42 @@ class AtlasPathPlanner(PathPlanner) :
         goal.plan_through_unknown_cells = rospy.get_param("~atlas/plan_through_unknown_cells")
         goal.solver_timeout = rospy.get_param("~atlas/auto_walker_timeout")
 
-        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- sending goal")
+        rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- sending goal")
         # Sends the goal to the action server.
         self.auto_walker_client.send_goal(goal)
 
-        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- polling feedback")
-        fb_msg = rospy.wait_for_message("/auto_walker/autonomous_server/feedback", auto_walker.msg.AutonomousWalkFeedback, 3.0)
-
-        while not fb_msg.feedback.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", auto_walker.msg.AutonomousWalkFeedback, 3.0)
-        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- planning complete, getting resulting steps...")
         try :
-            rospy.wait_for_service("/auto_walker/get_step_plan", self.wait_for_service_timeout)
+            rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- polling feedback")
+            fb_msg = rospy.wait_for_message("/auto_walker/autonomous_server/feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
+
+            while not fb_msg.feedback.planning_complete:
+                fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
+            rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- planning complete, getting resulting steps...")
+
+            try :
+                rospy.wait_for_service("/auto_walker/get_step_plan", self.wait_for_service_timeout)
+
+                try :
+                    rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- requesting plan!")
+                    step_planner = rospy.ServiceProxy("/auto_walker/get_step_plan", auto_walker.srv.GetStepPlan)
+                    resp = step_planner()
+
+                    step_poses = resp.step_poses
+                    lift_heights = resp.lift_heights
+                    feet = resp.feet
+
+                    rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- got footsteps!")
+
+                except rospy.ServiceException, e:
+                    rospy.logerr(str("AtlasPathPlanner::plan_path_auto_walker() -- faild to get step service" + str(e)))
+
+            except rospy.ROSException as e:
+                rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- faile to wait for step service: " + str(e))
+
         except rospy.ROSException as e:
-            rospy.logerr("AtlasPathPlanner::plan_navigation_path(): " + str(e))
-            return None
+            rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- failed to get feedback message: " + str(e))
 
-        try :
-            rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- requesting plan!")
-            step_planner = rospy.ServiceProxy("/auto_walker/get_step_plan", auto_walker.srv.GetStepPlan)
-            resp = step_planner()
-        except rospy.ServiceException, e:
-            rospy.logerr(str("AtlasPathPlanner::plan_navigation_path() -- " + str(e)))
-            return None
-
-        rospy.loginfo("AtlasPathPlanner::plan_navigation_path() -- got footsteps!")
-
-        return resp.step_poses, resp.lift_heights, resp.feet
+        return step_poses, lift_heights, feet
 
 
     def plan_path_walk_controller(self, waypoints) :

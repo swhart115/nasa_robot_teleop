@@ -4,6 +4,7 @@ import rospy
 import roslib; roslib.load_manifest("nasa_robot_teleop")
 
 import math
+import yaml
 import copy
 import threading
 import tf
@@ -52,8 +53,8 @@ class InteractiveControl:
         
         self.group_map = []
         self.group_config = {}
+        self.gripper_action = {}
         self.tolerances = None
-        self.gripper_action = None
         self.config_parser = None
 
         self.tf_listener = tf.TransformListener()
@@ -504,11 +505,18 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]
+
+                group_store = []
+                pt_store = []
+                
                 if g in self.get_groups('cartesian') :
                     im = self.server.get(g)
                     pt = geometry_msgs.msg.PoseStamped()
                     pt.header = im.header
                     pt.pose = im.pose
+
+                    group_store.append(g)
+                    pt_store.append([pt])
 
                     try :
                         self.path_planner.display_modes[g] = req.path_visualization_mode[idx]
@@ -530,14 +538,6 @@ class InteractiveControl:
                     except :
                         pass
 
-                    if self.auto_execute[g] :
-                        if not self.path_planner.plan_cartesian_and_execute([g], [[pt]]) :
-                            rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + g + ". re-synching..."))
-                        self.reset_group_marker(g)
-                    else :
-                        self.path_planner.clear_goal_target(g)
-                        self.path_planner.create_path_plan([g], [[pt]])
-
                     try :
                         for tol in req.tolerance :
                             self.set_tolerances(g,tol.mode,tol.types[0])
@@ -545,7 +545,16 @@ class InteractiveControl:
                     except :
                         pass
 
-                    self.server.applyChanges()
+            if not self.path_planner.plan_cartesian_and_execute(group_store, pt_store) :
+                rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + g + ". re-synching..."))
+                for g in group_store :
+                    self.reset_group_marker(g)
+            else :
+                for g in group_store :
+                    self.path_planner.clear_goal_target(g)
+                self.path_planner.create_path_plan(group_store,pt_store)
+
+            self.server.applyChanges()
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_JOINT_MAP :
             for idx in range(len(req.group_name)) :
@@ -736,13 +745,16 @@ class InteractiveControl:
         rospy.loginfo(str("InteractiveControl::handle_remove_group() -- removed " + req.name + " -- " + str(resp.success)))
         return resp
 
-    def set_gripper_action(self, act) :
-        self.gripper_action = act
-        self.path_planner.set_gripper_action(act)
+    def set_gripper_actions(self, actions) :
+        for a in actions :
+            rospy.loginfo(str("InteractiveControl::set_gripper_actions() -- found " + a['name'] + " gripper action: " + a['action']))
+            self.gripper_action[a['name']] = a['action']
+        self.path_planner.set_gripper_actions(actions)
 
-    def clear_gripper_action(self) :
-        self.gripper_action = None
-        self.path_planner.clear_gripper_action()
+    def clear_gripper_actions(self) :
+        for a in self.gripper_action.keys():
+            del self.gripper_action[a]
+        self.path_planner.clear_gripper_actions()
 
     def toggle_posture_control(self, group) :
         joint_names = self.path_planner.get_all_group_joints(group)
@@ -1040,9 +1052,20 @@ if __name__=="__main__":
 
     control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
 
+    gripper_yaml = None
+
     if gripper_action and gripper_action != "" :
-       rospy.loginfo(str("Setting Gripper Service: " + gripper_action))
-       control.set_gripper_action(gripper_action)
+        rospy.loginfo(str("Setting Gripper Service: " + gripper_action))
+
+        try:
+            f = open(gripper_action)
+            gripper_yaml = yaml.load(f.read())
+            f.close()
+        except :
+            rospy.logerr("load gripper yaml() -- error opening config file")
+
+        if gripper_yaml :
+            control.set_gripper_actions(gripper_yaml['GripperAction'])
 
     r = rospy.Rate(10.0)
     while not rospy.is_shutdown():

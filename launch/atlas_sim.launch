@@ -7,6 +7,6 @@
 		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/atlas.yaml"/>
 		<param name="planner_config_file" value="$(find atlas_moveit_config)/config/atlas.srdf"/>
 		<param name="tolerance_file" value="$(find nasa_robot_teleop)/config/tolerances.yaml"/>
-     	<param name="gripper_action" value="/atlas/gripper/server"/>  
-	</node>
+     	<param name="gripper_action" value="$(find nasa_robot_teleop)/config/atlas_sim_grippers.yaml"/>  
+     </node>
 </launch>

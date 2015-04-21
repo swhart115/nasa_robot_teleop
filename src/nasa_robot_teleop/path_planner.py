@@ -62,8 +62,8 @@ class PathPlanner(object):
         self.plan_color = (0.5,0.1,0.75,.5)
         self.path_increment = 1
 
-        self.gripper_action = None
-        self.gripper_client = None
+        self.gripper_action = {}
+        self.gripper_client = {}
 
         self.bridge_topic_map = {}
 
@@ -557,7 +557,7 @@ class PathPlanner(object):
             self.plan_generated[group_name] = False
             ret[group_name] = False
                    
-            if not (self.group_types[group_name] == "endeffector" and self.gripper_action):
+            if not (self.group_types[group_name] == "endeffector" and (group_name in self.gripper_action.keys())) :
                 planning_group_names.append(group_name)
             else :
                 ret[group_name] = True
@@ -706,37 +706,37 @@ class PathPlanner(object):
     ##### gripper service methods ######
     ####################################
 
-    def set_gripper_action(self, act) :
+    def set_gripper_actions(self, actions) :
+
+        for a in actions :
+            try :
+
+                self.gripper_client[a['name']] = actionlib.SimpleActionClient(a['action'], GripperCommandAction)
+
+                rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['action'] + ") for group " + a['name'] + " -- looking for server")
+                if not self.gripper_client[a['name']].wait_for_server(rospy.Duration(2.0)) :
+                    rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
+                    self.clear_gripper_actions()
+                    return 
+                else :
+                    rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['name'] + ") -- server found")
+                
+            except rospy.ROSException as e:
+                rospy.logerr("PathPlanner::set_gripper_actions(): " + str(e))
+                self.clear_gripper_actions()
+
+    def clear_gripper_actions(self) :
+        for a in self.gripper_action.keys() :
+            del self.gripper_action[a]
+
+        for a in self.gripper_client.keys() :
+            del self.gripper_client[a]   
         
-        try :
-            
-            self.gripper_client = actionlib.SimpleActionClient(act, GripperCommandAction)
-            
-            # rospy.wait_for_service(act,2.0)
-            # rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- service found")
-            # self.gripper_action = rospy.ServiceProxy(act, EndEffectorCommand)
-
-            rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- looking for server")
-            if not self.gripper_client.wait_for_server(rospy.Duration(2.0)) :
-                rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
-                self.clear_gripper_action()
-                return 
-            else :
-                rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + act + ") -- server found")
-            
-        except rospy.ROSException as e:
-            rospy.logerr("PathPlanner::set_gripper_action(): " + str(e))
-            self.clear_gripper_action()
-
-    def clear_gripper_action(self) :
-        self.gripper_client = None   
-        self.gripper_action = None
-
     def execute_gripper_action(self, group_name, from_stored=False, wait=True) :
         r = False
         rospy.loginfo(str("PathPlanner::execute_gripper_action() -- executing plan for group: " + group_name))                
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
-            if self.group_types[group_name] == "endeffector" and self.gripper_client:
+            if self.group_types[group_name] == "endeffector" and (group_name in self.gripper_client.keys()):
                 r = self.run_gripper_action(group_name, self.stored_plans[group_name])
         else :
             rospy.logerr(str("PathPlanner::execute_gripper_action() -- no plan for group" + group_name + " yet generated."))
@@ -748,8 +748,12 @@ class PathPlanner(object):
     # to send a service call to any custom node that will interpret the JT as whatever is necessary
     def run_gripper_action(self, group, traj) :
         
-        if not self.gripper_client.wait_for_server(rospy.Duration(2.0)) :
-            rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
+        if not group in self.gripper_client.keys() :
+            rospy.logerr(str("PathPlanner::run_gripper_action() -- group " + group + " not an available gripper action client"))
+            return False
+
+        if not self.gripper_client[group].wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr(str("PathPlanner::run_gripper_action(" + group + ") -- wait for server timeout"))
             return False
 
         goal = GripperCommandGoal()
@@ -758,7 +762,7 @@ class PathPlanner(object):
         goal.goal_trajectory = traj
 
         # Fill in the goal here
-        self.gripper_client.send_goal(goal)
+        self.gripper_client[group].send_goal(goal)
 
         return True
         # rospy.loginfo("PathPlanner::run_gripper_action() -- polling feedback")
