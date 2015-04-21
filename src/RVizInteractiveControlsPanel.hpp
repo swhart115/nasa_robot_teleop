@@ -13,6 +13,7 @@
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
 #include "NavigationControlsWidget.hpp"
+#include "ServiceCallWidgetInterface.hpp"
 
 namespace Ui {
 class RVizInteractiveControlsPanel;
@@ -20,18 +21,29 @@ class RVizInteractiveControlsPanel;
 
 namespace rviz_interactive_controls_panel {
 
-    class RVizInteractiveControlsPanel : public rviz::Panel
+    class RVizInteractiveControlsPanel
+        : public rviz::Panel
+        , public ServiceCallWidgetInterface
     {
         Q_OBJECT
 
     public:
+        typedef nasa_robot_teleop::InteractiveControlsInterface ICIface;
         explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
         ~RVizInteractiveControlsPanel();
+        /** Implement the service call response handling. Note that this
+         * is a late addition that simply calls the original response
+         * handler method. */
+        void updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
+
+      Q_SIGNALS:
+         void sendCall(ICIface);
 
       public Q_SLOTS:  
          bool getConfigData();
          bool addGroupRequest();
          bool removeGroupRequest();
+         void groupDoubleClicked(QListWidgetItem*);
 
     private:
         
@@ -55,21 +67,22 @@ namespace rviz_interactive_controls_panel {
 
         // setup widget function
         void setupWidgets();
+        bool selectTab(const std::string &text);
 
         // function add a new group controls tab
         bool addGroupControls(std::string group_name);
 
         // multi-group controls
-        void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
         bool addMultiGroupControls();
         bool removeMultiGroupControls();
 
         // navigation controls
-        void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
         bool addNavigationControls();
         bool removeNavigationControls();
 
-        bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
 
     };
 

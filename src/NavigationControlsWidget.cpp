@@ -17,6 +17,12 @@ NavigationControlsWidget::~NavigationControlsWidget()
     delete ui;
 }
 
+void NavigationControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
+    // NOTE: ignores the return value!
+    setDataFromResponse(rsp);
+}
+
+
 void NavigationControlsWidget::setupWidgets() {
 
     QObject::connect(ui->add_button, SIGNAL(clicked()), this, SLOT(addWaypointRequest()));
@@ -67,7 +73,7 @@ void NavigationControlsWidget::setupDisplay() {
 
 }
 
-bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
 
     waypoint_list.clear();
     for(uint idx=0; idx<resp.navigation_waypoint_name.size(); idx++) {

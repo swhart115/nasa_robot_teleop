@@ -15,9 +15,14 @@ MultiGroupControlsWidget::MultiGroupControlsWidget(QWidget *parent)
     setupWidgets();
 }
 
-MultiGroupControlsWidget::~MultiGroupControlsWidget()
-{
+MultiGroupControlsWidget::~MultiGroupControlsWidget() {
     delete ui;
+}
+
+void MultiGroupControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
+    // TODO: since this is gonna be called by the service thread, have to
+    //   figure out what it's a response *to*...
+    //if (rsp.action_type 
 }
 
 void MultiGroupControlsWidget::setupWidgets() {

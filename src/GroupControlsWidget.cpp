@@ -17,6 +17,12 @@ GroupControlsWidget::~GroupControlsWidget()
     delete ui;
 }
 
+void GroupControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
+    // NOTE: ignores the return value!
+    setGroupDataFromResponse(rsp);
+}
+
+
 void GroupControlsWidget::setupWidgets() {
 
     QObject::connect(ui->plan_button, SIGNAL(clicked()), this, SLOT(planRequest()));
@@ -113,7 +119,7 @@ void GroupControlsWidget::setupDisplay() {
 
 }
 
-bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
 
     for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
         if(group_name == resp.active_group_name[idx]) {

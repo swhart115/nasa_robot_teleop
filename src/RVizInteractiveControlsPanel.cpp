@@ -30,13 +30,19 @@ RVizInteractiveControlsPanel::~RVizInteractiveControlsPanel()
     group_widgets.clear();
 }
 
+void RVizInteractiveControlsPanel::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
+    // NOTE: ignores the return value!
+    setupFromConfigResponse(rsp);
+}
+
 void RVizInteractiveControlsPanel::setupWidgets() {
     QObject::connect(ui->refresh_button, SIGNAL(clicked()), this, SLOT(getConfigData()));
     QObject::connect(ui->add_group_button, SIGNAL(clicked()), this, SLOT(addGroupRequest()));
     QObject::connect(ui->remove_group_button, SIGNAL(clicked()), this, SLOT(removeGroupRequest()));
+    QObject::connect(ui->active_group_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(groupDoubleClicked(QListWidgetItem*)));
 }
 
-bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
     ROS_INFO("RVizInteractiveControlsPanel::setupFromConfigResponse()");
     ROS_DEBUG("RVizInteractiveControlsPanel: have [%lu] previous groups", previous_groups.size());
     // set up widgets for all the groups
@@ -195,7 +201,7 @@ bool RVizInteractiveControlsPanel::addGroupControls(std::string group_name) {
     return true;
 }
 
-void RVizInteractiveControlsPanel::updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+void RVizInteractiveControlsPanel::updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
     ROS_INFO("RVizInteractiveControlsPanel::updateMultiGroupControls()");
     if (resp.active_group_name.size() > 1) {
         if (addMultiGroupControls()) {
@@ -253,7 +259,7 @@ bool RVizInteractiveControlsPanel::removeMultiGroupControls() {
     return true;
 }
 
-void RVizInteractiveControlsPanel::updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+void RVizInteractiveControlsPanel::updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
     ROS_INFO("RVizInteractiveControlsPanel::updateNavigationControls()");    
     // set up navigation controls widget if applicable
     if (resp.has_navigation_controls) {
@@ -380,7 +386,22 @@ bool RVizInteractiveControlsPanel::removeGroupRequest() {
     return true;
 }
 
+void RVizInteractiveControlsPanel::groupDoubleClicked(QListWidgetItem* item) {
+    selectTab(item->text().toStdString());
+}
 
+bool RVizInteractiveControlsPanel::selectTab(const std::string &gn) {
+    bool retval = false;
+    if (group_widgets.count(gn) > 0) {
+        int idx = ui->GroupTabs->indexOf(group_widgets[gn]);
+        if (idx >= 0) {
+            ui->GroupTabs->setCurrentIndex(idx);
+            ui->GroupTabs->show();
+            retval = true;
+        }
+    }
+    return retval;
+}
 
 
 #include <pluginlib/class_list_macros.h>
