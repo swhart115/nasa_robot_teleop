@@ -3,10 +3,10 @@
 using namespace rviz_interactive_controls_panel;
 using namespace std;
 
-GroupControlsWidget::GroupControlsWidget(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::GroupControls),
-    initialized(false)
+GroupControlsWidget::GroupControlsWidget(QWidget *parent)
+    : QWidget(parent)
+    , ui(new Ui::GroupControls)
+    , initialized(false)
 {
     ui->setupUi(this);
     setupWidgets();
@@ -34,7 +34,7 @@ void GroupControlsWidget::setupWidgets() {
 
 }
 
-void GroupControlsWidget::setupDisplay() {
+void GroupControlsWidget::setupDisplay(QString from) {
 
     ui->joint_list->clear();
     
@@ -55,9 +55,9 @@ void GroupControlsWidget::setupDisplay() {
     }
     
     if(plan_found) {
-        ui->plan_label->setText(QString("PLAN FOUND"));
+        ui->plan_label->setText(QString("PLAN FOUND")+ from);
     } else {
-        ui->plan_label->setText(QString("NO PLAN"));
+        ui->plan_label->setText(QString("NO PLAN")+ from);
     }
 
     if(group_type=="cartesian") {
@@ -113,11 +113,12 @@ void GroupControlsWidget::setupDisplay() {
 
 }
 
-bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp, QString from) {
 
-    for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
+    ROS_INFO("GroupControlsWidget: [%s] got response", group_name.c_str());
+    for (uint idx=0; idx<resp.active_group_name.size(); idx++) {
         if(group_name == resp.active_group_name[idx]) {
-            
+            ROS_INFO("GroupControlsWidget: [%s] set data", group_name.c_str());
             int jdx=0;
             joint_names.clear();
             joint_mask.clear();
@@ -180,13 +181,12 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                     stored_poses.push_back(stored_pose);
                 }
             }       
-            setupDisplay();
+            setupDisplay(from);
 
         }   
     }
 
     return initialized;
-
 }
 
 
@@ -339,6 +339,18 @@ bool GroupControlsWidget::planRequest() {
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_TO_MARKER;
+    fillPlanRequest(srv);
+    if (service_client_->call(srv)) {
+        ROS_INFO("GroupControlsWidget::planRequest() -- success");
+        return setGroupDataFromResponse(srv.response);
+    } else {
+        ROS_ERROR("GroupControlsWidget::planRequest() -- failed to call service");
+        return false;
+    }
+}
+
+
+void GroupControlsWidget::fillPlanRequest(nasa_robot_teleop::InteractiveControlsInterface &srv) {
     srv.request.group_name.push_back(group_name);
     std::string viz_type = ui->viz_type->currentText().toStdString();
     srv.request.path_visualization_mode.push_back(viz_type);
@@ -364,19 +376,7 @@ bool GroupControlsWidget::planRequest() {
         jm.mask.push_back(joint_mask[jdx]);
     }
     srv.request.joint_mask.push_back(jm); 
-
-    if (service_client_->call(srv))
-    {
-        ROS_INFO("GroupControlsWidget::planRequest() -- success");
-        return setGroupDataFromResponse(srv.response);
-    }
-    else
-    {
-        ROS_ERROR("GroupControlsWidget::planRequest() -- failed to call service");
-        return false;
-    }
 }
-
 
 bool GroupControlsWidget::executeRequest() {
 

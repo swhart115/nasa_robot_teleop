@@ -3,10 +3,10 @@
 using namespace rviz_interactive_controls_panel;
 using namespace std;
 
-NavigationControlsWidget::NavigationControlsWidget(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::NavigationControls),
-    initialized(false)
+NavigationControlsWidget::NavigationControlsWidget(QWidget *parent)
+    : QWidget(parent)
+    , ui(new Ui::NavigationControls)
+    , initialized(false)
 {
     ui->setupUi(this);
     setupWidgets();
@@ -68,7 +68,7 @@ void NavigationControlsWidget::setupDisplay() {
 
 }
 
-bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp) {
+bool NavigationControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
 
     waypoint_list.clear();
     for(uint idx=0; idx<resp.navigation_waypoint_name.size(); idx++) {

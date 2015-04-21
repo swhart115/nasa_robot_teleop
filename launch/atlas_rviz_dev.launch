@@ -1,0 +1,23 @@
+<?xml version="1.0" ?>
+<launch>
+  <arg name="spew" default="screen" />
+
+  <node pkg="topic_tools" type="relay" name="topic_relay"
+    args="/joint_states /atlas/joint_states" output="$(arg spew)" />
+
+  <!--
+  <node pkg="sim_hand_interface" type="sim_hand_bridge" name="sim_hand_bridge"
+	 output="$(arg spew)" />
+  -->
+
+  <node pkg="planned_manipulation" type="planned_manipulation"
+    name="planned_manipulation" output="$(arg spew)" />
+
+  <include file="$(find nasa_robot_teleop)/launch/atlas_sim.launch" />
+
+  <!--
+  -->
+  <node pkg="rviz" type="rviz" name="$(anon rviz)" output="$(arg spew)"
+    args="-d $(find nasa_robot_teleop)/config/atlas_basic.rviz" />
+
+</launch>

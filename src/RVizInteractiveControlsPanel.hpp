@@ -9,15 +9,16 @@
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
 
 #include "ui_rviz_interactive_controls_panel.h"
+#include "InteractiveControlsInterfaceUtils.hpp"
 #include "GroupControlsWidget.hpp"
+#include "MultiGroupControlsWidget.hpp"
 #include "NavigationControlsWidget.hpp"
 
 namespace Ui {
 class RVizInteractiveControlsPanel;
 }
 
-namespace rviz_interactive_controls_panel
-{
+namespace rviz_interactive_controls_panel {
 
     class RVizInteractiveControlsPanel : public rviz::Panel
     {
@@ -26,12 +27,12 @@ namespace rviz_interactive_controls_panel
     public:
         explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
         ~RVizInteractiveControlsPanel();
-
-       public Q_SLOTS:
         
+      public Q_SLOTS:  
          bool getConfigData();
          bool addGroupRequest();
          bool removeGroupRequest();
+         void groupDoubleClicked(QListWidgetItem*);
 
     private:
         
@@ -49,17 +50,28 @@ namespace rviz_interactive_controls_panel
         
         // array of group widgets
         std::map<std::string, GroupControlsWidget *> group_widgets;
+        std::map<std::string, int> previous_groups;
+        MultiGroupControlsWidget *multi_group_widget;
         NavigationControlsWidget *navigation_widget;
 
         // setup widget function
         void setupWidgets();
+        bool selectTab(const std::string &text);
 
         // function add a new group controls tab
         bool addGroupControls(std::string group_name);
+
+        // multi-group controls
+        void updateMultiGroupControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
+        bool addMultiGroupControls();
+        bool removeMultiGroupControls();
+
+        // navigation controls
+        void updateNavigationControls(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
         bool addNavigationControls();
+        bool removeNavigationControls();
 
-        bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
-
+        bool setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
 
     };
 

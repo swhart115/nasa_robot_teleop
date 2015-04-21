@@ -7,7 +7,6 @@
 
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
 
-
 #include "ui_navigation_controls_widget.h"
 
 
@@ -35,7 +34,7 @@ namespace rviz_interactive_controls_panel
         }
 
         void setupDisplay();
-        bool setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse resp);
+        bool setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
 
     public Q_SLOTS:
 
