@@ -5,6 +5,7 @@
 #define SERVICE_CALL_WIDGET_INTERFACE_HPP
 
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
+#include <QString>
 #include <QWidget>
 
 namespace rviz_interactive_controls_panel {
@@ -33,12 +34,22 @@ namespace rviz_interactive_controls_panel {
         Q_OBJECT
         public:
             typedef nasa_robot_teleop::InteractiveControlsInterface ICIface;
-
+            
             ServiceCallWidgetInterface(QWidget *parent = 0);
+            ~ServiceCallWidgetInterface();
+            QString getTag();
             virtual void updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
         
         Q_SIGNALS:
+            void callerRemoval(QString);
             void sendCall(QString, ICIface);
+        
+        protected:
+            QString m_tag;
+        
+        private:
+            static int TAG_COUNT;
+
     };
 }
 #endif

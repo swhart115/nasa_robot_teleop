@@ -5,8 +5,11 @@
 #define SERVICE_CALL_THREAD_HPP
 
 #include <ros/ros.h>
-#include "nasa_robot_teleop/InteractiveControlsInterface.h"
-#include "nasa_robot_teleop/ServiceCallWidgetInterface.h"
+//#include "nasa_robot_teleop/InteractiveControlsInterface.h"
+#include "InteractiveControlsInterfaceUtils.hpp"
+#include "ServiceCallWidgetInterface.hpp"
+#include <deque>
+#include <map>
 
 namespace rviz_interactive_controls_panel {
     
@@ -19,12 +22,12 @@ namespace rviz_interactive_controls_panel {
         Q_OBJECT
         public:
             ServiceCallThread(double frequency);
-            bool addCaller(const std::string &, ServiceCallWidgetInterface*);
-            bool removeCaller(const std::string &);
+            bool addCaller(ServiceCallWidgetInterface*);
 		public Q_SLOTS:
+            void removeCaller(QString);
 			void start();
 			void abort();
-			void newCall(ICIface);
+			void newCall(QString, ICIface);
 			void clearCall();
 		Q_SIGNALS:
 			void callResult(int, bool);
@@ -38,16 +41,18 @@ namespace rviz_interactive_controls_panel {
 		private:
 			double m_frequency;
 			bool m_signal;
+            std::string m_topic;
 			
 			bool heartbeat_on;
 			
-			std::deque<GenericService> commandQueue;
+            std::map<QString, ServiceCallWidgetInterface*> m_callers;
+			std::deque<ICIface> callQueue;
 			
 			QBasicTimer m_timer;
 			QMutex m_callMutex;
 			unsigned char m_counter;
 			ros::WallTime m_last_time;
-			ros::ServiceClient gsc_client;
+			ros::ServiceClient m_client;
 	};
 	
 

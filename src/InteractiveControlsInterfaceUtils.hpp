@@ -41,10 +41,10 @@ namespace rviz_interactive_controls_panel {
             static
             std::string responseStr(const ICInterfaceResponse &srv, bool suppress=true);
             
-        private:
             static
             std::string actionStr(char type);
             
+        private:
             static
             std::string vecString2Str(const std::vector<std::string> &vec);
             
