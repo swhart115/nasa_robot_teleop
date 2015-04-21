@@ -38,16 +38,22 @@ bool MultiGroupControlsWidget::addGroup(const std::string &group_name,
                                         GroupControlsWidget* group_widget) {
     auto search = group_map.find(group_name);
     if (search == group_map.end()) {
-        ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p",
-                group_name.c_str(), group_widget);
+        ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
+                group_name.c_str(), group_widget, group_widget->group_type.c_str());
         const QString label(group_name.c_str());
-        group_map[group_name] = group_widget;
-        ui->group_list->addItem(label);
-        QListWidgetItem* item = getListItem(label);
-        if (item != NULL) {
-            item->setCheckState(Qt::Checked);
+        if(group_widget->group_type == "cartesian") {
+            ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
+                group_name.c_str(), group_widget, group_widget->group_type.c_str());
+            group_map[group_name] = group_widget;
+            ui->group_list->addItem(label);
+            QListWidgetItem* item = getListItem(label);
+            if (item != NULL) {
+                item->setCheckState(Qt::Checked);
+            } else {
+                item->setCheckState(Qt::Unchecked);
+            }
         } else {
-            item->setCheckState(Qt::Unchecked);
+            return false;
         }
     } else {
         return false;
@@ -178,7 +184,7 @@ void MultiGroupControlsWidget::executeOnPlanClicked(int d) {
     //getCheckedGroups(execute_on_plan, srv.request.group_name, srv.request.execute_on_plan);
     for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
         srv.request.group_name.push_back(git->first);
-        srv.request.plan_on_move.push_back(getChecked(QString::fromStdString(git->first)) && execute_on_plan);
+        srv.request.execute_on_plan.push_back(getChecked(QString::fromStdString(git->first)) && execute_on_plan);
     }
     std::cout << "MultiGroupControlsWidget: request:" << std::endl;
     std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;

@@ -355,7 +355,7 @@ void GroupControlsWidget::fillPlanRequest(nasa_robot_teleop::InteractiveControls
     std::string viz_type = ui->viz_type->currentText().toStdString();
     srv.request.path_visualization_mode.push_back(viz_type);
     srv.request.execute_on_plan.push_back(ui->execute_on_plan->checkState()==Qt::Checked);
-
+    srv.request.group_type.push_back(group_type);
 
     nasa_robot_teleop::ToleranceInfo pos_tol_info;
     pos_tol_info.mode = "Position Tolerance";

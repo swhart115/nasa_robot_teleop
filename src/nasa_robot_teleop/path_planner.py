@@ -486,8 +486,6 @@ class PathPlanner(object):
         group_joints = self.get_group_joints(group_name)
         traj = trajectory_msgs.msg.JointTrajectory()
         jnt_map = {}
-        print "group_joints: ", group_joints
-        print "plan.joint_names: ", plan.joint_names
         
         for jnt in plan.joint_names :
             traj.joint_names.append(jnt)

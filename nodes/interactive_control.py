@@ -474,7 +474,6 @@ class InteractiveControl:
 
     def handle_configure(self, req) :
         
-        # print req
         resp = None
         
         if req.action_type == InteractiveControlsInterfaceRequest.GET_INFO :
@@ -489,8 +488,8 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
             for g in req.group_name :
                 self.reset_group_marker(g)
-                if not self.path_planner.execute([g]) :
-                    rospy.logerr(str("InteractiveControl::handle_configure() -- failed planner execution for group: " + g))
+            if not self.path_planner.execute(req.group_name) :
+                rospy.logerr(str("InteractiveControl::handle_configure() -- failed planner execution for group: " + g))
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
             for idx in range(len(req.group_name)) :
@@ -503,11 +502,15 @@ class InteractiveControl:
                 self.reset_group_marker(g)
               
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
+
+            group_store = []
+            pt_store = []
+
+            auto_plan = True
+            auto_execute = True
+
             for idx in range(len(req.group_name)) :
                 g = req.group_name[idx]
-
-                group_store = []
-                pt_store = []
                 
                 if g in self.get_groups('cartesian') :
                     im = self.server.get(g)
@@ -525,11 +528,13 @@ class InteractiveControl:
 
                     try :
                         self.auto_execute[g] = req.execute_on_plan[idx]
+                        auto_execute = auto_execute and self.auto_execute[g]
                     except :
                         pass
 
                     try :
                         self.auto_plan[g] = req.plan_on_move[idx]
+                        auto_plan = auto_plan and self.auto_plan[g]
                     except :
                         pass
 
@@ -545,10 +550,12 @@ class InteractiveControl:
                     except :
                         pass
 
-            if not self.path_planner.plan_cartesian_and_execute(group_store, pt_store) :
-                rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group: " + g + ". re-synching..."))
-                for g in group_store :
-                    self.reset_group_marker(g)
+            if auto_execute :
+                if not self.path_planner.plan_cartesian_and_execute(group_store, pt_store) :
+                    rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group(s). re-synching..."))
+                    for g in group_store :
+                        rospy.logerr(str("InteractiveControl::process_feedback(mouse) -- failed planner execution for group " + g + ". re-synching..."))
+                        self.reset_group_marker(g)
             else :
                 for g in group_store :
                     self.path_planner.clear_goal_target(g)
@@ -642,7 +649,6 @@ class InteractiveControl:
 
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION :
-            print req.navigation_mode
             if req.navigation_mode in self.path_planner.get_navigation_modes() :
                 self.path_planner.set_navigation_mode(req.navigation_mode)
             try :

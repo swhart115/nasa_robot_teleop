@@ -227,7 +227,7 @@ bool RVizInteractiveControlsPanel::addMultiGroupControls() {
     ROS_INFO("RVizInteractiveControlsPanel::addMultiGroupControls()");
     // assume always called after setting up group tabs
     // removing the tab for non-NULL puts it at the end
-    const QString label("MG");
+    const QString label("MultiGroup");
     if (multi_group_widget == NULL) {
         ROS_DEBUG("RVizInteractiveControlsPanel: creating MultiGroupControls");
         multi_group_widget = new MultiGroupControlsWidget();
