@@ -13,7 +13,8 @@
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
 #include "NavigationControlsWidget.hpp"
-#include "ServiceCallWidgetInterface.hpp"
+//#include "ServiceCallWidgetInterface.hpp"
+//#include "ServiceCallThread.hpp"
 
 namespace Ui {
 class RVizInteractiveControlsPanel;
@@ -21,16 +22,22 @@ class RVizInteractiveControlsPanel;
 
 namespace rviz_interactive_controls_panel {
 
-    class RVizInteractiveControlsPanel
-        : public rviz::Panel
-        , public ServiceCallWidgetInterface
+    class RVizInteractiveControlsPanel : public rviz::Panel
     {
         Q_OBJECT
 
     public:
+        // because this subclasses rviz::Panel, it can't also subclass
+        // ServiceCallWidgetInterface (Qt doesn't play well with multiple
+        // inheritance, in this case an ambiguous QObject superclass),
+        // even though it performs the same task (making
+        // InteractiveControlsInterface service calls and updating from
+        // the response). This typedef is to enable the sendCall signal.
         typedef nasa_robot_teleop::InteractiveControlsInterface ICIface;
+
         explicit RVizInteractiveControlsPanel(QWidget *parent = 0);
         ~RVizInteractiveControlsPanel();
+        
         /** Implement the service call response handling. Note that this
          * is a late addition that simply calls the original response
          * handler method. */
@@ -52,6 +59,7 @@ namespace rviz_interactive_controls_panel {
 
         // service client to get/set info
         ros::ServiceClient interactive_control_client_;
+        //ServiceCallThread client_thread_;
 
         // ros node handle
         ros::NodeHandle nh_;

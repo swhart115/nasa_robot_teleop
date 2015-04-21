@@ -18,20 +18,15 @@ class NavigationControls;
 namespace rviz_interactive_controls_panel
 {
 
-    class NavigationControlsWidget
-        : public QWidget
-        , public ServiceCallWidgetInterface
+    class NavigationControlsWidget : public ServiceCallWidgetInterface
     {
         Q_OBJECT
 
     public:
-        typedef nasa_robot_teleop::InteractiveControlsInterface ICIface;
         explicit NavigationControlsWidget(QWidget *parent = 0);
          ~NavigationControlsWidget();
-        /** Implement the service call response handling. Note that this
-         * is a late addition that simply calls the original response
-         * handler method. */
-        void updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
+         void updateFromResponse(
+             nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
 
         void setNodeHandle(ros::NodeHandle &nh) {
             nh_ = nh;
@@ -43,9 +38,6 @@ namespace rviz_interactive_controls_panel
 
         void setupDisplay();
         bool setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
-
-      Q_SIGNALS:
-         void sendCall(ICIface);
 
     public Q_SLOTS:
 

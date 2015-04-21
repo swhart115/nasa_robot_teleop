@@ -3,10 +3,10 @@
 using namespace rviz_interactive_controls_panel;
 using namespace std;
 
-NavigationControlsWidget::NavigationControlsWidget(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::NavigationControls),
-    initialized(false)
+NavigationControlsWidget::NavigationControlsWidget(QWidget *parent)
+    : ServiceCallWidgetInterface(parent)
+    , ui(new Ui::NavigationControls)
+    , initialized(false)
 {
     ui->setupUi(this);
     setupWidgets();

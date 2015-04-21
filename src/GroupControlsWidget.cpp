@@ -3,10 +3,10 @@
 using namespace rviz_interactive_controls_panel;
 using namespace std;
 
-GroupControlsWidget::GroupControlsWidget(QWidget *parent) :
-    QWidget(parent),
-    ui(new Ui::GroupControls),
-    initialized(false)
+GroupControlsWidget::GroupControlsWidget(QWidget *parent)
+    : ServiceCallWidgetInterface(parent)
+    , ui(new Ui::GroupControls)
+    , initialized(false)
 {
     ui->setupUi(this);
     setupWidgets();

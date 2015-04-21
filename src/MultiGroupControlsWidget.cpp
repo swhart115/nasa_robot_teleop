@@ -7,7 +7,7 @@ using namespace rviz_interactive_controls_panel;
 using namespace std;
 
 MultiGroupControlsWidget::MultiGroupControlsWidget(QWidget *parent)
-    : QWidget(parent)
+    : ServiceCallWidgetInterface(parent)
     , ui(new Ui::MultiGroupControls)
     , initialized(false)
 {

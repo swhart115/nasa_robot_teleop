@@ -18,20 +18,15 @@ class GroupControls;
 
 namespace rviz_interactive_controls_panel {
 
-    class GroupControlsWidget
-        : public QWidget
-        , public ServiceCallWidgetInterface
+    class GroupControlsWidget : public ServiceCallWidgetInterface
     {
         Q_OBJECT
 
     public:
-        typedef nasa_robot_teleop::InteractiveControlsInterface ICIface;
         explicit GroupControlsWidget(QWidget *parent = 0);
          ~GroupControlsWidget();
-        /** Implement the service call response handling. Note that this
-         * is a late addition that simply calls the original response
-         * handler method. */
-        void updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
+         void updateFromResponse(
+             nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
 
         void setNodeHandle(ros::NodeHandle &nh) {
             nh_ = nh;
@@ -44,9 +39,6 @@ namespace rviz_interactive_controls_panel {
         void setupDisplay();
         bool setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
         void fillPlanRequest(nasa_robot_teleop::InteractiveControlsInterface &srv);
-
-      Q_SIGNALS:
-         void sendCall(ICIface);
 
     public Q_SLOTS:
 
