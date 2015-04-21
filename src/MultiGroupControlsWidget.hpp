@@ -11,7 +11,6 @@
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
 
 #include "ui_multi_group_controls_widget.h"
-#include "ServiceCallWidgetInterface.hpp"
 
 namespace Ui {
 class MultiGroupControls;
@@ -21,15 +20,13 @@ namespace rviz_interactive_controls_panel {
 
     class GroupControlsWidget;
 
-    class MultiGroupControlsWidget : public ServiceCallWidgetInterface
+    class MultiGroupControlsWidget : public QWidget
     {
         Q_OBJECT
 
     public:
         explicit MultiGroupControlsWidget(QWidget *parent = 0);
          ~MultiGroupControlsWidget();
-         void updateFromResponse(
-              nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
 
         void setNodeHandle(ros::NodeHandle &nh) {
             nh_ = nh;
@@ -50,6 +47,7 @@ namespace rviz_interactive_controls_panel {
         void removeGroup(const std::string &group_name);
 
         //void setupDisplay();
+        bool setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
 
     public Q_SLOTS:
 

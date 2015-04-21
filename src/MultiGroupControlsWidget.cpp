@@ -7,7 +7,7 @@ using namespace rviz_interactive_controls_panel;
 using namespace std;
 
 MultiGroupControlsWidget::MultiGroupControlsWidget(QWidget *parent)
-    : ServiceCallWidgetInterface(parent)
+    : QWidget(parent)
     , ui(new Ui::MultiGroupControls)
     , initialized(false)
 {
@@ -17,12 +17,6 @@ MultiGroupControlsWidget::MultiGroupControlsWidget(QWidget *parent)
 
 MultiGroupControlsWidget::~MultiGroupControlsWidget() {
     delete ui;
-}
-
-void MultiGroupControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-    // TODO: since this is gonna be called by the service thread, have to
-    //   figure out what it's a response *to*...
-    //if (rsp.action_type 
 }
 
 void MultiGroupControlsWidget::setupWidgets() {
@@ -44,7 +38,8 @@ bool MultiGroupControlsWidget::addGroup(const std::string &group_name,
                                         GroupControlsWidget* group_widget) {
     auto search = group_map.find(group_name);
     if (search == group_map.end()) {
-        ROS_INFO("MultiGroupControlsWidget::addGroup(%s)", group_name.c_str());
+        ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p",
+                group_name.c_str(), group_widget);
         const QString label(group_name.c_str());
         group_map[group_name] = group_widget;
         ui->group_list->addItem(label);
@@ -75,9 +70,46 @@ void MultiGroupControlsWidget::removeGroup(const std::string &group_name) {
     }
 }
 
+bool MultiGroupControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
+    bool retval = false;
+    std::cout << "MultiGroupControlsWidget: response:" << std::endl;
+    std::cout << InteractiveControlsInterfaceUtils::responseStr(resp) << std::endl;
+    
+    plan_found = (resp.active_group_name.size() > 0 ? true : false);
+    for (uint idx=0; idx<resp.active_group_name.size(); ++idx) {
+        std::string group_name(resp.active_group_name[idx]);
+        ROS_INFO("  group: [%s]", group_name.c_str());
+        if (group_map.count(group_name) > 0) {
+            ROS_INFO("    setting data (ptr=%p); group plan_found=%s",
+                    group_map[group_name],
+                     (group_map[group_name]->plan_found ? "true" : "false"));
+            // only consider checked groups for plan status display
+            if (!getChecked(QString::fromStdString(group_name))) {
+                group_map[group_name]->setGroupDataFromResponse(resp);
+            } else {
+                retval = retval &&
+                    group_map[group_name]->setGroupDataFromResponse(resp, QString(" (from Multigroup)"));
+                ROS_INFO("    group plan_found=%s",
+                     (group_map[group_name]->plan_found ? "true" : "false"));
+                plan_found = plan_found && group_map[group_name]->plan_found;
+                ROS_INFO("    my plan_found=%s", (plan_found ? "true" : "false"));
+            }
+        } else {
+            ROS_INFO("    missing in group_map!");
+        }
+    }
+    
+    if (plan_found) {
+        ui->plan_label->setText(QString("PLAN FOUND"));
+    } else {
+        ui->plan_label->setText(QString("NO PLAN"));
+    }
+    return retval;
+}
+
 bool MultiGroupControlsWidget::planRequest() {
     ROS_INFO("MultiGroupControlsWidget::planRequest()");
-
+    bool retval = false;
     nasa_robot_teleop::InteractiveControlsInterface srv;
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_TO_MARKER;
     for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {
@@ -90,26 +122,17 @@ bool MultiGroupControlsWidget::planRequest() {
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planRequest() -- success");
-        std::cout << "MultiGroupControlsWidget: response:" << std::endl;
-        std::cout << InteractiveControlsInterfaceUtils::responseStr(srv.response) << std::endl;
         // return value is boolean && of all groups' setGroupData
-        bool retval = false;
-        for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
-            std::string group_name(srv.response.group_name[idx]);
-            if (group_map.count(group_name) > 0) {
-                retval = retval &&
-                         group_map[group_name]->setGroupDataFromResponse(srv.response);
-            }
-        }
-        return retval;
+        retval = setDataFromResponse(srv.response);
     } else {
         ROS_ERROR("MultiGroupControlsWidget::planRequest() -- failed to call service");
-        return false;
     }
+    return retval;
 }
 
 bool MultiGroupControlsWidget::executeRequest() {
     ROS_INFO("MultiGroupControlsWidget::executeRequest()");
+    bool retval = false;
     nasa_robot_teleop::InteractiveControlsInterface srv;
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::EXECUTE_PLAN;
     std::vector<unsigned char> junk;
@@ -117,19 +140,11 @@ bool MultiGroupControlsWidget::executeRequest() {
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::executeRequest() -- success");
-        bool retval = false;
-        for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
-            std::string group_name(srv.response.group_name[idx]);
-            if (group_map.count(group_name) > 0) {
-                retval = retval &&
-                         group_map[group_name]->setGroupDataFromResponse(srv.response);
-            }
-        }
-        return retval;
+        retval = setDataFromResponse(srv.response);
     } else {
         ROS_ERROR("MultiGroupControlsWidget::executeRequest() -- failed to call service");
-        return false;
     }
+    return retval;
 }
 
 void MultiGroupControlsWidget::planOnMoveClicked(int d) {
@@ -148,14 +163,7 @@ void MultiGroupControlsWidget::planOnMoveClicked(int d) {
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planOnMoveClicked() -- success");
-        //std::cout << "MultiGroupControlsWidget: response:" << std::endl;
-        //std::cout << InteractiveControlsInterfaceUtils::responseStr(srv.response) << std::endl;
-        for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
-            std::string group_name(srv.response.group_name[idx]);
-            if (group_map.count(group_name) > 0) {
-                group_map[group_name]->setGroupDataFromResponse(srv.response);
-            }
-        }
+        setDataFromResponse(srv.response);
     } else {
         ROS_ERROR("MultiGroupControlsWidget::planOnMoveClicked() -- failed to call service");
     }
@@ -177,12 +185,7 @@ void MultiGroupControlsWidget::executeOnPlanClicked(int d) {
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::executeOnPlanClicked() -- success");
-        for (uint idx=0; idx<srv.response.group_name.size(); ++idx) {
-            std::string group_name(srv.response.group_name[idx]);
-            if (group_map.count(group_name) > 0) {
-                group_map[group_name]->setGroupDataFromResponse(srv.response);
-            }
-        }
+        setDataFromResponse(srv.response);
     } else {
         ROS_ERROR("MultiGroupControlsWidget::executeOnPlanClicked() -- failed to call service");
     }

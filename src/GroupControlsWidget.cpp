@@ -4,7 +4,7 @@ using namespace rviz_interactive_controls_panel;
 using namespace std;
 
 GroupControlsWidget::GroupControlsWidget(QWidget *parent)
-    : ServiceCallWidgetInterface(parent)
+    : QWidget(parent)
     , ui(new Ui::GroupControls)
     , initialized(false)
 {
@@ -16,12 +16,6 @@ GroupControlsWidget::~GroupControlsWidget()
 {
     delete ui;
 }
-
-void GroupControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-    // NOTE: ignores the return value!
-    setGroupDataFromResponse(rsp);
-}
-
 
 void GroupControlsWidget::setupWidgets() {
 
@@ -40,7 +34,7 @@ void GroupControlsWidget::setupWidgets() {
 
 }
 
-void GroupControlsWidget::setupDisplay() {
+void GroupControlsWidget::setupDisplay(QString from) {
 
     ui->joint_list->clear();
     
@@ -61,9 +55,9 @@ void GroupControlsWidget::setupDisplay() {
     }
     
     if(plan_found) {
-        ui->plan_label->setText(QString("PLAN FOUND"));
+        ui->plan_label->setText(QString("PLAN FOUND")+ from);
     } else {
-        ui->plan_label->setText(QString("NO PLAN"));
+        ui->plan_label->setText(QString("NO PLAN")+ from);
     }
 
     if(group_type=="cartesian") {
@@ -119,11 +113,12 @@ void GroupControlsWidget::setupDisplay() {
 
 }
 
-bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
+bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp, QString from) {
 
-    for(uint idx=0; idx<resp.active_group_name.size(); idx++) {
+    ROS_INFO("GroupControlsWidget: [%s] got response", group_name.c_str());
+    for (uint idx=0; idx<resp.active_group_name.size(); idx++) {
         if(group_name == resp.active_group_name[idx]) {
-            
+            ROS_INFO("GroupControlsWidget: [%s] set data", group_name.c_str());
             int jdx=0;
             joint_names.clear();
             joint_mask.clear();
@@ -186,13 +181,12 @@ bool GroupControlsWidget::setGroupDataFromResponse(nasa_robot_teleop::Interactiv
                     stored_poses.push_back(stored_pose);
                 }
             }       
-            setupDisplay();
+            setupDisplay(from);
 
         }   
     }
 
     return initialized;
-
 }
 
 

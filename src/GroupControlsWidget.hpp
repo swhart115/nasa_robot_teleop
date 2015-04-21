@@ -9,8 +9,6 @@
 #include "nasa_robot_teleop/ToleranceInfo.h"
 
 #include "ui_group_controls_widget.h"
-#include "ServiceCallWidgetInterface.hpp"
-
 
 namespace Ui {
 class GroupControls;
@@ -18,15 +16,13 @@ class GroupControls;
 
 namespace rviz_interactive_controls_panel {
 
-    class GroupControlsWidget : public ServiceCallWidgetInterface
+    class GroupControlsWidget : public QWidget
     {
         Q_OBJECT
 
     public:
         explicit GroupControlsWidget(QWidget *parent = 0);
          ~GroupControlsWidget();
-         void updateFromResponse(
-             nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
 
         void setNodeHandle(ros::NodeHandle &nh) {
             nh_ = nh;
@@ -36,8 +32,8 @@ namespace rviz_interactive_controls_panel {
             service_client_ = client_;
         }
 
-        void setupDisplay();
-        bool setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp);
+        void setupDisplay(QString from = "");
+        bool setGroupDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp, QString from = "");
         void fillPlanRequest(nasa_robot_teleop::InteractiveControlsInterface &srv);
 
     public Q_SLOTS:

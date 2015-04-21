@@ -8,7 +8,6 @@
 #include "nasa_robot_teleop/InteractiveControlsInterface.h"
 
 #include "ui_navigation_controls_widget.h"
-#include "ServiceCallWidgetInterface.hpp"
 
 
 namespace Ui {
@@ -18,15 +17,13 @@ class NavigationControls;
 namespace rviz_interactive_controls_panel
 {
 
-    class NavigationControlsWidget : public ServiceCallWidgetInterface
+    class NavigationControlsWidget : public QWidget
     {
         Q_OBJECT
 
     public:
         explicit NavigationControlsWidget(QWidget *parent = 0);
          ~NavigationControlsWidget();
-         void updateFromResponse(
-             nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp);
 
         void setNodeHandle(ros::NodeHandle &nh) {
             nh_ = nh;

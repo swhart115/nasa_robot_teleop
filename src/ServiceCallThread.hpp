@@ -40,7 +40,6 @@ namespace rviz_interactive_controls_panel {
 			void timerEvent(QTimerEvent *te);
 		private:
 			double m_frequency;
-			bool m_signal;
             std::string m_topic;
 			
 			bool heartbeat_on;

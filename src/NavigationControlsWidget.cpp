@@ -4,7 +4,7 @@ using namespace rviz_interactive_controls_panel;
 using namespace std;
 
 NavigationControlsWidget::NavigationControlsWidget(QWidget *parent)
-    : ServiceCallWidgetInterface(parent)
+    : QWidget(parent)
     , ui(new Ui::NavigationControls)
     , initialized(false)
 {
@@ -16,12 +16,6 @@ NavigationControlsWidget::~NavigationControlsWidget()
 {
     delete ui;
 }
-
-void NavigationControlsWidget::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-    // NOTE: ignores the return value!
-    setDataFromResponse(rsp);
-}
-
 
 void NavigationControlsWidget::setupWidgets() {
 

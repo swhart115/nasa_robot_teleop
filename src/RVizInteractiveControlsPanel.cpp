@@ -30,10 +30,10 @@ RVizInteractiveControlsPanel::~RVizInteractiveControlsPanel()
     group_widgets.clear();
 }
 
-void RVizInteractiveControlsPanel::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-    // NOTE: ignores the return value!
-    setupFromConfigResponse(rsp);
-}
+//void RVizInteractiveControlsPanel::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
+//    // NOTE: ignores the return value!
+//    setupFromConfigResponse(rsp);
+//}
 
 void RVizInteractiveControlsPanel::setupWidgets() {
     QObject::connect(ui->refresh_button, SIGNAL(clicked()), this, SLOT(getConfigData()));
@@ -44,7 +44,7 @@ void RVizInteractiveControlsPanel::setupWidgets() {
 
 bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
     ROS_INFO("RVizInteractiveControlsPanel::setupFromConfigResponse()");
-    ROS_DEBUG("RVizInteractiveControlsPanel: have [%lu] previous groups", previous_groups.size());
+    ROS_INFO("RVizInteractiveControlsPanel: have [%lu] previous groups", previous_groups.size());
     // set up widgets for all the groups
     // TODO: what if a non-active group was removed? do we care?
     ui->all_group_list->clear();
@@ -58,10 +58,12 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         // reconcile resp.groups with previous_groups map (for tabs)
         // - groups in map also in resp stay around
         if ((pgit=previous_groups.find(g)) != previous_groups.end()) {
+            ROS_INFO("RVizInteractiveControlsPanel: [%s] in previous groups",
+                     g.c_str());
             previous_groups.erase(pgit);
         }
     }
-    ROS_DEBUG("RVizInteractiveControlsPanel: got [%lu] removed groups", previous_groups.size());
+    ROS_INFO("RVizInteractiveControlsPanel: got [%lu] removed groups", previous_groups.size());
     // remove/delete groups still in previous_groups
     for (auto pg : previous_groups) {
         const std::string &g = pg.first;
@@ -102,7 +104,8 @@ bool RVizInteractiveControlsPanel::setupFromConfigResponse(nasa_robot_teleop::In
         ui->active_group_list->addItem(QString(group_name.c_str()));
 
         addGroupControls(group_name);
-        ROS_DEBUG("RVizInteractiveControlsPanel: added group [%s]", group_name.c_str());
+        ROS_INFO("RVizInteractiveControlsPanel: added group [%s], ptr=%p",
+                group_name.c_str(), group_widgets[group_name]);
 
         int jdx=0;
         group_widgets[group_name]->group_name = group_name;
