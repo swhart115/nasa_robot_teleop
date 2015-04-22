@@ -333,17 +333,13 @@ class NavigationWaypointControl(object) :
 
 
     def direct_move(self, waypoint_name) :
-
         rospy.logwarn("NavigationControl::direct_move()")
-
         ps = PoseStamped()
-
         for id in self.waypoint_markers :
             n = self.get_waypoint_name(id)
             p = self.server.get(n)  
             ps.pose = p.pose
             ps.header = p.header
-
         self.path_planner.direct_move(ps)
 
     def get_waypoints(self) :
