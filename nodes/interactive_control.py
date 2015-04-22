@@ -709,6 +709,9 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
             self.path_planner.set_navigation_mode(req.navigation_mode)
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_ORIENTATION :
+            self.navigation_controls.sync_orientation()
+        
         self.server.applyChanges()
 
         resp = self.populate_service_response()

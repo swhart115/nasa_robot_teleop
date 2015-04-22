@@ -24,6 +24,7 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->plan_button, SIGNAL(clicked()), this, SLOT(planRequest()));
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
     QObject::connect(ui->direct_move_button, SIGNAL(clicked()), this, SLOT(directMoveRequest()));
+    QObject::connect(ui->sync_orientation_button, SIGNAL(clicked()), this, SLOT(syncOrientationRequest()));
 
     QObject::connect(ui->accommodate_terrain, SIGNAL(stateChanged(int)), this, SLOT(accommodateTerrainClicked(int)));
     QObject::connect(ui->nav_mode_box, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(navModeChanged(const QString&)));
@@ -143,6 +144,25 @@ bool NavigationControlsWidget::planRequest() {
     else
     {
         ROS_ERROR("NavigationControlsWidget::planRequest() -- failed to call service");
+        return false;
+    }
+}
+
+bool NavigationControlsWidget::syncOrientationRequest() {
+
+    ROS_INFO("NavigationControlsWidget::syncOrientationRequest()");    
+
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SYNC_NAVIGATION_ORIENTATION;
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("NavigationControlsWidget::syncOrientationRequest() -- success");
+        return setDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("NavigationControlsWidget::syncOrientationRequest() -- failed to call service");
         return false;
     }
 }
