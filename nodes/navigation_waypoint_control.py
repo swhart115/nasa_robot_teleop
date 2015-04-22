@@ -23,10 +23,11 @@ from footstep_control import *
 
 class NavigationWaypointControl(object) :
 
-    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None) :
+    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None, reference_frame="") :
 
         self.robot = robot
         self.frame_id = frame_id
+        self.reference_frame = reference_frame
 
         if server :
             self.server = server
@@ -55,6 +56,10 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Toggle Full Control")
         self.waypoint_menu_options.append("Delete Waypoint")
         self.waypoint_menu_options.append("Move Directly")
+
+        if self.reference_frame != "" :
+            self.waypoint_menu_options.append("Sync Orientation")
+    
         self.waypoint_menu_options.append("Request Footstep Plan")
         self.waypoint_menu_options.append("Execute Footstep Plan")
 
@@ -67,6 +72,9 @@ class NavigationWaypointControl(object) :
         p = geometry_msgs.msg.Pose()
         p.orientation.w = 1
         self.add_waypoint(None, p, False)
+
+        if self.reference_frame != "" :
+            self.sync_orientation()
 
 
     def set_path_planner(self, path_planner) :
@@ -342,6 +350,21 @@ class NavigationWaypointControl(object) :
             ps.header = p.header
         self.path_planner.direct_move(ps)
 
+    def sync_orientation(self) :
+
+        self.tf_listener.waitForTransform(self.frame_id, self.reference_frame, rospy.Time(0), rospy.Duration(5.0))
+        (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, self.reference_frame, rospy.Time(0))       
+        ref_pose = toPose(trans, rot)
+     
+        for id in self.waypoint_markers :
+            ps = Pose()
+            n = self.get_waypoint_name(id)
+            p = self.server.get(n)  
+            ps.position = p.pose.position
+            ps.orientation = ref_pose.orientation
+            self.server.setPose(n, ps)
+        self.server.applyChanges()
+
     def get_waypoints(self) :
         return self.waypoint_markers
 
@@ -363,6 +386,8 @@ class NavigationWaypointControl(object) :
                 self.footstep_controls.execute_footstep_path()
             elif handle == self.waypoint_menu_handles["Move Directly"] :
                 self.direct_move(feedback.marker_name)
+            elif handle == self.waypoint_menu_handles["Sync Orientation"] :
+                self.sync_orientation()
 
 
     def navigation_marker_callback(self, feedback) :
