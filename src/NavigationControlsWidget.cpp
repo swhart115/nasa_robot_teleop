@@ -284,6 +284,10 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
         ui->direct_move_button->setEnabled(true);
         ui->plan_button->setEnabled(false);
         ui->execute_button->setEnabled(false);
+    } else if (srv.request.navigation_mode == "WALK_CONTROLLER") {
+        ui->direct_move_button->setEnabled(true);
+        ui->plan_button->setEnabled(true);
+        ui->execute_button->setEnabled(true);
     } else {
         ui->direct_move_button->setEnabled(false);
         ui->plan_button->setEnabled(true);

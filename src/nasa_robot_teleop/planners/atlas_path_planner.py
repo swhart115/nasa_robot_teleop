@@ -352,7 +352,7 @@ class AtlasPathPlanner(PathPlanner) :
         ret = False
         mode = rospy.get_param("~atlas/navigation_mode")
         if mode == "WALK_CONTROLLER" :
-            ret = self.execute_walk_controller(footsteps, lift_heights, feet)
+            ret = self.execute_walk_controller(goal=None, footsteps=footsteps, lift_heights=lift_heights, feet=feet)
         elif mode == "AUTO_WALKER" :
             ret = self.execute_auto_walker(footsteps, lift_heights, feet)
         elif mode == "REACTIVE_WALKER" :
@@ -363,10 +363,17 @@ class AtlasPathPlanner(PathPlanner) :
         return ret 
 
 
-    def execute_walk_controller(self, footsteps, lift_heights, feet) :
+    def execute_walk_controller(self, goal, footsteps, lift_heights, feet) :
+
+        if not goal :
+            return self.execute_walk_controller_from_steps(footsteps, lift_heights, feet)
+        else :
+            return self.execute_walk_controller_direct(goal)
+        
+    def execute_walk_controller_from_steps(self, footsteps, lift_heights, feet) :
 
         if not self.walk_controller_client.wait_for_server(rospy.Duration(2.0)) :
-            rospy.logerr("AtlasPathPlanner::execute_walk_controller() -- wait for server timeout")
+            rospy.logerr("AtlasPathPlanner::execute_walk_controller_from_steps() -- wait for server timeout")
             return False
 
         # Creates a goal to send to the action server.
@@ -421,12 +428,12 @@ class AtlasPathPlanner(PathPlanner) :
         goal.stamp_in_place_after = False
         goal.back_up_distance = 0.0
 
-        rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- sending walk path goal")
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- sending walk path goal")
         # Sends the goal to the action server.
         self.walk_controller_client.send_goal(goal)
 
         # Waits for the server to finish performing the action.
-        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- waiting for walk path result")
+        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- waiting for walk path result")
         # self.walk_controller_client.wait_for_result()
 
         try :
@@ -434,9 +441,88 @@ class AtlasPathPlanner(PathPlanner) :
             while not fb_msg.feedback.planning_complete:
                 fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
         except :
-            rospy.logwarn("AtlasPathPlanner::execute_walk_controller() -- timeout on sending goal to walk")
+            rospy.logwarn("AtlasPathPlanner::execute_walk_controller_from_steps() -- timeout on sending goal to walk")
         
-        rospy.loginfo("AtlasPathPlanner::execute_walk_controller() -- COMPLETE(?)")
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- COMPLETE(?)")
+
+        # Prints out the result of executing the action
+        # print self.walk_controller_client.get_result()  
+        status = self.walk_controller_client.get_state() == GoalStatus.SUCCEEDED
+
+        return status
+
+
+    def execute_walk_controller_direct(self, nav_goal) :
+
+        if not self.walk_controller_client.wait_for_server(rospy.Duration(2.0)) :
+            rospy.logerr("AtlasPathPlanner::execute_walk_controller_direct() -- wait for server timeout")
+            return False
+
+        # Creates a goal to send to the action server.
+        goal = walk_controller.msg.WalkPathGoal()
+                
+        for ng in nav_goal :
+    
+            self.tf_listener.waitForTransform("/global", ng.header.frame_id, rospy.Time(0), rospy.Duration(5.0))
+            ng = self.tf_listener.transformPose("/global", ng)
+            p = Pose2D()
+            p.x = ng.pose.position.x
+            p.y = ng.pose.position.y
+
+            q = [0]*4
+            q[0] = ng.pose.orientation.x
+            q[1] = ng.pose.orientation.y
+            q[2] = ng.pose.orientation.z
+            q[3] = ng.pose.orientation.w
+
+            R = kdl.Rotation.Quaternion(q[0],q[1],q[2],q[3])
+            rpy = R.GetRPY()
+            p.theta = rpy[2] 
+
+            n = geometry_msgs.msg.Vector3(R[0,2],R[1,2],R[2,2])
+
+            goal.path.append(p)
+            goal.heights.append(ng.pose.position.z)
+            goal.normals.append(n)
+
+        try : 
+            goal.left_foot_start = feet[0] == 0 # FIXME
+        except :
+            goal.left_foot_start = rospy.get_param("~atlas/start_foot") == "left"
+          
+        goal.step_duration = 0.6
+        goal.step_mode = False
+        goal.relative_height = False
+        goal.mode = 0
+        goal.params_set = False
+        goal.linear_stride_length = 0.3
+        goal.side_stride_length = 0.0
+        goal.rotational_stride_length = 0.01
+        goal.stride_width = 0.3
+        goal.swing_height = 0.1
+        goal.turn_out = 0.01
+        goal.final_turn_out = 0.0
+        goal.final_stride_width = 0.2
+        goal.stamp_in_place_before = False
+        goal.stamp_in_place_after = False
+        goal.back_up_distance = 0.0
+
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- sending walk path goal")
+        # Sends the goal to the action server.
+        self.walk_controller_client.send_goal(goal)
+
+        # Waits for the server to finish performing the action.
+        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- waiting for walk path result")
+        # self.walk_controller_client.wait_for_result()
+
+        try :
+            fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+            while not fb_msg.feedback.planning_complete:
+                fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        except :
+            rospy.logwarn("AtlasPathPlanner::execute_walk_controller_direct() -- timeout on sending goal to walk")
+        
+        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- COMPLETE(?)")
 
         # Prints out the result of executing the action
         # print self.walk_controller_client.get_result()  
@@ -524,7 +610,10 @@ class AtlasPathPlanner(PathPlanner) :
 
     def direct_move(self, goal) :
         try:
-            self.execute_reactive_walker([goal])
+            if self.navigation_mode == "REACTIVE_WALKER" :
+                self.execute_reactive_walker([goal])
+            elif self.navigation_mode == "WALK_CONTROLLER" :
+                self.execute_walk_controller(goal=[goal], footsteps=None, lift_heights=None, feet=None)
         except Exception as e:
             print e
             rospy.logerr("AtlasPathPlanner::direct_move() -- problems")
