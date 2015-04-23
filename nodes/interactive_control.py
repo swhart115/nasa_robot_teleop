@@ -43,13 +43,14 @@ from nasa_robot_teleop.srv import *
 
 class InteractiveControl:
 
-    def __init__(self, robot_name, planner_type, navigation_frame, group_config_file, planner_config_file, tolerance_file):
+    def __init__(self, robot_name, planner_type, navigation_frame, robot_reference_frame, group_config_file, planner_config_file, tolerance_file):
 
         self.robot_name = robot_name
         self.group_config_file = group_config_file
         self.planner_config_file = planner_config_file
         self.tolerance_file =  tolerance_file
         self.navigation_frame = navigation_frame
+        self.robot_reference_frame = robot_reference_frame
         
         self.group_map = []
         self.group_config = {}
@@ -87,7 +88,7 @@ class InteractiveControl:
         # nav control markers
         if self.navigation_frame and navigation_frame != "":
             rospy.loginfo("InteractiveControl::init() -- setting up NavigationWaypointControl")
-            self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame, self.tf_listener)
+            self.navigation_controls = NavigationWaypointControl(self.robot_name, self.server, self.navigation_frame, self.tf_listener, self.robot_reference_frame)
         else :
             self.navigation_controls = None
         # joint state sub
@@ -708,6 +709,9 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
             self.path_planner.set_navigation_mode(req.navigation_mode)
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_ORIENTATION :
+            self.navigation_controls.sync_orientation()
+        
         self.server.applyChanges()
 
         resp = self.populate_service_response()
@@ -1055,8 +1059,9 @@ if __name__=="__main__":
     tolerance_file = rospy.get_param("~tolerance_file", None)   
     navigation_frame = rospy.get_param("~navigation_frame", None)
     gripper_action = rospy.get_param("~gripper_action", None)
+    robot_reference_frame = rospy.get_param("~robot_reference_frame", "")
 
-    control = InteractiveControl(robot, planner, navigation_frame, group_config_file, planner_config_file, tolerance_file)
+    control = InteractiveControl(robot, planner, navigation_frame, robot_reference_frame, group_config_file, planner_config_file, tolerance_file)
 
     gripper_yaml = None
 

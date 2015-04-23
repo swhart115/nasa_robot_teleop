@@ -262,6 +262,13 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="sync_orientation_button">
+          <property name="text">
+           <string>Sync</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>

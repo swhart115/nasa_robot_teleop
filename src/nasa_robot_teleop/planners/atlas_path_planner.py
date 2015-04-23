@@ -436,12 +436,12 @@ class AtlasPathPlanner(PathPlanner) :
         # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- waiting for walk path result")
         # self.walk_controller_client.wait_for_result()
 
-        try :
-            fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-            while not fb_msg.feedback.planning_complete:
-                fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        except :
-            rospy.logwarn("AtlasPathPlanner::execute_walk_controller_from_steps() -- timeout on sending goal to walk")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        #     while not fb_msg.planning_complete:
+        #         fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        # except :
+        #     rospy.logwarn("AtlasPathPlanner::execute_walk_controller_from_steps() -- timeout on sending goal to walk")
         
         rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- COMPLETE(?)")
 
@@ -515,12 +515,12 @@ class AtlasPathPlanner(PathPlanner) :
         # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- waiting for walk path result")
         # self.walk_controller_client.wait_for_result()
 
-        try :
-            fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-            while not fb_msg.feedback.planning_complete:
-                fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        except :
-            rospy.logwarn("AtlasPathPlanner::execute_walk_controller_direct() -- timeout on sending goal to walk")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        #     while not fb_msg.planning_complete:
+        #         fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
+        # except :
+        #     rospy.logwarn("AtlasPathPlanner::execute_walk_controller_direct() -- timeout on sending goal to walk")
         
         rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- COMPLETE(?)")
 
@@ -555,8 +555,8 @@ class AtlasPathPlanner(PathPlanner) :
         self.explicit_walk_client.send_goal(goal)
 
         # try :
-        #     fb_msg = rospy.wait_for_message("/auto_walker/explicit_server", auto_walker.msg.ExplicitWalkActionFeedback, 3.0)
-        #     while not fb_msg.feedback.progress:
+        #     fb_msg = rospy.wait_for_message("/auto_walker/explicit_server_feedback", auto_walker.msg.ExplicitWalkActionFeedback, 3.0)
+        #     while not fb_msg.progress:
         #         fb_msg = rospy.wait_for_message("/path_walker/feedback", auto_walker.msg.ExplicitWalkActionFeedback, 3.0)
         # except :
         #     rospy.logwarn("AtlasPathPlanner::execute_auto_walker() -- timeout on sending goal to walk")
@@ -914,10 +914,9 @@ class AtlasPathPlanner(PathPlanner) :
 
         try :
             rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- polling feedback")
-            fb_msg = rospy.wait_for_message("/auto_walker/autonomous_server/feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
-
-            while not fb_msg.feedback.planning_complete:
-                fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
+            fb_msg = rospy.wait_for_message("/auto_walker/autonomous_server_feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
+            while not fb_msg.planning_complete:
+                fb_msg = rospy.wait_for_message("/auto_walker/autonomous_server_feedback", auto_walker.msg.AutonomousWalkFeedback, 5.0)
             rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- planning complete, getting resulting steps...")
 
             try :
