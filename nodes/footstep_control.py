@@ -128,9 +128,7 @@ class FootstepControl(object) :
             start_foot_id = self.feet_names.index(start_foot)
     
         for id in range(len(poses)) :
-      
-            m = Marker()
-            
+            m = Marker()      
             try :
                 self.tf_listener.waitForTransform(self.frame_id, str("/" + poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
                 ps =  self.tf_listener.transformPose(self.frame_id, poses[id])
