@@ -30,6 +30,7 @@ namespace rviz_interactive_controls_panel {
         
       public Q_SLOTS:  
          bool getConfigData();
+         bool popupParamData();
          bool addGroupRequest();
          bool removeGroupRequest();
          void groupDoubleClicked(QListWidgetItem*);

@@ -30,13 +30,9 @@ RVizInteractiveControlsPanel::~RVizInteractiveControlsPanel()
     group_widgets.clear();
 }
 
-//void RVizInteractiveControlsPanel::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-//    // NOTE: ignores the return value!
-//    setupFromConfigResponse(rsp);
-//}
-
 void RVizInteractiveControlsPanel::setupWidgets() {
     QObject::connect(ui->refresh_button, SIGNAL(clicked()), this, SLOT(getConfigData()));
+    QObject::connect(ui->param_button, SIGNAL(clicked()), this, SLOT(popupParamData()));
     QObject::connect(ui->add_group_button, SIGNAL(clicked()), this, SLOT(addGroupRequest()));
     QObject::connect(ui->remove_group_button, SIGNAL(clicked()), this, SLOT(removeGroupRequest()));
     QObject::connect(ui->active_group_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(groupDoubleClicked(QListWidgetItem*)));
@@ -322,6 +318,11 @@ bool RVizInteractiveControlsPanel::getConfigData() {
         return false;
     }
 
+    return true;
+}
+
+bool RVizInteractiveControlsPanel::popupParamData() {
+    ROS_INFO("RVizInteractiveControlsPanel::popupParamData() -- popup window to modify parameters");
     return true;
 }
 

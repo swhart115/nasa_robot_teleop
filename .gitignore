@@ -8,3 +8,4 @@ CMakeLists.txt
 package.xml
 manifest.xml
 Makefile
+*~
