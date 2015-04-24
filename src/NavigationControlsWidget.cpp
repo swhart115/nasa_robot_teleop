@@ -24,7 +24,8 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->plan_button, SIGNAL(clicked()), this, SLOT(planRequest()));
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
     QObject::connect(ui->direct_move_button, SIGNAL(clicked()), this, SLOT(directMoveRequest()));
-    QObject::connect(ui->sync_orientation_button, SIGNAL(clicked()), this, SLOT(syncOrientationRequest()));
+    QObject::connect(ui->sync_to_robot_orientation_button, SIGNAL(clicked()), this, SLOT(syncToRobotOrientationRequest()));
+    QObject::connect(ui->sync_to_path_orientation_button, SIGNAL(clicked()), this, SLOT(syncToPathOrientationRequest()));
 
     QObject::connect(ui->accommodate_terrain, SIGNAL(stateChanged(int)), this, SLOT(accommodateTerrainClicked(int)));
     QObject::connect(ui->nav_mode_box, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(navModeChanged(const QString&)));
@@ -148,25 +149,43 @@ bool NavigationControlsWidget::planRequest() {
     }
 }
 
-bool NavigationControlsWidget::syncOrientationRequest() {
+bool NavigationControlsWidget::syncToRobotOrientationRequest() {
 
-    ROS_INFO("NavigationControlsWidget::syncOrientationRequest()");    
+    ROS_INFO("NavigationControlsWidget::syncToRobotOrientationRequest()");    
 
     nasa_robot_teleop::InteractiveControlsInterface srv;
 
-    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SYNC_NAVIGATION_ORIENTATION;
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SYNC_NAVIGATION_TO_ROBOT_ORIENTATION;
     if (service_client_->call(srv))
     {
-        ROS_INFO("NavigationControlsWidget::syncOrientationRequest() -- success");
+        ROS_INFO("NavigationControlsWidget::syncToRobotOrientationRequest() -- success");
         return setDataFromResponse(srv.response);
     }
     else
     {
-        ROS_ERROR("NavigationControlsWidget::syncOrientationRequest() -- failed to call service");
+        ROS_ERROR("NavigationControlsWidget::syncToRobotOrientationRequest() -- failed to call service");
         return false;
     }
 }
 
+bool NavigationControlsWidget::syncToPathOrientationRequest() {
+
+    ROS_INFO("NavigationControlsWidget::syncToPathOrientationRequest()");    
+
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SYNC_NAVIGATION_TO_PATH_ORIENTATION;
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("NavigationControlsWidget::syncToPathOrientationRequest() -- success");
+        return setDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("NavigationControlsWidget::syncToPathOrientationRequest() -- failed to call service");
+        return false;
+    }
+}
 
 bool NavigationControlsWidget::executeRequest() {
 

@@ -115,7 +115,7 @@
       </property>
      </widget>
     </item>
-    <item row="0" column="0" rowspan="2">
+    <item row="0" column="0" rowspan="3">
      <layout class="QVBoxLayout" name="verticalLayout_4">
       <item>
        <spacer name="verticalSpacer">
@@ -263,9 +263,16 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="sync_orientation_button">
+         <widget class="QPushButton" name="sync_to_robot_orientation_button">
           <property name="text">
-           <string>Sync</string>
+           <string>Sync to Robot</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="sync_to_path_orientation_button">
+          <property name="text">
+           <string>Sync to Path</string>
           </property>
          </widget>
         </item>
