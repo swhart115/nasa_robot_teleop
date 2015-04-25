@@ -9,3 +9,4 @@ package.xml
 manifest.xml
 Makefile
 *~
+*.swp

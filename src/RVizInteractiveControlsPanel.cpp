@@ -1,4 +1,5 @@
 #include "RVizInteractiveControlsPanel.hpp"
+#include "RosparamDialog.hpp"
 
 using namespace rviz_interactive_controls_panel;
 using namespace std;
@@ -6,6 +7,7 @@ using namespace std;
 RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent)
     : rviz::Panel(parent)
     , ui(new Ui::RVizInteractiveControlsPanel)
+    , topic_base_("/interactive_control")
     , initialized(false)
     , multi_group_widget(NULL)
     , navigation_widget(NULL)
@@ -13,7 +15,7 @@ RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent)
     ui->setupUi(this);
 
     // setup service clients
-    interactive_control_client_ = nh_.serviceClient<nasa_robot_teleop::InteractiveControlsInterface>("/interactive_control/configure");
+    interactive_control_client_ = nh_.serviceClient<nasa_robot_teleop::InteractiveControlsInterface>(topic_base_ +"/configure");
     
     // setup QT widgets
     setupWidgets();
@@ -322,7 +324,14 @@ bool RVizInteractiveControlsPanel::getConfigData() {
 }
 
 bool RVizInteractiveControlsPanel::popupParamData() {
-    ROS_INFO("RVizInteractiveControlsPanel::popupParamData() -- popup window to modify parameters");
+    std::string param(topic_base_), val;
+    nh_.getParam(param +"/planner_type", val);
+    if (!val.empty()) {
+        RosparamDialog rpd(param +"/"+ val, this);
+        rpd.exec();
+    } else {
+        ROS_ERROR("RVizInteractiveControlsPanel: empty planner_type!");
+    }
     return true;
 }
 

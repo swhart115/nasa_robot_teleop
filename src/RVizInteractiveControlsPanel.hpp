@@ -46,6 +46,9 @@ namespace rviz_interactive_controls_panel {
         // ros node handle
         ros::NodeHandle nh_;
 
+		  // topic base
+		  std::string topic_base_;
+
         // init flag
         bool initialized;
         
