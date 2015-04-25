@@ -24,7 +24,7 @@ from footstep_control import *
 
 class NavigationWaypointControl(threading.Thread) :
 
-    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None, reference_frame="") :
+    def __init__(self, robot, server=None, frame_id="global", tf_listener=None, reference_frame="") :
         super(NavigationWaypointControl,self).__init__()
 
         self.mutex = threading.Lock()
@@ -70,7 +70,9 @@ class NavigationWaypointControl(threading.Thread) :
             self.waypoint_menu_options.append("Sync Orientation to Robot")
             self.waypoint_menu_options.append("Sync Orientation to Path")
     
-        self.waypoint_menu_options.append("Save Footstep Plan")
+        self.waypoint_menu_options.append("Save Footstep Path")
+        # self.waypoint_menu_options.append("Load Footstep Path")
+
         self.waypoint_menu_options.append("Request Footstep Plan")
         self.waypoint_menu_options.append("Execute Footstep Plan")
 
@@ -243,6 +245,7 @@ class NavigationWaypointControl(threading.Thread) :
         for m in self.waypoint_menu_options :
             self.waypoint_menu_handles[m] = self.waypoint_marker_menus[waypoint_id].insert( m, callback=self.waypoint_menu_callback )
 
+        self.setup_stored_footstep_menu(waypoint_id)
         self.waypoint_markers.append(waypoint.name)
         self.waypoint_marker_menus[waypoint_id].apply(self.server, waypoint.name)
         self.server.applyChanges()
@@ -458,11 +461,29 @@ class NavigationWaypointControl(threading.Thread) :
                 self.sync_orientation_to_robot()
             elif handle == self.waypoint_menu_handles["Sync Orientation to Path"] :
                 self.sync_orientation_to_path()
+            elif handle == self.waypoint_menu_handles["Save Footstep Path"] :
+                self.footstep_controls.save_footsteps()
+            # elif handle == self.waypoint_menu_handles["Load Footstep Path"] :
+            #     self.footstep_controls.load_footsteps_from_file()
 
 
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
        
+
+    def setup_stored_footstep_menu(self, waypoint_id) :
+        m = "Load Footstep Path"
+        sub_menu_handle = self.waypoint_marker_menus[waypoint_id].insert(m)
+        for f in self.footstep_controls.get_footstep_files() :
+            self.waypoint_menu_handles[(m,f)] = self.waypoint_marker_menus[waypoint_id].insert(f,parent=sub_menu_handle,callback=self.load_footstep_path_callback)
+            self.waypoint_marker_menus[waypoint_id].reApply( self.server )
+        self.server.applyChanges()
+
+    def load_footstep_path_callback(self, feedback) :
+        for f in self.footstep_controls.get_footstep_files() :
+            if self.waypoint_menu_handles[("Load Footstep Path",f)] == feedback.menu_entry_id :
+                rospy.logwarn(str("FootstepControl::load_footsteps_path -- " + f))
+                self.footstep_controls.load_footsteps_from_file(f)
 
     def run(self) :
         while self.running :
