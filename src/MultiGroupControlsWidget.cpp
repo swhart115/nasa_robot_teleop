@@ -1,3 +1,6 @@
+/**
+ * Put copyright notice here
+ */
 #include "GroupControlsWidget.hpp"
 #include "MultiGroupControlsWidget.hpp"
 #include "InteractiveControlsInterfaceUtils.hpp"
@@ -29,20 +32,17 @@ void MultiGroupControlsWidget::setupWidgets() {
                      this, SLOT(planOnMoveClicked(int)));
     QObject::connect(ui->execute_on_plan, SIGNAL(stateChanged(int)),
                      this, SLOT(executeOnPlanClicked(int)));
-    
-    //QObject::connect(ui->group_list, SIGNAL(itemClicked(QListWidgetItem *)),
-    //                 this, SLOT(groupMaskChanged(QListWidgetItem*)));
 }
 
 bool MultiGroupControlsWidget::addGroup(const std::string &group_name,
                                         GroupControlsWidget* group_widget) {
     auto search = group_map.find(group_name);
     if (search == group_map.end()) {
-        ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
+        ROS_DEBUG("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
                 group_name.c_str(), group_widget, group_widget->group_type.c_str());
         const QString label(group_name.c_str());
         if(group_widget->group_type == "cartesian") {
-            ROS_INFO("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
+            ROS_DEBUG("MultiGroupControlsWidget::addGroup(%s) ptr=%p, type=%s",
                 group_name.c_str(), group_widget, group_widget->group_type.c_str());
             group_map[group_name] = group_widget;
             ui->group_list->addItem(label);
@@ -78,27 +78,20 @@ void MultiGroupControlsWidget::removeGroup(const std::string &group_name) {
 
 bool MultiGroupControlsWidget::setDataFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &resp) {
     bool retval = false;
-    std::cout << "MultiGroupControlsWidget: response:" << std::endl;
-    std::cout << InteractiveControlsInterfaceUtils::responseStr(resp) << std::endl;
+    //std::cout << "MultiGroupControlsWidget: response:" << std::endl;
+    //std::cout << InteractiveControlsInterfaceUtils::responseStr(resp) << std::endl;
     
     plan_found = (resp.active_group_name.size() > 0 ? true : false);
     for (uint idx=0; idx<resp.active_group_name.size(); ++idx) {
         std::string group_name(resp.active_group_name[idx]);
-        ROS_INFO("  group: [%s]", group_name.c_str());
         if (group_map.count(group_name) > 0) {
-            ROS_INFO("    setting data (ptr=%p); group plan_found=%s",
-                    group_map[group_name],
-                     (group_map[group_name]->plan_found ? "true" : "false"));
             // only consider checked groups for plan status display
             if (!getChecked(QString::fromStdString(group_name))) {
                 group_map[group_name]->setGroupDataFromResponse(resp);
             } else {
                 retval = retval &&
                     group_map[group_name]->setGroupDataFromResponse(resp, QString(" (from Multigroup)"));
-                ROS_INFO("    group plan_found=%s",
-                     (group_map[group_name]->plan_found ? "true" : "false"));
                 plan_found = plan_found && group_map[group_name]->plan_found;
-                ROS_INFO("    my plan_found=%s", (plan_found ? "true" : "false"));
             }
         } else {
             ROS_INFO("    missing in group_map!");
@@ -123,8 +116,8 @@ bool MultiGroupControlsWidget::planRequest() {
             git->second->fillPlanRequest(srv);
         }
     }
-    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
-    std::cout << rviz_interactive_controls_panel::InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
+    //std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    //std::cout << rviz_interactive_controls_panel::InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planRequest() -- success");
@@ -164,8 +157,8 @@ void MultiGroupControlsWidget::planOnMoveClicked(int d) {
         srv.request.group_name.push_back(git->first);
         srv.request.plan_on_move.push_back(getChecked(QString::fromStdString(git->first)) && plan_on_move);
     }
-    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
-    std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
+    //std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    //std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::planOnMoveClicked() -- success");
@@ -186,8 +179,8 @@ void MultiGroupControlsWidget::executeOnPlanClicked(int d) {
         srv.request.group_name.push_back(git->first);
         srv.request.execute_on_plan.push_back(getChecked(QString::fromStdString(git->first)) && execute_on_plan);
     }
-    std::cout << "MultiGroupControlsWidget: request:" << std::endl;
-    std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
+    //std::cout << "MultiGroupControlsWidget: request:" << std::endl;
+    //std::cout << InteractiveControlsInterfaceUtils::requestStr(srv.request) << std::endl;
 
     if (service_client_->call(srv)) {
         ROS_INFO("MultiGroupControlsWidget::executeOnPlanClicked() -- success");
@@ -199,7 +192,7 @@ void MultiGroupControlsWidget::executeOnPlanClicked(int d) {
 
 void MultiGroupControlsWidget::getCheckedGroups(bool andVal,
                 std::vector<std::string> &gnvec, std::vector<unsigned char> &gcvec) {
-    ROS_INFO("MultiGroupControlsWidget::getCheckedGroups()");
+    ROS_DEBUG("MultiGroupControlsWidget::getCheckedGroups()");
     gnvec.clear(); gcvec.clear(); // just to be sure
     
     for (auto git=group_map.cbegin(); git!=group_map.cend(); ++git) {

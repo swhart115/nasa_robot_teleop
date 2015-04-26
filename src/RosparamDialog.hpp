@@ -33,22 +33,25 @@ namespace rviz_interactive_controls_panel {
 		private:
 			/** Create the \c RosparamTreeWidget, using \c ns as the root. */
 			void createRosparamTreeWidget(const std::string &ns);
+			/** Resize, accounting for margins, spacing, etc. */
+			void resizeDialog();
 			/** Executed prior to closing; updates any changed parameter
 			 * values. */
 			void processClick(QDialog::DialogCode code);
+			/** Lays out the widgets; assumes all widgets exist. */
 			void setupUi();
 			
 			XmlRpc::XmlRpcValue m_root;
 			RosparamTreeWidget *m_treeWidget;
 			QPushButton *m_ok, *m_no;
+			int m_treeDispWidth;
 	};
 	
 	/** A \c QTreeWidget representing (editable) ROS parameters. */
 	class RosparamTreeWidget : public QTreeWidget {
 		Q_OBJECT
 		public:
-			RosparamTreeWidget(RosparamDialog* parent = 0);
-			~RosparamTreeWidget();
+			RosparamTreeWidget(RosparamDialog* parent);
 			/** Fill the parameter tree. */
 			void fillTree(XmlRpc::XmlRpcValue* rootVal,
 			              const std::string &rootPath);
@@ -77,7 +80,15 @@ namespace rviz_interactive_controls_panel {
 	 * \c RosparamTreeItem is responsible for translating between \c XmlRpc
 	 * and \c QVariant values, maintaining the parameter's path and name,
 	 * creating its children parameters (recursively), and setting values
-	 * on the parameter server. */
+	 * on the parameter server.
+	 * 
+	 * At this point, editing relies on the default \c QItemEditorFactory
+	 * for editing widgets (e.g., \c QComboBox for \c bool, \c QLineEdit
+	 * for \c QString, etc.); in the future, it is desirable to provide
+	 * facilities for custom editing, particularly a \c QComboBox for
+	 * enumerations. Note that, according to the \c QStyledItemDelegate
+	 * documentation, it is possible to provide editors without using an
+	 * editor factory (see \c QStyledItemDelegate::createEditor). */
 	class RosparamTreeItem : public QTreeWidgetItem {
 		public:
 			/** Constructor. */

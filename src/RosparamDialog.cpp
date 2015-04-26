@@ -19,6 +19,7 @@ namespace rviz_interactive_controls_panel {
 	 **********************************************************************/
 	RosparamDialog::RosparamDialog(const std::string &ns, QWidget *parent)
 			: QDialog(parent)
+			, m_treeDispWidth(500)
 	{
 		// set a maximum size based on default screen geometry
 		const QRect screenRect = QApplication::desktop()->screenGeometry();
@@ -33,6 +34,7 @@ namespace rviz_interactive_controls_panel {
 	}
 	
 	RosparamDialog::~RosparamDialog() {
+		if (m_treeWidget) delete m_treeWidget;
 	}
 	
 	void RosparamDialog::okClicked() {
@@ -44,14 +46,8 @@ namespace rviz_interactive_controls_panel {
 	}
 	
 	void RosparamDialog::onTreeWidthCalculated(int width) {
-		int l,t,r,b, tw;
-		getContentsMargins(&l,&t,&r,&b);
-		tw = width + l + r;
-		if (tw < maximumWidth()) {
-			resize(QSize(tw, height()));
-		} else {
-			resize(QSize(maximumWidth(), height()));
-		}
+		m_treeDispWidth = width;
+		resizeDialog();
 	}
 	
 	void RosparamDialog::createRosparamTreeWidget(const std::string &ns) {
@@ -65,6 +61,18 @@ namespace rviz_interactive_controls_panel {
 			}
 		} else {
 			ROS_ERROR("RosparamDialog: [%s] not found!", ns.c_str());
+		}
+	}
+	
+	void RosparamDialog::resizeDialog() {
+		int l,t,r,b, sp, tw;
+		getContentsMargins(&l,&t,&r,&b);
+		sp = (layout() == 0 ? 0 : layout()->spacing());
+		tw = m_treeDispWidth + l + r + sp;
+		if (tw < maximumWidth()) {
+			resize(QSize(tw, height()));
+		} else {
+			resize(QSize(maximumWidth(), height()));
 		}
 	}
 	
@@ -82,7 +90,7 @@ namespace rviz_interactive_controls_panel {
 		but_lo->addWidget(m_ok);
 		
 		QVBoxLayout *tot_lo = new QVBoxLayout();
-		m_treeWidget->setMinimumSize(300, 500);
+		m_treeWidget->setMinimumSize(m_treeDispWidth, 500);
 		tot_lo->addWidget(m_treeWidget);
 		tot_lo->addLayout(but_lo);
 		setLayout(tot_lo);
@@ -107,21 +115,28 @@ namespace rviz_interactive_controls_panel {
 		        this, SLOT(onItemChanged(QTreeWidgetItem*, int)));
 	}
 	
-	RosparamTreeWidget::~RosparamTreeWidget() {
-	}
-	
 	void RosparamTreeWidget::fillTree(XmlRpc::XmlRpcValue* rootVal,
 	                                  const std::string &rootPath) {
+		// TODO: I'm assuming that the 'addTopLevelItem' associates
+		//   the root item with this tree widget as its 'parent'
+		//   (since NULL is passed as the tree item parent) so that
+		//   it'll be deleted on dialog close...
 		m_rootItem = new RosparamTreeItem(rootVal, NULL, rootPath);
 		addTopLevelItem(m_rootItem);
 		m_rootItem->setData(0, Qt::DisplayRole,
 		                    QVariant(QString::fromStdString(rootPath)));
 		expandAll();
+		// it's not clear to me what exactly is used to size the widget;
+		// the following is providing enough width in tested case...
 		resizeColumnToContents(0);
 		int wid0 = columnWidth(0);
 		resizeColumnToContents(1);
 		int wid1 = columnWidth(1);
-		Q_EMIT treeWidthCalculated(wid0 + wid1);
+		int icsize = iconSize().width();
+		int l,t,r,b;
+		getContentsMargins(&l,&t,&r,&b);
+		int ind = indentation();
+		Q_EMIT treeWidthCalculated(wid0 + wid1 + icsize + icsize + l + r + ind);
 	}
 	
 	void RosparamTreeWidget::commitUpdates(ros::NodeHandle &nh) {
