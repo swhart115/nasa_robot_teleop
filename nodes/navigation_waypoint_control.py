@@ -401,7 +401,7 @@ class NavigationWaypointControl(threading.Thread) :
 
             n = self.get_waypoint_name(id)
             
-            # print "Getting Heading from ", last_frame, " to ", n
+            rospy.logwar(str("NavigationWaypointControl::sync_to_path() -- getting path heading from " + last_frame + " to " + n))
             self.tf_listener.waitForTransform(n, self.frame_id, rospy.Time(0), rospy.Duration(3.0))
             (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, n, rospy.Time(0))       
             waypoint_pose = toPose(trans, rot)
