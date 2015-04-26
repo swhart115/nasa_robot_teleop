@@ -44,15 +44,17 @@ namespace rviz_interactive_controls_panel {
 	}
 	
 	void RosparamDialog::onTreeWidthCalculated(int width) {
-		ROS_INFO("RosparamDialog: tree width [%d]", width);
-		if (width < maximumWidth()) {
-			ROS_INFO("RosparamDialog: resizing to (%d,%d)", width, height());
-			resize(QSize(width, height()));
+		int l,t,r,b, tw;
+		getContentsMargins(&l,&t,&r,&b);
+		tw = width + l + r;
+		if (tw < maximumWidth()) {
+			resize(QSize(tw, height()));
+		} else {
+			resize(QSize(maximumWidth(), height()));
 		}
 	}
 	
 	void RosparamDialog::createRosparamTreeWidget(const std::string &ns) {
-		ROS_INFO("RosparamDialog: parameters from [%s]", ns.c_str());
 		m_treeWidget = new RosparamTreeWidget(this);
 		connect(m_treeWidget, SIGNAL(treeWidthCalculated(int)),
 		        this, SLOT(onTreeWidthCalculated(int)));
@@ -80,7 +82,7 @@ namespace rviz_interactive_controls_panel {
 		but_lo->addWidget(m_ok);
 		
 		QVBoxLayout *tot_lo = new QVBoxLayout();
-		m_treeWidget->setMinimumSize(300, 200);
+		m_treeWidget->setMinimumSize(300, 500);
 		tot_lo->addWidget(m_treeWidget);
 		tot_lo->addLayout(but_lo);
 		setLayout(tot_lo);
@@ -112,13 +114,14 @@ namespace rviz_interactive_controls_panel {
 	                                  const std::string &rootPath) {
 		m_rootItem = new RosparamTreeItem(rootVal, NULL, rootPath);
 		addTopLevelItem(m_rootItem);
-		m_rootItem->setData(0, Qt::DisplayRole, QVariant(QString::fromStdString(rootPath)));
+		m_rootItem->setData(0, Qt::DisplayRole,
+		                    QVariant(QString::fromStdString(rootPath)));
 		expandAll();
-		int wid0 = columnWidth(0), wid1 = columnWidth(1);
-		ROS_INFO("RosparamTreeWidget: width 1=%d, width 2=%d", wid0, wid1);
-		Q_EMIT treeWidthCalculated(wid0 + wid1);
 		resizeColumnToContents(0);
+		int wid0 = columnWidth(0);
 		resizeColumnToContents(1);
+		int wid1 = columnWidth(1);
+		Q_EMIT treeWidthCalculated(wid0 + wid1);
 	}
 	
 	void RosparamTreeWidget::commitUpdates(ros::NodeHandle &nh) {
@@ -131,35 +134,21 @@ namespace rviz_interactive_controls_panel {
 	}
 	
 	void RosparamTreeWidget::onItemDoubleClicked(QTreeWidgetItem* item, int col) {
-		std::cout << "RosparamTreeWidget: doubleclick:";
-		std::cout << " [" << item->text(0).toStdString() << "]";
-		std::cout << ", col=" << col << std::endl;
 		if (isEditable(col)) {
 			editItem(item, col);
 		}
 	}
 	
 	void RosparamTreeWidget::onItemChanged(QTreeWidgetItem* item, int col) {
-		std::cout << "RosparamTreeWidget: itemChanged:";
-		std::cout << " [" << item->text(0).toStdString() << "]";
-		std::cout << ", col=" << col << std::endl;
 		if (isEditable(col)) {
 			RosparamTreeItem* rpitem = static_cast<RosparamTreeItem*>(item);
 			if (item->data(col, Qt::EditRole) != rpitem->data()) {
-				std::cout << "  Values different! store for exit..." << std::endl;
 				if (m_updates.count(rpitem) < 1) {
 					m_updates.insert(rpitem);
-					std::cout << "    Inserted " << rpitem;
-					std::cout << " [" << item->text(0).toStdString() << "]";
-					std::cout << std::endl;
 				}
 			} else {
-				std::cout << "  Same values; ignore..." << std::endl;
 				if (m_updates.count(rpitem) > 0) {
 					m_updates.erase(rpitem);
-					std::cout << "    removed " << rpitem;
-					std::cout << " [" << item->text(0).toStdString() << "]";
-					std::cout << std::endl;
 				}
 			}
 		}
@@ -279,7 +268,6 @@ namespace rviz_interactive_controls_panel {
 		item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsEditable);
 		item->setData(0, Qt::DisplayRole, QVariant(QString::fromStdString(name)));
 		item->setData(1, Qt::EditRole, valToQVariant(*val));
-		//item->setSizeHint(0, QSize(
 		QTreeWidgetItem::addChild(item);
 		item->setExpanded(true);
 	}
