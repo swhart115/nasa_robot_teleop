@@ -74,6 +74,7 @@ class FootstepControl(object) :
         self.lift_heights = None
         self.feet = None
 
+        self.foostep_filename = ""
 
         random.seed(rospy.Time.now().secs)
 
@@ -337,6 +338,10 @@ class FootstepControl(object) :
             rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
 
+    def set_footstep_filename(self, filename) :
+        self.footstep_filename = filename
+
+
     def save_footsteps(self) :
 
         import datetime
@@ -347,8 +352,11 @@ class FootstepControl(object) :
         rp = rospkg.RosPack()
         path = rp.get_path("nasa_robot_teleop")
 
-        filename =  path + "/store/footpaths/" + d.strftime("%d-%m-%Y-%H-%M-%S") + str(".fsp")
-        
+        if self.footstep_filename == "" :
+            filename =  path + "/store/footpaths/" + d.strftime("%d-%m-%Y-%H-%M-%S") + str(".fsp")
+        else :
+            filename = path + "/store/footpaths/" + self.footstep_filename
+
         step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
         for idx in range(len(step_poses)) :
             self.tf_listener.waitForTransform("nav_goal", step_poses[idx].header.frame_id, rospy.Time(0), rospy.Duration(3.0))

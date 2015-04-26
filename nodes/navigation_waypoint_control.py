@@ -462,11 +462,14 @@ class NavigationWaypointControl(threading.Thread) :
             elif handle == self.waypoint_menu_handles["Sync Orientation to Path"] :
                 self.sync_orientation_to_path()
             elif handle == self.waypoint_menu_handles["Save Footstep Path"] :
-                self.footstep_controls.save_footsteps()
+                self.save_footstep_path("")
             # elif handle == self.waypoint_menu_handles["Load Footstep Path"] :
             #     self.footstep_controls.load_footsteps_from_file()
 
-
+    def save_footstep_path(self, filename) :
+        self.footstep_controls.set_footstep_filename(filename)
+        self.footstep_controls.save_footsteps()
+        
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
        
@@ -484,6 +487,10 @@ class NavigationWaypointControl(threading.Thread) :
             if self.waypoint_menu_handles[("Load Footstep Path",f)] == feedback.menu_entry_id :
                 rospy.logwarn(str("FootstepControl::load_footsteps_path -- " + f))
                 self.footstep_controls.load_footsteps_from_file(f)
+
+    def set_footstep_filename(self, filename) :
+        self.footstep_controls.set_footstep_filename(filename)
+
 
     def run(self) :
         while self.running :

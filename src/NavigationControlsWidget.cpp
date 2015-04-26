@@ -26,6 +26,7 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->direct_move_button, SIGNAL(clicked()), this, SLOT(directMoveRequest()));
     QObject::connect(ui->sync_to_robot_orientation_button, SIGNAL(clicked()), this, SLOT(syncToRobotOrientationRequest()));
     QObject::connect(ui->sync_to_path_orientation_button, SIGNAL(clicked()), this, SLOT(syncToPathOrientationRequest()));
+    QObject::connect(ui->save_footstep_path_button, SIGNAL(clicked()), this, SLOT(saveFootstepPathRequest()));
 
     QObject::connect(ui->accommodate_terrain, SIGNAL(stateChanged(int)), this, SLOT(accommodateTerrainClicked(int)));
     QObject::connect(ui->nav_mode_box, SIGNAL(currentIndexChanged(const QString&)), this, SLOT(navModeChanged(const QString&)));
@@ -207,6 +208,26 @@ bool NavigationControlsWidget::executeRequest() {
 
 }
 
+bool NavigationControlsWidget::saveFootstepPathRequest() {
+
+    ROS_INFO("NavigationControlsWidget::saveFootstepPathRequest()");    
+
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SAVE_FOOTSTEP_PATH;
+    srv.request.footstep_filename = ui->footstep_path_filename->text().toStdString();
+
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("NavigationControlsWidget::saveFootstepPathRequest() -- success");
+        return setDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("NavigationControlsWidget::saveFootstepPathRequest() -- failed to call service");
+        return false;
+    }
+
+}
 
 bool NavigationControlsWidget::directMoveRequest() {
 

@@ -715,6 +715,8 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_PATH_ORIENTATION :
             self.navigation_controls.sync_orientation_to_path()
 
+        elif req.action_type == InteractiveControlsInterfaceRequest.SAVE_FOOTSTEP_PATH :
+            self.navigation_controls.save_footstep_path(req.footstep_filename)
         
         self.server.applyChanges()
 

@@ -24,6 +24,8 @@ int8 action_type
   int8 EXECUTE_DIRECT_MOVE = 22
   int8 SYNC_NAVIGATION_TO_ROBOT_ORIENTATION = 23
   int8 SYNC_NAVIGATION_TO_PATH_ORIENTATION = 24
+  int8 SAVE_FOOTSTEP_PATH = 25
+  
   
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
 string[] group_name
@@ -61,6 +63,10 @@ bool accommodate_terrain_in_navigation
 
 # the navigation mode to use
 string navigation_mode
+
+# the filename to save the footstep path to
+string footstep_filename
+
 
 ----
 

@@ -43,6 +43,8 @@ namespace rviz_interactive_controls_panel
         bool directMoveRequest();
         bool syncToRobotOrientationRequest();
         bool syncToPathOrientationRequest();
+        bool saveFootstepPathRequest();
+        
         bool addWaypointRequest();
         bool deleteWaypointRequest();
 
