@@ -2,10 +2,13 @@
  * Put copyright notice here
  */
 #include "RosparamDialog.hpp"
+#include <QApplication>
 #include <QDate>
 #include <QDateTime>
+#include <QDesktopWidget>
 #include <QLayout>
 #include <QPushButton>
+#include <QRect>
 #include <QTime>
 #include <ostream>
 
@@ -17,6 +20,10 @@ namespace rviz_interactive_controls_panel {
 	RosparamDialog::RosparamDialog(const std::string &ns, QWidget *parent)
 			: QDialog(parent)
 	{
+		// set a maximum size based on default screen geometry
+		const QRect screenRect = QApplication::desktop()->screenGeometry();
+		setMaximumSize(screenRect.width(), screenRect.height());
+		
 		createRosparamTreeWidget(ns);
 		m_ok = new QPushButton("OK", this);
 		m_no = new QPushButton("Cancel", this);
@@ -36,9 +43,19 @@ namespace rviz_interactive_controls_panel {
 		processClick(QDialog::Rejected);
 	}
 	
+	void RosparamDialog::onTreeWidthCalculated(int width) {
+		ROS_INFO("RosparamDialog: tree width [%d]", width);
+		if (width < maximumWidth()) {
+			ROS_INFO("RosparamDialog: resizing to (%d,%d)", width, height());
+			resize(QSize(width, height()));
+		}
+	}
+	
 	void RosparamDialog::createRosparamTreeWidget(const std::string &ns) {
 		ROS_INFO("RosparamDialog: parameters from [%s]", ns.c_str());
 		m_treeWidget = new RosparamTreeWidget(this);
+		connect(m_treeWidget, SIGNAL(treeWidthCalculated(int)),
+		        this, SLOT(onTreeWidthCalculated(int)));
 		ros::NodeHandle nh;
 		if (nh.getParam(ns, m_root)) {
 			if (m_root.size() > 0) {
@@ -95,7 +112,11 @@ namespace rviz_interactive_controls_panel {
 	                                  const std::string &rootPath) {
 		m_rootItem = new RosparamTreeItem(rootVal, NULL, rootPath);
 		addTopLevelItem(m_rootItem);
+		m_rootItem->setData(0, Qt::DisplayRole, QVariant(QString::fromStdString(rootPath)));
 		expandAll();
+		int wid0 = columnWidth(0), wid1 = columnWidth(1);
+		ROS_INFO("RosparamTreeWidget: width 1=%d, width 2=%d", wid0, wid1);
+		Q_EMIT treeWidthCalculated(wid0 + wid1);
 		resizeColumnToContents(0);
 		resizeColumnToContents(1);
 	}
