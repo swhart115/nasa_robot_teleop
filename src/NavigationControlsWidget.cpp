@@ -326,9 +326,10 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
     
     nasa_robot_teleop::InteractiveControlsInterface srv;
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_NAVIGATION_MODE;
-      
+
     if(ui->nav_mode_box->currentText().toStdString() != navigation_mode) {
         srv.request.navigation_mode = ui->nav_mode_box->currentText().toStdString();
+        navigation_mode = srv.request.navigation_mode;
         
         if (service_client_->call(srv))
         {
@@ -339,19 +340,20 @@ bool NavigationControlsWidget::navModeChanged(const QString&) {
             ROS_ERROR("NavigationControlsWidget::navModeChanged() -- failed to call service");
             return false;
         }
-    }
-    if (srv.request.navigation_mode == "REACTIVE_WALKER") {
-        ui->direct_move_button->setEnabled(true);
-        ui->plan_button->setEnabled(false);
-        ui->execute_button->setEnabled(false);
-    } else if (srv.request.navigation_mode == "WALK_CONTROLLER") {
-        ui->direct_move_button->setEnabled(true);
-        ui->plan_button->setEnabled(true);
-        ui->execute_button->setEnabled(true);
-    } else {
-        ui->direct_move_button->setEnabled(false);
-        ui->plan_button->setEnabled(true);
-        ui->execute_button->setEnabled(true);
+    
+        if (srv.request.navigation_mode == "REACTIVE_WALKER") {
+            ui->direct_move_button->setEnabled(true);
+            ui->plan_button->setEnabled(false);
+            ui->execute_button->setEnabled(false);
+        } else if (srv.request.navigation_mode == "WALK_CONTROLLER") {
+            ui->direct_move_button->setEnabled(true);
+            ui->plan_button->setEnabled(true);
+            ui->execute_button->setEnabled(true);
+        } else {
+            ui->direct_move_button->setEnabled(false);
+            ui->plan_button->setEnabled(true);
+            ui->execute_button->setEnabled(true);
+        }
     }
     return true; //setDataFromResponse(srv.response);
 }
