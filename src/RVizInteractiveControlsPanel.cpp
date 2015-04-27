@@ -328,7 +328,9 @@ bool RVizInteractiveControlsPanel::popupParamData() {
     nh_.getParam(param +"/planner_type", val);
     if (!val.empty()) {
         RosparamDialog rpd(param +"/"+ val, this);
-        rpd.exec();
+        if (rpd.exec()) {
+            getConfigData();
+        }
     } else {
         ROS_ERROR("RVizInteractiveControlsPanel: empty planner_type!");
     }
