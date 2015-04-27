@@ -4,6 +4,7 @@ import rospy
 import roslib; roslib.load_manifest("nasa_robot_teleop")
 
 import math
+import threading
 import argparse
 from copy import deepcopy
 
@@ -21,9 +22,13 @@ from nasa_robot_teleop.util.kinematics_util import *
 
 from footstep_control import *
 
-class NavigationWaypointControl(object) :
+class NavigationWaypointControl(threading.Thread) :
 
-    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None, reference_frame="") :
+    def __init__(self, robot, server=None, frame_id="global", tf_listener=None, reference_frame="") :
+        super(NavigationWaypointControl,self).__init__()
+
+        self.mutex = threading.Lock()
+        self._stop = threading.Event()
 
         self.robot = robot
         self.frame_id = frame_id
@@ -38,6 +43,10 @@ class NavigationWaypointControl(object) :
             self.tf_listener = tf_listener
         else :
             self.tf_listener = tf.TransformListener()
+
+        self.tf_broadcaster = tf.TransformBroadcaster()
+        self.tf_frame = "nav_goal"
+
 
         self.path_planner = None
         self.footstep_controls = FootstepControl(self.robot, self.server, self.frame_id, self.tf_listener)
@@ -58,14 +67,21 @@ class NavigationWaypointControl(object) :
         self.waypoint_menu_options.append("Move Directly")
 
         if self.reference_frame != "" :
-            self.waypoint_menu_options.append("Sync Orientation")
+            self.waypoint_menu_options.append("Sync Orientation to Robot")
+            self.waypoint_menu_options.append("Sync Orientation to Path")
     
+        self.waypoint_menu_options.append("Save Footstep Path")
+        # self.waypoint_menu_options.append("Load Footstep Path")
+
         self.waypoint_menu_options.append("Request Footstep Plan")
         self.waypoint_menu_options.append("Execute Footstep Plan")
 
         self.use_footstep_planner = True
 
         self.last_waypoint_height = 2.0
+
+        self.running = True  
+        self.start()
 
     def activate_navigation_markers(self, v) :
         self.waypoint_markers_on = v
@@ -74,7 +90,7 @@ class NavigationWaypointControl(object) :
         self.add_waypoint(None, p, False)
 
         if self.reference_frame != "" :
-            self.sync_orientation()
+            self.sync_orientation_to_robot()
 
 
     def set_path_planner(self, path_planner) :
@@ -229,6 +245,7 @@ class NavigationWaypointControl(object) :
         for m in self.waypoint_menu_options :
             self.waypoint_menu_handles[m] = self.waypoint_marker_menus[waypoint_id].insert( m, callback=self.waypoint_menu_callback )
 
+        self.setup_stored_footstep_menu(waypoint_id)
         self.waypoint_markers.append(waypoint.name)
         self.waypoint_marker_menus[waypoint_id].apply(self.server, waypoint.name)
         self.server.applyChanges()
@@ -350,12 +367,16 @@ class NavigationWaypointControl(object) :
             ps.header = p.header
         self.path_planner.direct_move(ps)
 
-    def sync_orientation(self) :
+    def sync_orientation_to_robot(self) :
 
-        self.tf_listener.waitForTransform(self.frame_id, self.reference_frame, rospy.Time(0), rospy.Duration(5.0))
-        (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, self.reference_frame, rospy.Time(0))       
-        ref_pose = toPose(trans, rot)
-     
+        if self.reference_frame :
+            self.tf_listener.waitForTransform(self.frame_id, self.reference_frame, rospy.Time(0), rospy.Duration(5.0))
+            (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, self.reference_frame, rospy.Time(0))       
+            ref_pose = toPose(trans, rot)
+        else :
+            ref_pose = Pose()
+            ref_pose.orientation.w = 1
+
         for id in self.waypoint_markers :
             ps = Pose()
             n = self.get_waypoint_name(id)
@@ -364,6 +385,56 @@ class NavigationWaypointControl(object) :
             ps.orientation = ref_pose.orientation
             self.server.setPose(n, ps)
         self.server.applyChanges()
+
+    def sync_orientation_to_path(self) :
+
+        if self.reference_frame :
+            last_frame = self.reference_frame
+        else :
+            last_frame = self.frame_id
+
+        self.tf_listener.waitForTransform(last_frame, self.frame_id, rospy.Time(0), rospy.Duration(3.0))
+        (trans, rot) = self.tf_listener.lookupTransform(last_frame, self.frame_id, rospy.Time(0))       
+        ref_pose = toPose(trans, rot)
+
+        for id in self.waypoint_markers :
+
+            n = self.get_waypoint_name(id)
+            
+            rospy.logwarn(str("NavigationWaypointControl::sync_to_path() -- getting path heading from " + last_frame + " to " + n))
+            self.tf_listener.waitForTransform(n, self.frame_id, rospy.Time(0), rospy.Duration(3.0))
+            (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, n, rospy.Time(0))       
+            waypoint_pose = toPose(trans, rot)
+
+            T1 = fromMsg(ref_pose)
+            T2 = fromMsg(waypoint_pose)
+            rpy = T2.M.GetRPY()
+            
+            T2.M = Rotation()
+
+            T = T1.Inverse()*T2
+            new_pose = toMsg(T)
+
+            x = new_pose.position.x
+            y = new_pose.position.y
+            z = new_pose.position.z
+
+            yaw = math.atan2(y,x)
+            rpy_new = (rpy[0],rpy[1], yaw)
+            q = Rotation.RPY(rpy_new[0],rpy_new[1],rpy_new[2]).GetQuaternion()
+            new_pose.orientation.x = q[0]
+            new_pose.orientation.y = q[1]
+            new_pose.orientation.z = q[2]
+            new_pose.orientation.w = q[3]
+        
+            ps = Pose()
+            ps.position = waypoint_pose.position
+            ps.orientation = new_pose.orientation
+            self.server.setPose(n, ps)
+
+            last_frame = n
+            ref_pose = waypoint_pose
+            self.server.applyChanges()
 
     def get_waypoints(self) :
         return self.waypoint_markers
@@ -386,13 +457,71 @@ class NavigationWaypointControl(object) :
                 self.footstep_controls.execute_footstep_path()
             elif handle == self.waypoint_menu_handles["Move Directly"] :
                 self.direct_move(feedback.marker_name)
-            elif handle == self.waypoint_menu_handles["Sync Orientation"] :
-                self.sync_orientation()
+            elif handle == self.waypoint_menu_handles["Sync Orientation to Robot"] :
+                self.sync_orientation_to_robot()
+            elif handle == self.waypoint_menu_handles["Sync Orientation to Path"] :
+                self.sync_orientation_to_path()
+            elif handle == self.waypoint_menu_handles["Save Footstep Path"] :
+                self.save_footstep_path("")
+            # elif handle == self.waypoint_menu_handles["Load Footstep Path"] :
+            #     self.footstep_controls.load_footsteps_from_file()
 
-
+    def save_footstep_path(self, filename) :
+        self.footstep_controls.set_footstep_filename(filename)
+        self.footstep_controls.save_footsteps()
+        
     def navigation_marker_callback(self, feedback) :
         self.waypoint_poses[feedback.marker_name] = feedback.pose
        
+
+    def setup_stored_footstep_menu(self, waypoint_id) :
+        m = "Load Footstep Path"
+        sub_menu_handle = self.waypoint_marker_menus[waypoint_id].insert(m)
+        for f in self.footstep_controls.get_footstep_files() :
+            self.waypoint_menu_handles[(m,f)] = self.waypoint_marker_menus[waypoint_id].insert(f,parent=sub_menu_handle,callback=self.load_footstep_path_callback)
+            self.waypoint_marker_menus[waypoint_id].reApply( self.server )
+        self.server.applyChanges()
+
+    def load_footstep_path_callback(self, feedback) :
+        for f in self.footstep_controls.get_footstep_files() :
+            if self.waypoint_menu_handles[("Load Footstep Path",f)] == feedback.menu_entry_id :
+                rospy.logwarn(str("FootstepControl::load_footsteps_path -- " + f))
+                self.footstep_controls.load_footsteps_from_file(f)
+
+    def set_footstep_filename(self, filename) :
+        self.footstep_controls.set_footstep_filename(filename)
+
+
+    def run(self) :
+        while self.running :
+            try : 
+
+                for goal in self.waypoint_markers :
+                # goal = self.waypoint_markers[len(self.waypoint_markers)-1]
+                    p = self.server.get(goal)              
+                    try :
+                        self.tf_broadcaster.sendTransform((p.pose.position.x,p.pose.position.y,p.pose.position.z),
+                                              (p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w),
+                                              rospy.Time.now(), goal, p.header.frame_id)
+                    except :
+                        rospy.logdebug("NavigationControl::run() -- could not update thread")
+
+
+                goal = self.waypoint_markers[len(self.waypoint_markers)-1]
+                p = self.server.get(goal)              
+                try :
+                    self.tf_broadcaster.sendTransform((p.pose.position.x,p.pose.position.y,p.pose.position.z),
+                                          (p.pose.orientation.x,p.pose.orientation.y,p.pose.orientation.z,p.pose.orientation.w),
+                                          rospy.Time.now(), self.tf_frame, p.header.frame_id)
+                except :
+                    rospy.logdebug("NavigationControl::run() -- could not update thread")
+
+
+            except :
+                pass
+            rospy.sleep(0.1)
+      
+
 
 
 if __name__=="__main__":

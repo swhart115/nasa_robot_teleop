@@ -709,8 +709,14 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_NAVIGATION_MODE :
             self.path_planner.set_navigation_mode(req.navigation_mode)
 
-        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_ORIENTATION :
-            self.navigation_controls.sync_orientation()
+        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_ROBOT_ORIENTATION :
+            self.navigation_controls.sync_orientation_to_robot()
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_PATH_ORIENTATION :
+            self.navigation_controls.sync_orientation_to_path()
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SAVE_FOOTSTEP_PATH :
+            self.navigation_controls.save_footstep_path(req.footstep_filename)
         
         self.server.applyChanges()
 

@@ -6,6 +6,7 @@ import roslib; roslib.load_manifest("nasa_robot_teleop")
 import math
 import random
 import tf
+import pickle
 
 from copy import deepcopy
 
@@ -22,10 +23,16 @@ from nasa_robot_teleop.path_planner import *
 from nasa_robot_teleop.util.marker_helper import *
 from nasa_robot_teleop.util.kinematics_util import *
 
+class FootstepStorage(object) :
+    def __init__(self) :
+        self.feet = None
+        self.lift_heights = None
+        self.step_poses = None
+
 
 class FootstepControl(object) :
 
-    def __init__(self, robot, server=None, frame_id="/global", tf_listener=None) :
+    def __init__(self, robot, server=None, frame_id="global", tf_listener=None) :
 
         self.robot_name = robot
         self.frame_id = frame_id
@@ -51,6 +58,7 @@ class FootstepControl(object) :
        
         self.footstep_menu_options = []
         self.footstep_menu_options.append("Toggle Full Controls")
+        self.footstep_menu_options.append("Save Footsteps")
         # self.footstep_menu_options.append("Execute")
         
         self.footstep_plan_valid = False
@@ -66,9 +74,11 @@ class FootstepControl(object) :
         self.lift_heights = None
         self.feet = None
 
+        self.foostep_filename = ""
 
         random.seed(rospy.Time.now().secs)
 
+        self.get_footstep_files()
 
     def set_path_planner(self, path_planner) :
         if not isinstance(path_planner, PathPlanner) :
@@ -128,12 +138,11 @@ class FootstepControl(object) :
             start_foot_id = self.feet_names.index(start_foot)
     
         for id in range(len(poses)) :
-      
-            m = Marker()
-            
+            m = Marker()      
             try :
                 self.tf_listener.waitForTransform(self.frame_id, str("/" + poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
-                ps =  self.tf_listener.transformPose(self.frame_id, poses[id])
+                # self.tf_listener.waitForTransform(self.frame_id, str(poses[id].header.frame_id), rospy.Time(0), rospy.Duration(3.0))
+                ps = self.tf_listener.transformPose(self.frame_id, poses[id])
                 m.header = ps.header
                 m.pose = ps.pose
             except :
@@ -256,6 +265,9 @@ class FootstepControl(object) :
             if handle == self.footstep_menu_handles["Toggle Full Controls"] :
                 self.toggle_foot_controls(feedback)
                 self.create_foot_interactive_markers()
+            elif handle == self.footstep_menu_handles["Save Footsteps"] :
+                self.save_footsteps()
+
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
             self.footstep_change_map.append(feedback.marker_name)
@@ -326,6 +338,75 @@ class FootstepControl(object) :
             rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
 
+    def set_footstep_filename(self, filename) :
+        self.footstep_filename = filename
+
+
+    def save_footsteps(self) :
+
+        import datetime
+        import rospkg
+
+        d=datetime.datetime.now()
+
+        rp = rospkg.RosPack()
+        path = rp.get_path("nasa_robot_teleop")
+
+        if self.footstep_filename == "" :
+            filename =  path + "/store/footpaths/" + d.strftime("%d-%m-%Y-%H-%M-%S") + str(".fsp")
+        else :
+            filename = path + "/store/footpaths/" + self.footstep_filename
+
+        step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
+        for idx in range(len(step_poses)) :
+            self.tf_listener.waitForTransform("nav_goal", step_poses[idx].header.frame_id, rospy.Time(0), rospy.Duration(3.0))
+            step_poses[idx] = self.tf_listener.transformPose("nav_goal", step_poses[idx])          
+
+        storage = FootstepStorage()
+        storage.step_poses = step_poses
+        storage.feet = self.feet
+        storage.lift_heights = self.lift_heights
+
+        rospy.logwarn("FootstepControl::save_footsteps() -- saved to: " + filename)
+        pickle.dump(storage, open( filename, "wb"))
+
+        self.filename = filename
+
+        self.get_footstep_files()
+        
+
+    def load_footsteps_from_file(self, filename) :
+
+        import rospkg
+        rp = rospkg.RosPack()
+        path = rp.get_path("nasa_robot_teleop")
+
+        recalled = pickle.load( open( filename, "rb") )
+
+        step_poses = []
+        for idx in range(len(recalled.step_poses)) :
+            step = recalled.step_poses[idx]
+            step.header.stamp = rospy.Time(0)
+            # self.tf_listener.waitForTransform("nav_goal", step.header.frame_id, rospy.Time(0), rospy.Duration(3.0))
+            # new_step = self.tf_listener.transformPose("nav_goal", step)     
+            step_poses.append(step)
+            
+        self.set_footstep_poses(step_poses, recalled.lift_heights, recalled.feet)
+        
+
+    def get_footstep_files(self) :
+        
+        import rospkg, os, glob
+
+        rp = rospkg.RosPack()
+        path = rp.get_path("nasa_robot_teleop") + "/store/footpaths/"
+        os.chdir(path)
+
+        self.footpaths = []
+        for ffile in glob.glob("*.fsp") :
+            self.footpaths.append(ffile)
+
+        return self.footpaths
 
 if __name__=="__main__":
 
@@ -333,7 +414,7 @@ if __name__=="__main__":
 
     server = InteractiveMarkerServer(str(args.robot + "_interactive_marker_server"))
 
-    fc = FootstepControl("atlas", server, "/global")
+    fc = FootstepControl("atlas", server, "global")
     fc.activate_navigation_markers(True)
 
     r = rospy.Rate(100.0)
