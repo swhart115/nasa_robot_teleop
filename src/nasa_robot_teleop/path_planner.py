@@ -607,11 +607,23 @@ class PathPlanner(object):
 
             waypoints = []
             rospy.loginfo(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
+            
+            print goals
             for p in goals[idx] :
+                p.header.stamp = rospy.Time(0)
+                group_planning_frame = self.get_group_planning_frame(group_name)
                 pt = geometry_msgs.msg.PoseStamped()
-                if p.header.frame_id != self.get_group_planning_frame(group_name) :
-                    self.tf_listener.waitForTransform(p.header.frame_id, self.get_group_planning_frame(group_name), rospy.Time(0), rospy.Duration(5.0))
-                    pt = self.tf_listener.transformPose(self.get_group_planning_frame(group_name), p)
+                pt.pose.orientation.w = 1.0
+                pt.header.frame_id = group_planning_frame
+                print group_name
+                print p
+                print group_planning_frame
+                if p.header.frame_id != group_planning_frame :
+                    print "Transforming pose"
+                    self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(5.0))
+                    print "found transform"
+                    pt = self.tf_listener.transformPose(group_planning_frame, p)
+                    print "transformed"
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
             idx += 1

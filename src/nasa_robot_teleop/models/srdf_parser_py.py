@@ -233,16 +233,16 @@ class SRDFModel :
                             
             self.joint_mask[g] = self.compute_joint_mask(g)
             
-            print "===================="
-            print "Group: ", g
-            print " base: ", self.base_links[g]
-            print " tip: ", self.tip_links[g]
-            print " joints (spec): ", self.group_joints[g]
-            print " joints (full): ", self.full_group_joints[g]
-            print " joint mask: ", self.joint_mask[g]
-            print " links  (spec): ", self.group_links[g]
-            print " is chain: ", 
-            print "====================\n"
+            # print "===================="
+            # print "Group: ", g
+            # print " base: ", self.base_links[g]
+            # print " tip: ", self.tip_links[g]
+            # print " joints (spec): ", self.group_joints[g]
+            # print " joints (full): ", self.full_group_joints[g]
+            # print " joint mask: ", self.joint_mask[g]
+            # print " links  (spec): ", self.group_links[g]
+            # print " is chain: ", 
+            # print "====================\n"
 
     def compute_joint_masks(self) :
          for g in self.get_groups() :
