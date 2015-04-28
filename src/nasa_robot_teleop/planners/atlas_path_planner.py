@@ -609,10 +609,11 @@ class AtlasPathPlanner(PathPlanner) :
         return True
 
     def direct_move(self, goal) :
+        navigation_mode = get_navigation_mode()
         try:
-            if self.navigation_mode == "REACTIVE_WALKER" :
+            if navigation_mode == "REACTIVE_WALKER" :
                 self.execute_reactive_walker([goal])
-            elif self.navigation_mode == "WALK_CONTROLLER" :
+            elif navigation_mode == "WALK_CONTROLLER" :
                 self.execute_walk_controller(goal=[goal], footsteps=None, lift_heights=None, feet=None)
         except Exception as e:
             print e
@@ -622,11 +623,10 @@ class AtlasPathPlanner(PathPlanner) :
         return ["WALK_CONTROLLER", "AUTO_WALKER", "REACTIVE_WALKER"]
 
     def get_navigation_mode(self) :
-        return self.navigation_mode
+        return rospy.get_param("~atlas/navigation_mode")
 
     def set_navigation_mode(self, mode) :
         if mode in self.get_navigation_modes() :
-            self.navigation_mode = mode
             rospy.set_param("~atlas/navigation_mode", mode)
 
     def accommodate_terrain_in_navigation(self) :

@@ -30,6 +30,7 @@ namespace rviz_interactive_controls_panel {
         
       public Q_SLOTS:  
          bool getConfigData();
+         bool popupParamData();
          bool addGroupRequest();
          bool removeGroupRequest();
          void groupDoubleClicked(QListWidgetItem*);
@@ -44,6 +45,9 @@ namespace rviz_interactive_controls_panel {
 
         // ros node handle
         ros::NodeHandle nh_;
+
+		  // topic base
+		  std::string topic_base_;
 
         // init flag
         bool initialized;

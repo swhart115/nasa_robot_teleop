@@ -33,6 +33,7 @@ qt4_wrap_cpp(MOC_FILES
     src/InteractiveControlsInterfaceUtils.hpp
     src/MultiGroupControlsWidget.hpp
     src/NavigationControlsWidget.hpp
+	 src/RosparamDialog.hpp
     src/RVizInteractiveControlsPanel.hpp
 )
 qt4_wrap_ui(QT_FORMS_HPP ${QT_FORMS})
@@ -42,6 +43,7 @@ set(SRC_FILES
     src/InteractiveControlsInterfaceUtils.cpp
     src/MultiGroupControlsWidget.cpp
     src/NavigationControlsWidget.cpp
+	 src/RosparamDialog.cpp
     src/RVizInteractiveControlsPanel.cpp
     ${MOC_FILES}
 )

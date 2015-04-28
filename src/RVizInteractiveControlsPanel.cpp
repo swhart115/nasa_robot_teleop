@@ -1,4 +1,5 @@
 #include "RVizInteractiveControlsPanel.hpp"
+#include "RosparamDialog.hpp"
 
 using namespace rviz_interactive_controls_panel;
 using namespace std;
@@ -6,6 +7,7 @@ using namespace std;
 RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent)
     : rviz::Panel(parent)
     , ui(new Ui::RVizInteractiveControlsPanel)
+    , topic_base_("/interactive_control")
     , initialized(false)
     , multi_group_widget(NULL)
     , navigation_widget(NULL)
@@ -13,7 +15,7 @@ RVizInteractiveControlsPanel::RVizInteractiveControlsPanel(QWidget *parent)
     ui->setupUi(this);
 
     // setup service clients
-    interactive_control_client_ = nh_.serviceClient<nasa_robot_teleop::InteractiveControlsInterface>("/interactive_control/configure");
+    interactive_control_client_ = nh_.serviceClient<nasa_robot_teleop::InteractiveControlsInterface>(topic_base_ +"/configure");
     
     // setup QT widgets
     setupWidgets();
@@ -30,13 +32,9 @@ RVizInteractiveControlsPanel::~RVizInteractiveControlsPanel()
     group_widgets.clear();
 }
 
-//void RVizInteractiveControlsPanel::updateFromResponse(nasa_robot_teleop::InteractiveControlsInterfaceResponse &rsp) {
-//    // NOTE: ignores the return value!
-//    setupFromConfigResponse(rsp);
-//}
-
 void RVizInteractiveControlsPanel::setupWidgets() {
     QObject::connect(ui->refresh_button, SIGNAL(clicked()), this, SLOT(getConfigData()));
+    QObject::connect(ui->param_button, SIGNAL(clicked()), this, SLOT(popupParamData()));
     QObject::connect(ui->add_group_button, SIGNAL(clicked()), this, SLOT(addGroupRequest()));
     QObject::connect(ui->remove_group_button, SIGNAL(clicked()), this, SLOT(removeGroupRequest()));
     QObject::connect(ui->active_group_list, SIGNAL(itemDoubleClicked(QListWidgetItem*)), this, SLOT(groupDoubleClicked(QListWidgetItem*)));
@@ -322,6 +320,20 @@ bool RVizInteractiveControlsPanel::getConfigData() {
         return false;
     }
 
+    return true;
+}
+
+bool RVizInteractiveControlsPanel::popupParamData() {
+    std::string param(topic_base_), val;
+    nh_.getParam(param +"/planner_type", val);
+    if (!val.empty()) {
+        RosparamDialog rpd(param +"/"+ val, this);
+        if (rpd.exec()) {
+            getConfigData();
+        }
+    } else {
+        ROS_ERROR("RVizInteractiveControlsPanel: empty planner_type!");
+    }
     return true;
 }
 
