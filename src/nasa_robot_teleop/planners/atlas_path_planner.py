@@ -57,25 +57,25 @@ class AtlasPathPlanner(PathPlanner) :
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
 
-        rospy.set_param("~atlas/interpolation_type", 1)
-        rospy.set_param("~atlas/num_visualizaton_points", 5)
-        rospy.set_param("~atlas/visualize_path", True)
-        rospy.set_param("~atlas/maintain_hand_pose_offsets", False)
-        rospy.set_param("~atlas/move_as_far_as_possible", False)
+        # rospy.set_param("~atlas/interpolation_type", 1)
+        # rospy.set_param("~atlas/num_visualizaton_points", 5)
+        # rospy.set_param("~atlas/visualize_path", True)
+        # rospy.set_param("~atlas/maintain_hand_pose_offsets", False)
+        # rospy.set_param("~atlas/move_as_far_as_possible", False)
 
-        rospy.set_param("~atlas/duration", 2.0)
-        rospy.set_param("~atlas/allow_incomplete_planning", True)
-        rospy.set_param("~atlas/num_acceptable_consecutive_failures", 0)
-        rospy.set_param("~atlas/plan_visualization_density", 0.5)
-        rospy.set_param("~atlas/visualize_on_plan", True)
-        rospy.set_param("~atlas/max_angular_velocity", 0.4)
-        rospy.set_param("~atlas/max_linear_velocity", 0.1)
+        # rospy.set_param("~atlas/duration", 2.0)
+        rospy.set_param("~atlas/planned_manipulation/allow_incomplete_planning", False)
+        rospy.set_param("~atlas/planned_manipulation/num_acceptable_consecutive_failures", 10)
+        rospy.set_param("~atlas/planned_manipulation/plan_visualization_density", 0.5)
+        rospy.set_param("~atlas/planned_manipulation/visualize_on_plan", True)
+        rospy.set_param("~atlas/planned_manipulation/max_angular_velocity", 0.4)
+        rospy.set_param("~atlas/planned_manipulation/max_linear_velocity", 0.1)
 
         rospy.set_param("~atlas/navigation_mode", "AUTO_WALKER")
-        rospy.set_param("~atlas/plan_footsteps", True)
-        rospy.set_param("~atlas/plan_through_unknown_cells", True)
-        rospy.set_param("~atlas/assume_flat_ground", True)
-        rospy.set_param("~atlas/auto_walker_timeout", 10.0)
+        rospy.set_param("~atlas/auto_walker/plan_footsteps", True)
+        rospy.set_param("~atlas/auto_walker/plan_through_unknown_cells", True)
+        rospy.set_param("~atlas/auto_walker/assume_flat_ground", True)
+        rospy.set_param("~atlas/auto_walker/auto_walker_timeout", 10.0)
 
         rospy.set_param("~atlas/reactive_walk/success_radius", 0.4)
         rospy.set_param("~atlas/reactive_walk/max_vel", 0.15)
@@ -336,9 +336,19 @@ class AtlasPathPlanner(PathPlanner) :
         try :
             executor = rospy.ServiceProxy("/planned_manipulation/execute", ExecuteManipulationPlan)
             resp = executor(req)
-            # for p in resp.progress :
-            #     rospy.loginfo(str("AtlasPathPlanner::execute_plans(" + group_name + ") progress: " + str(p)))
-            return True
+
+            rospy.loginfo("AtlasPathPlanner::execute_plans() -- polling feedback")
+            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+
+            while not fb_msg.feedback.execution_complete:
+                fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+
+            rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
+            if fb_msg.feedback.execution_progress > 0.98 :            
+                return True
+            else :
+                return False
+
         except rospy.ServiceException, e:
             rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
                 + ") -- ExecuteCommand service call failed for plan: " + str(plan_name) 
@@ -748,10 +758,10 @@ class AtlasPathPlanner(PathPlanner) :
             return False
 
         goal = matec_actions.msg.PlannedManipulationGoal()
-        goal.visualize_on_plan = rospy.get_param("~atlas/visualize_on_plan")
-        goal.allow_incomplete_planning = rospy.get_param("~atlas/allow_incomplete_planning")
-        goal.num_acceptable_consecutive_failures = rospy.get_param("~atlas/num_acceptable_consecutive_failures")
-        goal.plan_visualization_density = rospy.get_param("~atlas/plan_visualization_density")
+        goal.visualize_on_plan = rospy.get_param("~atlas/planned_manipulation/visualize_on_plan")
+        goal.allow_incomplete_planning = rospy.get_param("~atlas/planned_manipulation/allow_incomplete_planning")
+        goal.num_acceptable_consecutive_failures = rospy.get_param("~atlas/planned_manipulation/num_acceptable_consecutive_failures")
+        goal.plan_visualization_density = rospy.get_param("~atlas/planned_manipulation/plan_visualization_density")
         goal.execute_on_plan = True in [self.auto_execute[g] for g in group_names]
        
         goal.plan_name = ""
@@ -774,8 +784,8 @@ class AtlasPathPlanner(PathPlanner) :
         for segment in segments :
 
             motion = matec_msgs.msg.GoalMotion()
-            motion.max_angular_velocity = rospy.get_param("~atlas/max_angular_velocity")
-            motion.max_linear_velocity = rospy.get_param("~atlas/max_linear_velocity")
+            motion.max_angular_velocity = rospy.get_param("~atlas/planned_manipulation/max_angular_velocity")
+            motion.max_linear_velocity = rospy.get_param("~atlas/planned_manipulation/max_linear_velocity")
             motion.stable_frame = self.get_robot_planning_frame()
             motion.segment_duration = 0.0
             motion.available_joints = []
@@ -854,13 +864,13 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client.send_goal(goal)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
-        fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+        fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
         while not fb_msg.feedback.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
-        rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE(?)")
-        if fb_msg.feedback.planning_progress > 0.0 :            
+        rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
+        if fb_msg.feedback.planning_progress > 0.98 :            
             p = self.get_plan()
             return p
         else :
@@ -904,9 +914,9 @@ class AtlasPathPlanner(PathPlanner) :
         goal = auto_walker.msg.AutonomousWalkGoal()
         goal.targets = copy.deepcopy(waypoints)
         goal.execute_on_plan = False
-        goal.assume_flat_ground = rospy.get_param("~atlas/assume_flat_ground")
-        goal.plan_through_unknown_cells = rospy.get_param("~atlas/plan_through_unknown_cells")
-        goal.solver_timeout = rospy.get_param("~atlas/auto_walker_timeout")
+        goal.assume_flat_ground = rospy.get_param("~atlas/auto_walker/assume_flat_ground")
+        goal.plan_through_unknown_cells = rospy.get_param("~atlas/auto_walker/plan_through_unknown_cells")
+        goal.solver_timeout = rospy.get_param("~atlas/auto_walker/auto_walker_timeout")
 
         rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- sending goal")
         # Sends the goal to the action server.

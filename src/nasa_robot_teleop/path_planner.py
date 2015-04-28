@@ -326,7 +326,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        print "creating purple viz of joint traj from ", len(joint_trajectory.points), " points. mode = ", display_mode
+        rospy.loginfo(str("PathPlanner::joint_trajectory_to_marker_array() -- creating purple viz of joint traj from " + str(len(joint_trajectory.points)) + " points. mode = " + str(display_mode)))
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -608,22 +608,15 @@ class PathPlanner(object):
             waypoints = []
             rospy.loginfo(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
             
-            print goals
             for p in goals[idx] :
                 p.header.stamp = rospy.Time(0)
                 group_planning_frame = self.get_group_planning_frame(group_name)
                 pt = geometry_msgs.msg.PoseStamped()
                 pt.pose.orientation.w = 1.0
                 pt.header.frame_id = group_planning_frame
-                print group_name
-                print p
-                print group_planning_frame
                 if p.header.frame_id != group_planning_frame :
-                    print "Transforming pose"
                     self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(5.0))
-                    print "found transform"
                     pt = self.tf_listener.transformPose(group_planning_frame, p)
-                    print "transformed"
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
             idx += 1
