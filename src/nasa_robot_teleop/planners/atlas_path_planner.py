@@ -338,17 +338,18 @@ class AtlasPathPlanner(PathPlanner) :
             resp = executor(req)
 
             rospy.loginfo("AtlasPathPlanner::execute_plans() -- polling feedback")
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            # fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
-            while not fb_msg.feedback.execution_complete:
-                fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            # while not fb_msg.feedback.execution_complete:
+            #     fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
-            rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
-            if fb_msg.feedback.execution_progress > 0.98 :            
-                return True
-            else :
-                return False
-
+            # rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
+            # if fb_msg.feedback.execution_progress > 0.9 :            
+            #     return True
+            # else :
+            #     return False
+            return True
+            
         except rospy.ServiceException, e:
             rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
                 + ") -- ExecuteCommand service call failed for plan: " + str(plan_name) 
@@ -864,13 +865,13 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client.send_goal(goal)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
-        fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+        fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
         while not fb_msg.feedback.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
-        if fb_msg.feedback.planning_progress > 0.98 :            
+        if fb_msg.feedback.planning_progress > 0.9 :            
             p = self.get_plan()
             return p
         else :
