@@ -349,7 +349,7 @@ class AtlasPathPlanner(PathPlanner) :
             # else :
             #     return False
             return True
-            
+
         except rospy.ServiceException, e:
             rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
                 + ") -- ExecuteCommand service call failed for plan: " + str(plan_name) 
@@ -945,10 +945,10 @@ class AtlasPathPlanner(PathPlanner) :
                     rospy.loginfo("AtlasPathPlanner::plan_path_auto_walker() -- got footsteps!")
 
                 except rospy.ServiceException, e:
-                    rospy.logerr(str("AtlasPathPlanner::plan_path_auto_walker() -- faild to get step service" + str(e)))
+                    rospy.logerr(str("AtlasPathPlanner::plan_path_auto_walker() -- failed to get step service: " + str(e)))
 
             except rospy.ROSException as e:
-                rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- faile to wait for step service: " + str(e))
+                rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- failed to wait for step service: " + str(e))
 
         except rospy.ROSException as e:
             rospy.logerr("AtlasPathPlanner::plan_path_auto_walker() -- failed to get feedback message: " + str(e))

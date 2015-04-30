@@ -13,9 +13,9 @@ import sensor_msgs.msg
 import trajectory_msgs.msg
 import moveit_msgs.msg
 import actionlib_msgs.msg
+import control_msgs.msg
 
 from nasa_robot_teleop.path_planner import *
-
 from nasa_robot_teleop.msg import *
 from nasa_robot_teleop.srv import *
 
@@ -45,6 +45,8 @@ class MoveItPathPlanner(PathPlanner) :
         self.obstacle_markers = visualization_msgs.msg.MarkerArray()
         self.obstacle_publisher = rospy.Publisher(str('/' + self.robot_name + '/obstacle_markers'), visualization_msgs.msg.MarkerArray, queue_size=10)
         
+        self.action_clients = {}
+       
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\' finished"))
         
     ##############################
@@ -71,8 +73,11 @@ class MoveItPathPlanner(PathPlanner) :
 
             # topic_name = "/" + controller_name + "/command"
             topic_name = "/" + controller_name + "/goal"
+            action_name = "/" + controller_name
             rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
+            self.action_clients[group_name] = actionlib.SimpleActionClient(action_name, control_msgs.msg.FollowJointTrajectoryAction)
             self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
+
         except :
             rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up controller for: " + group_name))
             r = False
@@ -106,7 +111,7 @@ class MoveItPathPlanner(PathPlanner) :
             import yaml
             try:
                 controllers_file = self.config_package + "/config/controllers.yaml"
-                rospy.logdebug("Controller yaml: " + controllers_file)
+                rospy.loginfo("Controller yaml: " + controllers_file)
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
                 rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
@@ -119,10 +124,15 @@ class MoveItPathPlanner(PathPlanner) :
                         break
             self.group_controllers[group_name] = ""
             for c in controller_config['controller_list'] :
+                ns = ""
+                try :
+                    ns = "/" + c['action_ns']
+                except :
+                    pass
                 if jn in c['joints'] :
-                    self.group_controllers[group_name] = c['name'] + "/" + c['action_ns']
+                    self.group_controllers[group_name] = c['name'] + ns
 
-        rospy.logdebug(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
+        rospy.loginfo(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
 
     #################################
@@ -224,22 +234,30 @@ class MoveItPathPlanner(PathPlanner) :
     def execute_plans(self, group_names, from_stored=False, wait=True) :
         for group_name in group_names :
             if self.plan_generated[group_name] and self.stored_plans[group_name] :
-                rospy.loginfo(str("MoveItPathPlanner::execute_plan() -- executing plan for group: " + group_name))
+                rospy.loginfo(str("MoveItPathPlanner::execute_plans() -- executing plan for group: " + group_name))
                 if self.actionlib :
-                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
+                    rospy.logdebug("MoveItPathPlanner::execute_plans() -- using actionlib")
                     r = self.go(group_name, wait)
                 else :
-                    rospy.logdebug("MoveItPathPlanner::execute_plan() -- publishing to topic")
+                    rospy.logdebug("MoveItPathPlanner::execute_plans() -- publishing to topic")
+                    print type(self.stored_plans[group_name])
                     jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
-                    N = len(jt.goal.trajectory.points)
+                    N = len(jt.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
-                    self.command_topics[group_name].publish(jt)
+                    # N = len(jt.goal.trajectory.points)
+                    #self.command_topics[group_name].publish(jt)
                     self.plan_generated[group_name] = False
+
+                    if not self.action_clients[group_name].wait_for_server(rospy.Duration(5.0)) :
+                        rospy.logerr("MoveItPathPlanner::execute_plans() -- wait for raction_clients timeout")
+                        return False
+
+                    self.action_clients[group_name].send_goal(jt)
                     r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
             else :
-                rospy.logwarn(str("MoveItPathPlanner::execute_plan() -- no plan for group " + group_name + " yet generated."))
+                rospy.logwarn(str("MoveItPathPlanner::execute_plans() -- no plan for group " + group_name + " yet generated."))
                 r = False
-            rospy.logdebug(str("MoveItPathPlanner::execute_plan() -- plan execution: " + str(r)))
+            rospy.logdebug(str("MoveItPathPlanner::execute_plans() -- plan execution: " + str(r)))
 
     # This is the main execution function for sending trajectories to the robot.
     # This will only return True if the plan has been previously (successfully) generated.
@@ -249,15 +267,22 @@ class MoveItPathPlanner(PathPlanner) :
         r = False
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
             rospy.loginfo(str("MoveItPathPlanner::execute_plan() -- executing plan for group: " + group_name))
+            print self.actionlib
             if self.actionlib :
                 rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
                 r = self.go(group_name, wait)
             else :
                 rospy.logdebug("MoveItPathPlanner::execute_plan() -- publishing to topic")
                 jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
-                N = len(jt.goal.trajectory.points)
+                N = len(jt.trajectory.points)
                 rospy.logwarn(str("executing path of " + str(N) + " points"))
-                self.command_topics[group_name].publish(jt)
+                #N = len(jt.goal.trajectory.points)
+                # self.command_topics[group_name].publish(jt)
+                if not self.action_clients[group_name].wait_for_server(rospy.Duration(5.0)) :
+                    rospy.logerr("MoveItPathPlanner::execute_plan() -- wait for action_clients server timeout")
+                    return False
+
+                self.action_clients[group_name].send_goal(jt)
                 self.plan_generated[group_name] = False
                 r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
         else :
@@ -332,6 +357,7 @@ class MoveItPathPlanner(PathPlanner) :
                 try :
                     self.groups[group_name].set_pose_target(goals[idx])       
                     plan = self.groups[group_name].plan()
+                    print plan
                     # if self.auto_execute[group_name] :
                     #     self.execute(group_name, from_stored=True)
                     traj_results[group_name] = plan.joint_trajectory
@@ -366,6 +392,7 @@ class MoveItPathPlanner(PathPlanner) :
                         # this jump parameter often makes it fail---more investigation needed here.
                         # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
                         (plan, fraction) = self.groups[group_name].compute_cartesian_path(stripped_path, 0.01, 0)  
+                        print plan
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
@@ -375,8 +402,6 @@ class MoveItPathPlanner(PathPlanner) :
                 except :
                     rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed"))
 
-        print "traj_results"
-        print traj_results            
         return traj_results
 
                 
@@ -415,16 +440,25 @@ class MoveItPathPlanner(PathPlanner) :
 
     # this takes the JointTrajectory msg and converts it to a FollowJointTrajectoryActionGoal msg
     def translate_to_actionlib_goal_msg(self, jt, group_name, duration=2.0) :
-        from control_msgs.msg import FollowJointTrajectoryActionGoal
+        from control_msgs.msg import FollowJointTrajectoryActionGoal, FollowJointTrajectoryGoal
         from actionlib_msgs.msg import GoalID
         t = rospy.Time.now()
         ag = FollowJointTrajectoryActionGoal()
+
         ag.header.stamp = t
         ag.goal_id.stamp = t
-        ag.goal_id.id = str("action_goal[" + group_name + "]_" + str(int(random.random()*10000000)))
-        ag.goal.trajectory = jt
-        ag.goal.goal_time_tolerance = rospy.Duration(duration)       
-        return ag
+        ag.goal_id.id = str("action_goal_" + group_name + "_" + str(int(random.random()*10000000)))
+        
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory = jt
+
+        for p in goal.trajectory.points :
+            p.velocities = [0]*len(p.positions)
+            p.accelerations = [0]*len(p.positions)
+        goal.goal_time_tolerance = rospy.Duration(duration)       
+        
+        ag.goal = goal
+        return goal
 
     def has_joint_map(self, group_name) :
         return False

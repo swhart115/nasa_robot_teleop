@@ -176,7 +176,7 @@ class PathPlanner(object):
     
         self.plan_generated[group_name] = False
         self.stored_plans[group_name] = None
-        self.display_modes[group_name] = "all_points"
+        self.display_modes[group_name] = "last_point"
         self.auto_execute[group_name] = False
 
         self.group_types[group_name] = group_type
@@ -202,7 +202,6 @@ class PathPlanner(object):
                         if self.srdf_model.end_effectors[ee].parent_group == group_name :
                             self.end_effector_map[group_name] = ee
                             self.add_planning_group(self.srdf_model.end_effectors[ee].group, "endeffector") 
-
                 else :
                     self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                    
@@ -224,18 +223,7 @@ class PathPlanner(object):
                     self.control_meshes[group_name] = ""
                 self.end_effector_display[group_name] = end_effector.EndEffectorHelper(self.robot_name, group_name, self.get_control_frame(group_name), self.tf_listener)
                 self.end_effector_display[group_name].populate_data(self.get_group_links(group_name), self.get_urdf_model(), self.get_srdf_model())
-             #     if self.has_end_effector_link(group_name) :
-            #         ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
-            #     print "ee_link: ", ee_link
-            #     try :
-            #         self.control_meshes[group_name] = get_child_mesh(self.urdf_model, ee_link)
-            #     except :
-            #         rospy.logwarn("no mesh found")
-                # for ee in self.srdf_model.end_effectors.keys() :
-                #     if self.srdf_model.end_effectors[ee].parent_group == group_name :
-                #         self.end_effector_map[group_name] = ee
-                #         self.add_planning_group(self.srdf_model.end_effectors[ee].group, group_type="endeffector",
-                #             joint_tolerance=joint_tolerance, position_tolerances=position_tolerances, orientation_tolerances=orientation_tolerances)
+
 
         except :
             rospy.logerr(str("PathPlanner::add_planning_group() -- Robot " + self.robot_name + " has problem setting up group: " + group_name))
