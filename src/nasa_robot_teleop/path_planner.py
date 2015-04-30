@@ -60,7 +60,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 1
+        self.path_increment = 5
 
         self.gripper_action = {}
         self.gripper_client = {}
@@ -610,6 +610,7 @@ class PathPlanner(object):
             idx += 1
 
         rospy.loginfo("PathPlanner::create_path_plan() -- planning Cartesian path(s)")
+
         try :
             stored_plan = self.plan_cartesian_paths(group_names, waypoints_list)       
         except :
@@ -646,17 +647,20 @@ class PathPlanner(object):
     def execute(self, group_names, from_stored=True, wait=False) :
         rospy.loginfo("PathPlanner::execute()")
         planner_groups = []
-        ret = {}
+        all_ret = {}
+        manip_ret = {}
         for group_name in group_names :
             rospy.loginfo("PathPlanner::execute() -- " + group_name)
             if self.group_types[group_name] == "endeffector" and self.gripper_client:
                 rospy.loginfo("PathPlanner::execute() -- using gripper service")
-                ret[group_name] = self.execute_gripper_action(group_name)
+                all_ret[group_name] = self.execute_gripper_action(group_name)
             else :
                 planner_groups.append(group_name)
+        manip_ret = self.execute_plans(planner_groups, from_stored, wait)
+
         for group_name in planner_groups :
-            ret[group_name] = self.execute_plans(planner_groups, from_stored, wait)
-        return ret
+            all_ret[group_name] = manip_ret[group_name]
+        return all_ret
 
     ##########################
     ##### print methods ######

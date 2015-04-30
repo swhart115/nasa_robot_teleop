@@ -232,15 +232,15 @@ class MoveItPathPlanner(PathPlanner) :
     ###################################
   
     def execute_plans(self, group_names, from_stored=False, wait=True) :
+        ret = {}
         for group_name in group_names :
             if self.plan_generated[group_name] and self.stored_plans[group_name] :
                 rospy.loginfo(str("MoveItPathPlanner::execute_plans() -- executing plan for group: " + group_name))
                 if self.actionlib :
                     rospy.logdebug("MoveItPathPlanner::execute_plans() -- using actionlib")
-                    r = self.go(group_name, wait)
+                    ret[group_name] = self.go(group_name, wait)
                 else :
                     rospy.logdebug("MoveItPathPlanner::execute_plans() -- publishing to topic")
-                    print type(self.stored_plans[group_name])
                     jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
                     N = len(jt.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
@@ -249,15 +249,16 @@ class MoveItPathPlanner(PathPlanner) :
                     self.plan_generated[group_name] = False
 
                     if not self.action_clients[group_name].wait_for_server(rospy.Duration(5.0)) :
-                        rospy.logerr("MoveItPathPlanner::execute_plans() -- wait for raction_clients timeout")
-                        return False
+                        rospy.logerr("MoveItPathPlanner::execute_plans() -- wait for action_clients timeout")
+                        ret[group_name] = False
 
                     self.action_clients[group_name].send_goal(jt)
-                    r = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+                    ret[group_name] = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
             else :
                 rospy.logwarn(str("MoveItPathPlanner::execute_plans() -- no plan for group " + group_name + " yet generated."))
-                r = False
-            rospy.logdebug(str("MoveItPathPlanner::execute_plans() -- plan execution: " + str(r)))
+                ret[group_name] = False
+            rospy.logdebug(str("MoveItPathPlanner::execute_plans() -- plan execution: " + str(ret[group_name])))
+        return ret
 
     # This is the main execution function for sending trajectories to the robot.
     # This will only return True if the plan has been previously (successfully) generated.
@@ -267,7 +268,6 @@ class MoveItPathPlanner(PathPlanner) :
         r = False
         if self.plan_generated[group_name] and self.stored_plans[group_name] :
             rospy.loginfo(str("MoveItPathPlanner::execute_plan() -- executing plan for group: " + group_name))
-            print self.actionlib
             if self.actionlib :
                 rospy.logdebug("MoveItPathPlanner::execute_plan() -- using actionlib")
                 r = self.go(group_name, wait)
@@ -357,7 +357,6 @@ class MoveItPathPlanner(PathPlanner) :
                 try :
                     self.groups[group_name].set_pose_target(goals[idx])       
                     plan = self.groups[group_name].plan()
-                    print plan
                     # if self.auto_execute[group_name] :
                     #     self.execute(group_name, from_stored=True)
                     traj_results[group_name] = plan.joint_trajectory
@@ -392,7 +391,6 @@ class MoveItPathPlanner(PathPlanner) :
                         # this jump parameter often makes it fail---more investigation needed here.
                         # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
                         (plan, fraction) = self.groups[group_name].compute_cartesian_path(stripped_path, 0.01, 0)  
-                        print plan
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
@@ -401,6 +399,7 @@ class MoveItPathPlanner(PathPlanner) :
                         rospy.logerr("MoveItInterface::plan_cartesian_paths() -- Generating Cartesian Path Plan Failed")
                 except :
                     rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed"))
+            idx += 1
 
         return traj_results
 
