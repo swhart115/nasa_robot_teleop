@@ -526,16 +526,22 @@ class NavigationWaypointControl(threading.Thread) :
 
 if __name__=="__main__":
 
-    parser = argparse.ArgumentParser(description='Navigation Control')
-    parser.add_argument('-r, --robot', dest='robot', help='e.g. r2')
-    parser.add_argument('-f, --frame', dest='frame', help='e.g. /world')
-    args = parser.parse_args()
 
     rospy.init_node("NavigationControl")
 
-    server = InteractiveMarkerServer(str(args.robot + "_interactive_marker_server"))
+    robot = rospy.get_param("~robot", "atlas")
+    planner_config_file = rospy.get_param("~planner_config_file", None)   
+    navigation_frame = rospy.get_param("~navigation_frame", None)
+    robot_reference_frame = rospy.get_param("~robot_reference_frame", "")
 
-    nc = NavigationWaypointControl(args.robot, server, args.frame)
+    server = InteractiveMarkerServer(str(robot + "_interactive_marker_server"))
+    tf_listener = tf.TransformListener()
+
+    from nasa_robot_teleop.planners.atlas_path_planner import AtlasPathPlanner
+    path_planner = AtlasPathPlanner(robot, planner_config_file)
+
+    nc = NavigationWaypointControl(robot, server, navigation_frame, tf_listener, robot_reference_frame)
+    nc.set_path_planner(path_planner)
     nc.activate_navigation_markers(True)
 
     r = rospy.Rate(100.0)
