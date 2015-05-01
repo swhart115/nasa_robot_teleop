@@ -318,6 +318,8 @@ class AtlasPathPlanner(PathPlanner) :
 
         plan_name = ""       
 
+        ret = {}
+
         for group_name in group_names :
         
             rospy.loginfo(str("AtlasPathPlanner::execute_plans(" + group_name + ")"))
@@ -328,6 +330,7 @@ class AtlasPathPlanner(PathPlanner) :
                 continue
 
             plan_name += str("/") + group_name
+            ret[group_name] = False
 
         req = ExecuteManipulationPlanRequest()
         rospy.logwarn(str("AtlasPathPlanner::execute_plans for " + plan_name ))
@@ -348,13 +351,15 @@ class AtlasPathPlanner(PathPlanner) :
             #     return True
             # else :
             #     return False
-            return True
+            for group_name in ret.keys() :
+                ret[group_name] = True
 
         except rospy.ServiceException, e:
             rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
                 + ") -- ExecuteCommand service call failed for plan: " + str(plan_name) 
                 + " -- possibly a joint plan"))
-            return False
+        
+        return ret
 
     def execute_navigation_plan(self, footsteps=None, lift_heights=None, feet=None, goals=None) :
 
@@ -1031,9 +1036,9 @@ class AtlasPathPlanner(PathPlanner) :
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
             req.plans_in_parallel = False
-            req.plan_visualization_density = rospy.get_param("~atlas/plan_visualization_density")
+            req.plan_visualization_density = rospy.get_param("~atlas/planned_manipulation/plan_visualization_density")
             get_plan = rospy.ServiceProxy('/planned_manipulation/visualize', VisualizeManipulationPlan)
-            resp = get_plan(req)
+            resp = get_plan(req)           
         except :
             rospy.logerr("AtlasPathPlanner::get_plan_viz() -- service call failed")
             return None

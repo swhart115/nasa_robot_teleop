@@ -280,6 +280,12 @@ class PathPlanner(object):
         return bridge_topic_name
 
 
+    def is_plan_generated(self, group) :
+        if group in self.plan_generated :
+            return self.plan_generated[group]
+        else :
+            return False
+            
     #############################
     ##### path pub methods ######
     #############################
@@ -603,7 +609,8 @@ class PathPlanner(object):
                 pt.pose.orientation.w = 1.0
                 pt.header.frame_id = group_planning_frame
                 if p.header.frame_id != group_planning_frame :
-                    self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(5.0))
+                    print "waiting for transform from frame ", p.header.frame_id, "to ", group_planning_frame
+                    self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(3.0))
                     pt = self.tf_listener.transformPose(group_planning_frame, p)
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
@@ -888,8 +895,16 @@ class PathPlanner(object):
         rospy.logwarn("PathPlanner::set_start_foot() -- not implemented")
         raise NotImplementedError
 
-    def clear_goal_targets(self, group_names) :
+    def get_foot_display_pose_offset(self, foot_name) :
+        rospy.logwarn("PathPlanner::get_foot_display_pose_offset() -- not implemented")
+        raise NotImplementedError
+
+    def clear_goal_target(self, group_names) :
         rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
+        raise NotImplementedError
+
+    def clear_goal_targets(self, group_names) :
+        rospy.logerror("PathPlanner::clear_goal_targets() -- not implemented")
         raise NotImplementedError
 
     def get_navigation_modes(self) :

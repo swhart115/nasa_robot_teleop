@@ -140,6 +140,9 @@ class InteractiveControl:
         elif planner_type == "srv" :
             from nasa_robot_teleop.planners.srv_path_planner import SrvPathPlanner
             self.path_planner = SrvPathPlanner(self.robot_name, self.planner_config_file)
+        elif planner_type == "hybrid" :
+            from nasa_robot_teleop.planners.atlas_hybrid_path_planner import AtlasHybridPathPlanner
+            self.path_planner = AtlasHybridPathPlanner(self.robot_name, self.planner_config_file)
         else :
             rospy.logerr("InteractiveControl() unrecognized planner type!!")
             exit()
@@ -363,11 +366,12 @@ class InteractiveControl:
         
         for g in self.path_planner.srdf_model.get_groups() :
             resp.group_name.append(g)
+
         for g in self.markers.keys() :
             try :
                 resp.active_group_name.append(g)
                 resp.group_type.append(self.get_group_type(g))
-                resp.plan_found.append(self.path_planner.plan_generated[g])
+                resp.plan_found.append(self.path_planner.is_plan_generated(g))
             except :
                 rospy.logdebug("InteractiveControl::populate_service_response() -- problem with basic joint data")
             

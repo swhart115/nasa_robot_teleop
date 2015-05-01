@@ -2,10 +2,10 @@
 <launch>
     <node pkg="nasa_robot_teleop" type="interactive_control.py" name="interactive_control" output="screen"> 
 		<param name="robot" value="atlas"/>
-		<param name="planner_type" value="moveit"/>
-		<param name="navigation_frame" value=""/>
+		<param name="planner_type" value="hybrid"/>
+		<param name="navigation_frame" value="global"/>
 		<param name="robot_reference_frame" value="ground"/>
-		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/atlas_moveit.yaml"/>
+		<param name="group_config_file" value="$(find nasa_robot_teleop)/config/atlas.yaml"/>
 		<param name="planner_config_file" value="$(find new_atlas_moveit_config)/config/atlas.srdf"/>
 		<param name="tolerance_file" value="$(find nasa_robot_teleop)/config/tolerances.yaml"/>
      	<param name="gripper_action" value="$(find nasa_robot_teleop)/config/atlas_sim_grippers.yaml"/>  
