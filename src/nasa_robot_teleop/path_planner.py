@@ -201,7 +201,9 @@ class PathPlanner(object):
                     for ee in self.srdf_model.end_effectors.keys() :
                         if self.srdf_model.end_effectors[ee].parent_group == group_name :
                             self.end_effector_map[group_name] = ee
+                            rospy.logwarn(str("TRYING TO ADD END EFFECTOR GROUP " + self.srdf_model.end_effectors[ee].group + " FOR CARTESIAN GROUP " + group_name))
                             self.add_planning_group(self.srdf_model.end_effectors[ee].group, "endeffector") 
+                            rospy.logwarn(str("FINISHED"))
                 else :
                     self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                    
@@ -285,7 +287,7 @@ class PathPlanner(object):
             return self.plan_generated[group]
         else :
             return False
-            
+
     #############################
     ##### path pub methods ######
     #############################

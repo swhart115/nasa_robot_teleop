@@ -57,13 +57,6 @@ class AtlasPathPlanner(PathPlanner) :
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
 
-        # rospy.set_param("~atlas/interpolation_type", 1)
-        # rospy.set_param("~atlas/num_visualizaton_points", 5)
-        # rospy.set_param("~atlas/visualize_path", True)
-        # rospy.set_param("~atlas/maintain_hand_pose_offsets", False)
-        # rospy.set_param("~atlas/move_as_far_as_possible", False)
-
-        # rospy.set_param("~atlas/duration", 2.0)
         rospy.set_param("~atlas/planned_manipulation/allow_incomplete_planning", False)
         rospy.set_param("~atlas/planned_manipulation/num_acceptable_consecutive_failures", 10)
         rospy.set_param("~atlas/planned_manipulation/plan_visualization_density", 0.5)
@@ -93,7 +86,7 @@ class AtlasPathPlanner(PathPlanner) :
         
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
-        # self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
+        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server_feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
         # self.planner_viz_feedback_sub = rospy.Subscriber('/planned_manipulation/plan_visual', control_msgs.msg.FollowJointTrajectoryGoal, self.planner_viz_feedback)
       
         try :
@@ -341,10 +334,10 @@ class AtlasPathPlanner(PathPlanner) :
             resp = executor(req)
 
             rospy.loginfo("AtlasPathPlanner::execute_plans() -- polling feedback")
-            # fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            # fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
             # while not fb_msg.feedback.execution_complete:
-            #     fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            #     fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
             # rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
             # if fb_msg.feedback.execution_progress > 0.9 :            
@@ -870,10 +863,10 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client.send_goal(goal)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
-        fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+        fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
         while not fb_msg.feedback.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server/feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
         if fb_msg.feedback.planning_progress > 0.9 :            
