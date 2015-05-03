@@ -322,7 +322,9 @@ class FootstepControl(object) :
         return toMsg(T_foot)
 
 
-    def update_footstep_markers_from_server(self) :       
+    def update_footstep_markers_from_server(self) :  
+        rospy.loginfo(str("FootstepControl::update_footstep_markers_from_server()"))
+         
         for m in self.footstep_markers.keys() :
             self.footstep_markers[m].pose = self.server.get(m).pose
 
@@ -357,7 +359,10 @@ class FootstepControl(object) :
         else :
             filename = path + "/store/footpaths/" + self.footstep_filename
 
+        self.update_footstep_markers_from_server()
         step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
+
+        print step_poses
         for idx in range(len(step_poses)) :
             self.tf_listener.waitForTransform("nav_goal", step_poses[idx].header.frame_id, rospy.Time(0), rospy.Duration(3.0))
             step_poses[idx] = self.tf_listener.transformPose("nav_goal", step_poses[idx])          

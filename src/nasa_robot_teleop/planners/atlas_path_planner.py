@@ -618,7 +618,7 @@ class AtlasPathPlanner(PathPlanner) :
         return True
 
     def direct_move(self, goal) :
-        navigation_mode = get_navigation_mode()
+        navigation_mode = self.get_navigation_mode()
         try:
             if navigation_mode == "REACTIVE_WALKER" :
                 self.execute_reactive_walker([goal])
