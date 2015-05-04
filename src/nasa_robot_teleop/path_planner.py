@@ -511,13 +511,19 @@ class PathPlanner(object):
             # some planners might reutrn a combined/aggregate plan for all the groups,
             # if so, tease out the plan for just hte group joints and add it to storage
             # alternatively, the planne might return a dictionary of plans
+
+            self.stored_plans[group_name] = None
+
             if type(plan) == dict :
                 self.stored_plans[group_name] = plan[group_name]
             elif type(plan) == trajectory_msgs.msg.JointTrajectory : 
                 self.stored_plans[group_name] = self.get_subgroup_plan(plan, group_name)
+            if not plan :
+                rospy.logerr("PathPlanner::get_stored_plans_from_result() --failed ")
             else :
+                print type(plan)
                 rospy.logerr("PathPlanner::get_stored_plans_from_result() -- unknown return type from planner")
-                self.stored_plans[group_name] = None
+                
         return self.stored_plans
 
 

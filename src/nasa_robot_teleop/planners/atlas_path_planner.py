@@ -57,8 +57,12 @@ class AtlasPathPlanner(PathPlanner) :
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
         self.last_plan_name = ""
-        self.navigation_mode = rospy.get_param("~atlas/navigation_mode")
 
+        try :
+            self.navigation_mode = rospy.get_param("~atlas/navigation_mode")
+        except :
+            self.navigation_mode = ""
+            
         rospy.set_param("~atlas/planned_manipulation/allow_incomplete_planning", False)
         rospy.set_param("~atlas/planned_manipulation/num_acceptable_consecutive_failures", 10)
         rospy.set_param("~atlas/planned_manipulation/plan_visualization_density", 0.5)
