@@ -408,8 +408,8 @@ class Reflection(object):
 					if tag in unset_scalars:
 						element.set_from_xml(obj, child)
 						unset_scalars.remove(tag)
-					else:
-						on_error("Scalar element defined multiple times: {}\n".format(tag))
+					# else:
+					# 	on_error("Scalar element defined multiple times: {}\n".format(tag))
 				info.children.remove(child)
 
 		for attribute in map(self.attribute_map.get, unset_attributes):

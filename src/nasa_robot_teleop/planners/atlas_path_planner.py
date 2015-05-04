@@ -56,6 +56,8 @@ class AtlasPathPlanner(PathPlanner) :
         self.joint_names = []
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
+        self.last_plan_name = ""
+        self.navigation_mode = rospy.get_param("~atlas/navigation_mode")
 
         rospy.set_param("~atlas/planned_manipulation/allow_incomplete_planning", False)
         rospy.set_param("~atlas/planned_manipulation/num_acceptable_consecutive_failures", 10)
@@ -63,8 +65,11 @@ class AtlasPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/planned_manipulation/visualize_on_plan", True)
         rospy.set_param("~atlas/planned_manipulation/max_angular_velocity", 0.4)
         rospy.set_param("~atlas/planned_manipulation/max_linear_velocity", 0.1)
+        rospy.set_param("~atlas/planned_manipulation/planning_success_threshold", 0.9)
+        rospy.set_param("~atlas/planned_manipulation/execution_success_threshold", 0.9) 
 
         rospy.set_param("~atlas/navigation_mode", "AUTO_WALKER")
+
         rospy.set_param("~atlas/auto_walker/plan_footsteps", True)
         rospy.set_param("~atlas/auto_walker/plan_through_unknown_cells", True)
         rospy.set_param("~atlas/auto_walker/assume_flat_ground", True)
@@ -86,23 +91,21 @@ class AtlasPathPlanner(PathPlanner) :
         
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
-        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/server_feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
+        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/feedback', matec_actions.msg.PlannedManipulationFeedback, self.planner_feedback)
         # self.planner_viz_feedback_sub = rospy.Subscriber('/planned_manipulation/plan_visual', control_msgs.msg.FollowJointTrajectoryGoal, self.planner_viz_feedback)
       
         try :
-            rospy.loginfo("AtlasPathPlanner::init() -- waiting for visualization service")
-            self.connected_to_plan_viz = rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
+            rospy.logdebug("AtlasPathPlanner::init() -- waiting for visualization service")
+            rospy.wait_for_service('/planned_manipulation/visualize', 5.0)
+            self.connected_to_plan_viz = True
             if not self.connected_to_plan_viz :
-                rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service")  
+                rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service: /planned_manipulation/visualize")  
         except :
-            rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service")  
+            rospy.logwarn("AtlasPathPlanner::init() -- timeout out waiting for visualization service: /planned_manipulation/visualize")  
 
-        self.last_plan_name = ""
         self.get_joint_names()
 
-        self.navigation_mode = rospy.get_param("~atlas/navigation_mode")
-
-        rospy.loginfo(str("============ Setting up Path Planner for robot: \'" + self.robot_name + "\' finished"))
+        rospy.loginfo(str("============ Setting up AtlasPathPlanner finished"))
 
     ##############################
     ####### SETUP METHODS ########
@@ -154,7 +157,7 @@ class AtlasPathPlanner(PathPlanner) :
         return r
 
     def setup_group(self, group_name, joint_tolerance, position_tolerances, orientation_tolerances) :
-        rospy.loginfo(str("AtlasPathPlanner::setup_group() -- " + group_name))
+        rospy.logdebug(str("AtlasPathPlanner::setup_group() -- " + group_name))
         self.position_tolerances[group_name] = position_tolerances
         self.orientation_tolerances[group_name] = orientation_tolerances
         self.joint_tolerance[group_name] = joint_tolerance
@@ -165,7 +168,7 @@ class AtlasPathPlanner(PathPlanner) :
         if not group_name in self.srdf_model.groups :
             return False
 
-        rospy.loginfo(str("AtlasPathPlanner::load_group_from_srdf() -- group: " + group_name))
+        rospy.logdebug(str("AtlasPathPlanner::load_group_from_srdf() -- group: " + group_name))
 
         self.groups[group_name] = PlanGroupConfiguration()
         self.groups[group_name].joint_map = self.lookup_joint_map(group_name)
@@ -207,12 +210,8 @@ class AtlasPathPlanner(PathPlanner) :
 
         return joint_name_map
 
-    # def joint_name_callback(self, msg) :
-    #     self.joint_names = msg.data
-    #     rospy.loginfo("GOT JOINT NAMES!!")
-
     def get_joint_names(self) :
-        rospy.loginfo("AtlasPathPlanner::get_joint_names() -- getting joint names from service")
+        rospy.logdebug("AtlasPathPlanner::get_joint_names() -- getting joint names from service")
 
         try : 
             rospy.wait_for_service("/interactive_controls_bridge/get_joint_names", self.wait_for_service_timeout)
@@ -221,13 +220,14 @@ class AtlasPathPlanner(PathPlanner) :
             return None
         
         try :
-            rospy.loginfo(str("AtlasPathPlanner::get_joint_names() -- calling service"))
+            rospy.logdebug(str("AtlasPathPlanner::get_joint_names() -- calling service"))
             get_names = rospy.ServiceProxy("/interactive_controls_bridge/get_joint_names", GetJointNames)
             resp = get_names()
             self.joint_names = resp.joint_names
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::get_joint_names()" + str(e)))
             return None
+
 
     #################################
     ####### OBSTACLE METHODS ########
@@ -323,7 +323,7 @@ class AtlasPathPlanner(PathPlanner) :
                 continue
 
             plan_name += str("/") + group_name
-            ret[group_name] = False
+            ret[group_name] = True
 
         req = ExecuteManipulationPlanRequest()
         rospy.logwarn(str("AtlasPathPlanner::execute_plans for " + plan_name ))
@@ -333,19 +333,18 @@ class AtlasPathPlanner(PathPlanner) :
             executor = rospy.ServiceProxy("/planned_manipulation/execute", ExecuteManipulationPlan)
             resp = executor(req)
 
-            rospy.loginfo("AtlasPathPlanner::execute_plans() -- polling feedback")
-            # fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+            if wait :
+                rospy.loginfo("AtlasPathPlanner::execute_plans() -- polling feedback")
+                fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 3.0)
 
-            # while not fb_msg.feedback.execution_complete:
-            #     fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+                while not fb_msg.execution_complete:
+                    fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 3.0)
+                    rospy.sleep(0.05)
 
-            # rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
-            # if fb_msg.feedback.execution_progress > 0.9 :            
-            #     return True
-            # else :
-            #     return False
-            for group_name in ret.keys() :
-                ret[group_name] = True
+                rospy.loginfo("AtlasPathPlanner::execute_plans() -- EXECUTION COMPLETE")
+                if fb_msg.execution_progress > rospy.get_param("~atlas/planned_manipulation/execution_success_threshold") :            
+                    for group_name in ret.keys() :
+                        ret[group_name] = True
 
         except rospy.ServiceException, e:
             rospy.logwarn(str("AtlasPathPlanner::execute_plans(" + str(plan_name) 
@@ -441,21 +440,7 @@ class AtlasPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.walk_controller_client.send_goal(goal)
 
-        # Waits for the server to finish performing the action.
-        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- waiting for walk path result")
-        # self.walk_controller_client.wait_for_result()
-
-        # try :
-        #     fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        #     while not fb_msg.planning_complete:
-        #         fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        # except :
-        #     rospy.logwarn("AtlasPathPlanner::execute_walk_controller_from_steps() -- timeout on sending goal to walk")
-        
-        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_from_steps() -- COMPLETE(?)")
-
         # Prints out the result of executing the action
-        # print self.walk_controller_client.get_result()  
         status = self.walk_controller_client.get_state() == GoalStatus.SUCCEEDED
 
         return status
@@ -520,21 +505,7 @@ class AtlasPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.walk_controller_client.send_goal(goal)
 
-        # Waits for the server to finish performing the action.
-        # rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- waiting for walk path result")
-        # self.walk_controller_client.wait_for_result()
-
-        # try :
-        #     fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        #     while not fb_msg.planning_complete:
-        #         fb_msg = rospy.wait_for_message("/path_walker/feedback", walk_controller.msg.WalkPathActionFeedback, 3.0)
-        # except :
-        #     rospy.logwarn("AtlasPathPlanner::execute_walk_controller_direct() -- timeout on sending goal to walk")
-        
-        rospy.loginfo("AtlasPathPlanner::execute_walk_controller_direct() -- COMPLETE(?)")
-
         # Prints out the result of executing the action
-        # print self.walk_controller_client.get_result()  
         status = self.walk_controller_client.get_state() == GoalStatus.SUCCEEDED
 
         return status
@@ -562,20 +533,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         rospy.loginfo("AtlasPathPlanner::execute_auto_walker() -- sending goal")
         self.explicit_walk_client.send_goal(goal)
-
-        # try :
-        #     fb_msg = rospy.wait_for_message("/auto_walker/explicit_server_feedback", auto_walker.msg.ExplicitWalkActionFeedback, 3.0)
-        #     while not fb_msg.progress:
-        #         fb_msg = rospy.wait_for_message("/path_walker/feedback", auto_walker.msg.ExplicitWalkActionFeedback, 3.0)
-        # except :
-        #     rospy.logwarn("AtlasPathPlanner::execute_auto_walker() -- timeout on sending goal to walk")
         
-        rospy.loginfo("AtlasPathPlanner::execute_auto_walker() -- COMPLETE(?)")
-
-        # # Prints out the result of executing the action
-        # # print self.explicit_walk_client.get_result()  
-        # status = self.explicit_walk_client.get_state() == GoalStatus.SUCCEEDED
-
         status = self.explicit_walk_client.get_state() == GoalStatus.SUCCEEDED
 
         return status
@@ -625,8 +583,7 @@ class AtlasPathPlanner(PathPlanner) :
             elif navigation_mode == "WALK_CONTROLLER" :
                 self.execute_walk_controller(goal=[goal], footsteps=None, lift_heights=None, feet=None)
         except Exception as e:
-            print e
-            rospy.logerr("AtlasPathPlanner::direct_move() -- problems")
+            rospy.logerr(str("AtlasPathPlanner::direct_move() -- problems: " + str(e)))
 
     def get_navigation_modes(self) :
         return ["WALK_CONTROLLER", "AUTO_WALKER", "REACTIVE_WALKER"]
@@ -664,9 +621,6 @@ class AtlasPathPlanner(PathPlanner) :
         joint_names = []
         idx = 0
         for group in group_names :
-            # goal = goals[idx]
-            # if self.group_types[group] == "endeffector" :
-            #     self.create_joint_plan_from_goal(group, goal)
             group_joints = self.srdf_model.full_group_joints[group]
             for j in group_joints :
                 if j in joint_names :
@@ -717,10 +671,6 @@ class AtlasPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.joint_action_client.send_goal(goal)
 
-        # # Waits for the server to finish performing the action.
-        # rospy.loginfo("AtlasPathPlanner::plan_joint_paths() -- waiting for result")
-        # self.joint_action_client.wait_for_result()
-
         return goal.trajectory
         
 
@@ -766,6 +716,7 @@ class AtlasPathPlanner(PathPlanner) :
         goal.plan_name = ""
         for g in group_names :
             goal.plan_name += str("/") + g
+            self.plan_generated[g] = False
 
         self.last_plan_name = goal.plan_name
         rospy.logwarn("Setting plan_name: " + self.last_plan_name)
@@ -821,19 +772,6 @@ class AtlasPathPlanner(PathPlanner) :
                 final_region.Y.min = -rot_tol[2]
                 final_region.Y.max = rot_tol[2]
 
-                # final_region.x.min = -0.01
-                # final_region.x.max = 0.01
-                # final_region.y.min = -0.01
-                # final_region.y.max = 0.01
-                # final_region.z.min = -0.01
-                # final_region.z.max = 0.01
-                # final_region.R.min = -3.14
-                # final_region.R.max = 3.14
-                # final_region.P.min = -3.14
-                # final_region.P.max = 3.14
-                # final_region.Y.min = -3.14
-                # final_region.Y.max = 3.14
-
                 final_region.goal_frame.pose = wp.pose
                 final_region.goal_frame.header.stamp = rospy.Time(0)
                 final_region.goal_frame.header.frame_id = wp.header.frame_id.lstrip("/")
@@ -863,13 +801,17 @@ class AtlasPathPlanner(PathPlanner) :
         self.cartesian_reach_client.send_goal(goal)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
-        fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
-
-        while not fb_msg.feedback.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/server_feedback", matec_actions.msg.PlannedManipulationActionFeedback, 3.0)
+        try :
+            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        except :
+            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_paths() -- could not get feedback message on: /planned_manipulation/feedback"))
+            return None
+            
+        while not fb_msg.planning_complete:
+            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
 
         rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
-        if fb_msg.feedback.planning_progress > 0.9 :            
+        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
             p = self.get_plan()
             return p
         else :
@@ -1011,12 +953,33 @@ class AtlasPathPlanner(PathPlanner) :
         self.groups[group_name].joint_mask.mask = mask
         self.srdf_model.set_joint_mask(group_name, mask)
 
-    def planner_feedback(self, data) :
-        if data.feedback.planning_complete :
-            if data.feedback.planning_progress > 0.9 :
-                self.plan_generated[self.last_plan_name] = True
-            jt = self.get_plan() 
-            self.process_plan_viz(jt)
+    def planner_feedback(self, msg) :
+        
+        if self.last_plan_name == "" :
+            return 
+        
+        groups = self.last_plan_name.split("/")
+        groups.remove("")
+        if msg.planning_complete :
+            if msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :
+                new_plan_found = False
+                for g in groups :
+                    if not self.plan_generated[g] :
+                        new_plan_found = True
+                    self.plan_generated[g] = True
+                
+                if new_plan_found:
+                    jt = self.get_plan() 
+                    if isinstance(jt, trajectory_msgs.msg.JointTrajectory) :    
+                        self.process_plan_viz(jt)  
+                    else :
+                        rospy.logwarn("AtlasPathPlanner::planner_feedback() -- bad JointTrajectory msg") 
+
+        if msg.execution_complete :
+            if msg.execution_progress > rospy.get_param("~atlas/planned_manipulation/execution_success_threshold") :
+                self.execution_status[self.last_plan_name] = True
+            else :
+                self.execution_status[self.last_plan_name] = False
 
     def planner_viz_feedback(self, data) :
         jt = data.trajectory
@@ -1024,19 +987,20 @@ class AtlasPathPlanner(PathPlanner) :
 
     def get_plan(self) :    
 
+        rospy.sleep(0.2)
         try:
-            rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
             req.plans_in_parallel = False
-            req.plan_visualization_density = rospy.get_param("~atlas/planned_manipulation/plan_visualization_density")
-            get_plan = rospy.ServiceProxy('/planned_manipulation/visualize', VisualizeManipulationPlan)
-            resp = get_plan(req)           
-        except :
-            rospy.logerr("AtlasPathPlanner::get_plan_viz() -- service call failed")
+            req.plan_visualization_density = float(rospy.get_param("~atlas/planned_manipulation/plan_visualization_density"))
+            rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
+            get_plan_srv = rospy.ServiceProxy('/planned_manipulation/visualize', VisualizeManipulationPlan)
+            resp = get_plan_srv(req)           
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::get_plan() -- service call failed: " + str(e)))
             return None
         
-        rospy.loginfo("AtlasPathPlanner::get_plan_viz() -- publishing goal regions")
+        rospy.loginfo("AtlasPathPlanner::get_plan() -- publishing goal regions")
         self.goal_region_pub.publish(resp.goal_regions)     
 
         return resp.joint_trajectories.trajectory
@@ -1046,14 +1010,12 @@ class AtlasPathPlanner(PathPlanner) :
         joint_names = jt.joint_names
         group = self.get_group_from_names(joint_names)
         if group != "" :
-            rospy.loginfo(str("AtlasPathPlanner::get_plan_viz() -- trajectory for " + group))
+            rospy.loginfo(str("AtlasPathPlanner::process_plan_viz() -- trajectory for " + group))
      
             jm = self.groups[group].joint_map           
             jt_ordered = trajectory_msgs.msg.JointTrajectory()
             new_map = {}
 
-            # print "group joints: ", self.get_group_joints(group) 
-            # print "traj joints:  ", joint_names
             for j in self.get_group_joints(group) :
                 try :
                     if j in joint_names :
@@ -1066,12 +1028,8 @@ class AtlasPathPlanner(PathPlanner) :
             for p in jt.points :
                 if len(p.positions) != len(jt_ordered.joint_names) :
                     continue
-                # print p.positions
                 ordered_p = trajectory_msgs.msg.JointTrajectoryPoint()
                 for j in jt_ordered.joint_names :
-                    # print j
-                    # print new_map[j]
-                    # print p.positions[new_map[j]]
                     ordered_p.positions.append(p.positions[new_map[j]])
                 jt_ordered.points.append(ordered_p)
 

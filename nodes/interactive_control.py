@@ -767,7 +767,7 @@ class InteractiveControl:
 
     def set_gripper_actions(self, actions) :
         for a in actions :
-            rospy.loginfo(str("InteractiveControl::set_gripper_actions() -- found " + a['name'] + " gripper action: " + a['action']))
+            rospy.logdebug(str("InteractiveControl::set_gripper_actions() -- found " + a['name'] + " gripper action: " + a['action']))
             self.gripper_action[a['name']] = a['action']
         self.path_planner.set_gripper_actions(actions)
 
@@ -872,7 +872,6 @@ class InteractiveControl:
                 self.marker_menus[group].setCheckState(self.group_menu_handles[(group,mode,p)], MenuHandler.UNCHECKED )
 
     def reset_group_marker(self, group, delay=0) :
-        rospy.loginfo("InteractiveControl::reset_group_marker()")
         rospy.sleep(delay)
         if self.get_group_type(group) == "cartesian" :
             self.server.setPose(self.markers[group].name, Pose())

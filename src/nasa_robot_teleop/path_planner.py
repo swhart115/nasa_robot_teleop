@@ -55,6 +55,7 @@ class PathPlanner(object):
 
         self.display_modes = {}
         self.plan_generated = {}
+        self.execution_status = {}
         self.stored_plans = {}
         self.auto_execute = {}
         self.marker_store = {}
@@ -82,11 +83,11 @@ class PathPlanner(object):
 
     def create_models(self, config_file) :
 
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
+        rospy.logdebug("PathPlanner::create_models() -- Creating Robot Model from URDF....")
         self.urdf_model = urdf.Robot.from_parameter_server()
         if self.urdf_model == None : return False
 
-        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
+        rospy.logdebug("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
         self.srdf_model = SRDFModel(self.robot_name)
         if self.srdf_model == None : return False
 
@@ -97,9 +98,9 @@ class PathPlanner(object):
             self.joint_names = self.srdf_model.get_joint_names(g)
 
         try :
-            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
+            rospy.logdebug(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
             if self.srdf_model.parse_from_file(config_file) :
-                rospy.loginfo("PathPlanner::create_models() -- SRDF created")
+                rospy.logdebug("PathPlanner::create_models() -- SRDF created")
             # self.srdf_model.print_groups()
             return True
         except :
@@ -163,10 +164,10 @@ class PathPlanner(object):
 
     def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.02]*3, orientation_tolerances=[.05]*3) :
 
-        rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
+        rospy.logdebug(str("PathPlanner::add_planning_group() -- " + group_name))
 
         if not group_name in self.srdf_model.get_groups() :
-            rospy.logwarn(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
+            rospy.logdebug(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
             if group_name in self.active_groups :
                 self.active_groups.remove(group_name)
             return False
@@ -201,9 +202,7 @@ class PathPlanner(object):
                     for ee in self.srdf_model.end_effectors.keys() :
                         if self.srdf_model.end_effectors[ee].parent_group == group_name :
                             self.end_effector_map[group_name] = ee
-                            rospy.logwarn(str("TRYING TO ADD END EFFECTOR GROUP " + self.srdf_model.end_effectors[ee].group + " FOR CARTESIAN GROUP " + group_name))
                             self.add_planning_group(self.srdf_model.end_effectors[ee].group, "endeffector") 
-                            rospy.logwarn(str("FINISHED"))
                 else :
                     self.control_frames[group_name] = self.srdf_model.get_tip_link(group_name)
                    
@@ -322,7 +321,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        rospy.loginfo(str("PathPlanner::joint_trajectory_to_marker_array() -- creating purple viz of joint traj from " + str(len(joint_trajectory.points)) + " points. mode = " + str(display_mode)))
+        rospy.logdebug(str("PathPlanner::joint_trajectory_to_marker_array() -- creating purple viz of joint traj from " + str(len(joint_trajectory.points)) + " points. mode = " + str(display_mode)))
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -546,8 +545,8 @@ class PathPlanner(object):
         idx = 0
         # clear flags
         for group_name in group_names :
-            rospy.loginfo(str("PathPlanner::create_joint_plan() ===== PathPlanner Group Name: " + group_name))
-            rospy.loginfo(str("PathPlanner::create_joint_plan() ===== Generating Joint Plan "))
+            rospy.logdebug(str("PathPlanner::create_joint_plan() ===== PathPlanner Group Name: " + group_name))
+            rospy.logdebug(str("PathPlanner::create_joint_plan() ===== Generating Joint Plan "))
             self.plan_generated[group_name] = False
             ret[group_name] = False
                    
@@ -580,7 +579,7 @@ class PathPlanner(object):
             except:
                 rospy.logwarn("PathPlanner::create_joint_plan() -- no feedback available")
 
-        rospy.loginfo("PathPlanner::create_joint_plan() -- finished")
+        rospy.logdebug("PathPlanner::create_joint_plan() -- finished")
 
         return ret
 
@@ -598,11 +597,11 @@ class PathPlanner(object):
         for group_name in group_names :
             ret[group_name] = False
 
-            rospy.loginfo(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
-            rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
+            rospy.logdebug(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
+            rospy.logdebug(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
 
             waypoints = []
-            rospy.loginfo(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
+            rospy.logdebug(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
             
             for p in goals[idx] :
                 p.header.stamp = rospy.Time(0)
@@ -611,7 +610,6 @@ class PathPlanner(object):
                 pt.pose.orientation.w = 1.0
                 pt.header.frame_id = group_planning_frame
                 if p.header.frame_id != group_planning_frame :
-                    print "waiting for transform from frame ", p.header.frame_id, "to ", group_planning_frame
                     self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(3.0))
                     pt = self.tf_listener.transformPose(group_planning_frame, p)
                 waypoints.append(copy.deepcopy(pt))               
@@ -717,7 +715,7 @@ class PathPlanner(object):
 
                 self.gripper_client[a['name']] = actionlib.SimpleActionClient(a['action'], GripperCommandAction)
 
-                rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['action'] + ") for group " + a['name'] + " -- looking for server")
+                rospy.logdebug("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['action'] + ") for group " + a['name'] + " -- looking for server")
                 if not self.gripper_client[a['name']].wait_for_server(rospy.Duration(2.0)) :
                     rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
                     self.clear_gripper_actions()

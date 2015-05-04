@@ -63,12 +63,12 @@ class SRDFModel :
             rospy.logerr(str("  found      : " + root.attrib['name']))
             return False
         else :
-            rospy.loginfo(str("SRDFModel::parse_srdf() found robot: " + self.robot_name))
+            rospy.logdebug(str("SRDFModel::parse_srdf() found robot: " + self.robot_name))
 
         for elem in root.getchildren() :
             if elem.tag == "group" :
                 group_name = elem.attrib["name"]
-                rospy.loginfo(str("SRDFModel::parse_srdf() -- found group: " + group_name))
+                rospy.logdebug(str("SRDFModel::parse_srdf() -- found group: " + group_name))
                 self.groups.append(group_name)
                 self.group_links[group_name] = []
                 self.group_joints[group_name] = []
@@ -147,21 +147,21 @@ class SRDFModel :
         return True
 
     def validate_groups_with_urdf(self) :
-        rospy.loginfo("SRDFModel::validate_groups_with_urdf()")
+        rospy.logdebug("SRDFModel::validate_groups_with_urdf()")
         groups = copy.deepcopy(self.get_groups())
         for g in groups :
-            rospy.loginfo("SRDFModel::validate_groups_with_urdf() -- checking group " + g)
+            rospy.logdebug("SRDFModel::validate_groups_with_urdf() -- checking group " + g)
             if len(self.group_joints[g]) == 0 :
-                rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (no joints)" + g)
+                rospy.logdebug("SRDFModel::validate_groups_with_urdf() -- removing group (no joints)" + g)
                 self.remove_group(g)
             elif len(self.group_links[g]) == 0 :
-                rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (no links)" + g)
+                rospy.logdebug("SRDFModel::validate_groups_with_urdf() -- removing group (no links)" + g)
                 self.remove_group(g)
             else :
                 try :
                     for jnt in self.group_joints[g] :
                         if not jnt in self.urdf.joint_map.keys() :
-                            rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (unknown joints) " + g)
+                            rospy.logdebug("SRDFModel::validate_groups_with_urdf() -- removing group (unknown joints) " + g)
                             self.remove_group(g)
                             break
                 except :
@@ -169,14 +169,14 @@ class SRDFModel :
                 try :
                     for lnk in self.group_links[g] :
                         if not lnk in self.urdf.link_map.keys() :
-                            rospy.logwarn("SRDFModel::validate_groups_with_urdf() -- removing group (unknown links) " + g)
+                            rospy.logdebug("SRDFModel::validate_groups_with_urdf() -- removing group (unknown links) " + g)
                             self.remove_group(g)
                             break
                 except :
                     pass
 
     def expand_with_urdf(self) :
-        rospy.loginfo("SRDFModel::expanding_with_urdf()")
+        rospy.logdebug("SRDFModel::expanding_with_urdf()")
 
         for g in self.get_groups() :
 
@@ -280,7 +280,7 @@ class SRDFModel :
         if group in self.tip_links and self.tip_links[group] != None :
             return self.tip_links[group]
         else :
-            rospy.loginfo(str("No Tip Link for Group " + group))
+            rospy.logdebug(str("No Tip Link for Group " + group))
             return ""
 
     def get_base_link(self, group) :
