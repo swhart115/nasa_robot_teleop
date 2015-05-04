@@ -639,10 +639,10 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.set_param("~atlas/navigation_mode", mode)
 
     def accommodate_terrain_in_navigation(self) :
-        return not rospy.get_param("~atlas/assume_flat_ground")
+        return not rospy.get_param("~atlas/auto_walker/assume_flat_ground")
 
     def set_accommodate_terrain_in_navigation(self, val) :
-        rospy.set_param("~atlas/assume_flat_ground", not bool(val))
+        rospy.set_param("~atlas/auto_walker/assume_flat_ground", not bool(val))
 
     ##################################
     ######## PLANNING METHODS ########
