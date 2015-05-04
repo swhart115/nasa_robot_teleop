@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<launch>
+    <node pkg="nasa_robot_teleop" type="navigation_waypoint_control.py" name="navigation_control" output="screen"> 
+		<param name="robot" value="atlas"/>
+		<param name="navigation_frame" value="global"/>
+		<param name="robot_reference_frame" value="ground"/>
+		<param name="planner_config_file" value="$(find atlas_moveit_config)/config/atlas.srdf"/>
+     </node>
+</launch>
