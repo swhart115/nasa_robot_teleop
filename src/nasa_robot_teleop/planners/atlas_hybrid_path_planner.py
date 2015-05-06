@@ -1106,7 +1106,9 @@ class AtlasHybridPathPlanner(PathPlanner) :
                     self.moveit_groups[group_name].set_pose_target(goals[idx])       
                     plan = self.moveit_groups[group_name].plan()
                     if self.auto_execute[group_name] :
-                        self.execute([group_name], from_stored=True)
+                        self.stored_plans[group_name] = plan.joint_trajectory
+                        self.plan_generated[group_name] = True
+                        self.execute([group_name], from_stored=True)  
                     traj_results[group_name] = plan.joint_trajectory
                 except :
                     rospy.logwarn(str("MoveItPathPlanner::plan_to_cartesian_point(" + group_name + ") -- failed"))

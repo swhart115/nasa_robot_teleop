@@ -357,8 +357,10 @@ class MoveItPathPlanner(PathPlanner) :
                 try :
                     self.groups[group_name].set_pose_target(goals[idx])       
                     plan = self.groups[group_name].plan()
-                    # if self.auto_execute[group_name] :
-                    #     self.execute(group_name, from_stored=True)
+                    if self.auto_execute[group_name] :
+                        self.stored_plans[group_name] = plan.joint_trajectory
+                        self.plan_generated[group_name] = True
+                        self.execute([group_name], from_stored=True)   
                     traj_results[group_name] = plan.joint_trajectory
                 except :
                     rospy.logwarn(str("MoveItPathPlanner::plan_to_cartesian_point(" + group_name + ") -- failed"))
@@ -394,7 +396,11 @@ class MoveItPathPlanner(PathPlanner) :
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
-                            traj_results[group_name] =  plan.joint_trajectory            
+                            traj_results[group_name] =  plan.joint_trajectory
+                            if self.auto_execute[group_name] :
+                                self.stored_plans[group_name] = plan.joint_trajectory
+                                self.plan_generated[group_name] = True
+                                self.execute([group_name], from_stored=True)                     
                     except :
                         rospy.logerr("MoveItInterface::plan_cartesian_paths() -- Generating Cartesian Path Plan Failed")
                 except :
