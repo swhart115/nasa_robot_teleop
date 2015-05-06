@@ -514,15 +514,15 @@ class PathPlanner(object):
 
             self.stored_plans[group_name] = None
 
-            if type(plan) == dict :
-                self.stored_plans[group_name] = plan[group_name]
-            elif type(plan) == trajectory_msgs.msg.JointTrajectory : 
-                self.stored_plans[group_name] = self.get_subgroup_plan(plan, group_name)
             if not plan :
                 rospy.logerr("PathPlanner::get_stored_plans_from_result() --failed ")
+            if type(plan) == trajectory_msgs.msg.JointTrajectory : 
+                self.stored_plans[group_name] = self.get_subgroup_plan(plan, group_name)
             else :
                 print type(plan)
-                rospy.logerr("PathPlanner::get_stored_plans_from_result() -- unknown return type from planner")
+                self.stored_plans[group_name] = plan[group_name]
+            # else :
+            #     rospy.logerr("PathPlanner::get_stored_plans_from_result() -- unknown return type from planner")
                 
         return self.stored_plans
 
@@ -539,7 +539,6 @@ class PathPlanner(object):
     ##### planning & execution methods ######
     #########################################
 
-    
     # computes a PathPlanner JointTrajectory to a single joint goal. 
     def create_joint_plan(self, group_names, goals) :
 
@@ -862,23 +861,23 @@ class PathPlanner(object):
         raise NotImplementedError
 
     def get_group_planning_frame(self, group_name) :
-        rospy.logerror("PathPlanner::get_group_planning_frame() -- not implemented")
+        rospy.logerr("PathPlanner::get_group_planning_frame() -- not implemented")
         raise NotImplementedError
 
     def get_robot_planning_frame(self) :
-        rospy.logerror("PathPlanner::get_robot_planning_frame() -- not implemented")
+        rospy.logerr("PathPlanner::get_robot_planning_frame() -- not implemented")
         raise NotImplementedError
 
     def get_group_joints(self, group_name) :
-        rospy.logerror("PathPlanner::get_group_joints() -- not implemented")
+        rospy.logerr("PathPlanner::get_group_joints() -- not implemented")
         raise NotImplementedError
 
     def has_end_effector_link(self, group_name) :
-        rospy.logerror("PathPlanner::has_end_effector_link() -- not implemented")
+        rospy.logerr("PathPlanner::has_end_effector_link() -- not implemented")
         raise NotImplementedError
 
     def get_end_effector_link(self, group_name) :
-        rospy.logerror("PathPlanner::get_end_effector_link() -- not implemented")
+        rospy.logerr("PathPlanner::get_end_effector_link() -- not implemented")
         raise NotImplementedError
 
     def has_joint_map(self, group_name) :
@@ -906,68 +905,68 @@ class PathPlanner(object):
         raise NotImplementedError
 
     def clear_goal_target(self, group_names) :
-        rospy.logerror("PathPlanner::clear_goal_target() -- not implemented")
+        rospy.logerr("PathPlanner::clear_goal_target() -- not implemented")
         raise NotImplementedError
 
     def clear_goal_targets(self, group_names) :
-        rospy.logerror("PathPlanner::clear_goal_targets() -- not implemented")
+        rospy.logerr("PathPlanner::clear_goal_targets() -- not implemented")
         raise NotImplementedError
 
     def get_navigation_modes(self) :
-        rospy.logerror("PathPlanner::get_navigation_modes() -- not implemented")
+        rospy.logerr("PathPlanner::get_navigation_modes() -- not implemented")
         raise NotImplementedError
 
     def get_navigation_mode(self) :
-        rospy.logerror("PathPlanner::get_navigation_mode() -- not implemented")
+        rospy.logerr("PathPlanner::get_navigation_mode() -- not implemented")
         raise NotImplementedError
 
     def set_navigation_mode(self, mode) :
-        rospy.logerror("PathPlanner::set_navigation_mode() -- not implemented")
+        rospy.logerr("PathPlanner::set_navigation_mode() -- not implemented")
         raise NotImplementedError
 
     def accommodate_terrain_in_navigation(self) :
-        rospy.logerror("PathPlanner::accommodate_terrain_in_navigation() -- not implemented")
+        rospy.logerr("PathPlanner::accommodate_terrain_in_navigation() -- not implemented")
         raise NotImplementedError
 
     def set_accommodate_terrain_in_navigation(self, val) :
-        rospy.logerror("PathPlanner::set_accommodate_terrain_in_navigation() -- not implemented")
+        rospy.logerr("PathPlanner::set_accommodate_terrain_in_navigation() -- not implemented")
         raise NotImplementedError
 
     #### NAVIGATION FUNCTIONS  
     def plan_navigation_path(self, waypoints) :
-        rospy.logerror("PathPlanner::plan_navigation_path() -- not implemented")
+        rospy.logerr("PathPlanner::plan_navigation_path() -- not implemented")
         raise NotImplementedError
 
 
     #### CARTESIAN FUNCTIONS
     def plan_cartesian_goals(self, group_names, goals) :
-        rospy.logerror("PathPlanner::plan_cartesian_goals() -- not implemented")
+        rospy.logerr("PathPlanner::plan_cartesian_goals() -- not implemented")
         raise NotImplementedError
 
     def plan_cartesian_paths(self, group_names, paths) :
-        rospy.logerror("PathPlanner::plan_cartesian_paths() -- not implemented")
+        rospy.logerr("PathPlanner::plan_cartesian_paths() -- not implemented")
         raise NotImplementedError
 
 
     #### JOINT FUNCTIONS
     def plan_joint_goals(self, group_names, goals) :
-        rospy.logerror("PathPlanner::plan_joint_goals() -- not implemented")
+        rospy.logerr("PathPlanner::plan_joint_goals() -- not implemented")
         raise NotImplementedError
 
     def plan_joint_paths(self, group_names) :
-        rospy.logerror("PathPlanner::plan_joint_paths() -- not implemented")
+        rospy.logerr("PathPlanner::plan_joint_paths() -- not implemented")
         raise NotImplementedError
     
 
     #### EXCECUTION FUNCTIONS
     def execute_navigation_plan(self, footsteps, lift_heights, feet, goals) :
-        rospy.logerror("PathPlanner::execute_navigation_plan() -- not implemented")
+        rospy.logerr("PathPlanner::execute_navigation_plan() -- not implemented")
         raise NotImplementedError
 
     def execute_plans(self, group_names, from_stored, wait) :
-        rospy.logerror("PathPlanner::execute_plans() -- not implemented")
+        rospy.logerr("PathPlanner::execute_plans() -- not implemented")
         raise NotImplementedError
 
     def direct_move(self, goal) :
-        rospy.logerror("PathPlanner::direct_move() -- not implemented")
+        rospy.logerr("PathPlanner::direct_move() -- not implemented")
         raise NotImplementedError

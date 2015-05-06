@@ -317,6 +317,7 @@ class AtlasPathPlanner(PathPlanner) :
 
         ret = {}
 
+        print "EXECUTE GROUPS: ", group_names
         for group_name in group_names :
         
             rospy.loginfo(str("AtlasPathPlanner::execute_plans(" + group_name + ")"))
@@ -324,6 +325,10 @@ class AtlasPathPlanner(PathPlanner) :
             # hack to send individual foot goal to robot
             if "_leg" in group_name :
                 rospy.logwarn("AtlasPathPlanner::execute_plans() -- can't execute leg command directly; use \'execute_on_plan\' instead")
+                continue
+
+            if "hand" in group_name :
+                rospy.logwarn("AtlasPathPlanner::execute_plans() -- not adding hand name to execution groups")
                 continue
 
             plan_name += str("/") + group_name
@@ -991,7 +996,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def get_plan(self) :    
 
-        rospy.sleep(0.2)
+        rospy.sleep(.2)
         try:
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
