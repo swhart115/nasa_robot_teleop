@@ -330,6 +330,7 @@ class PathPlanner(object):
         if num_points == 0 : return markers
         idx = 0
 
+        # print joint_trajectory
         ee_offset = toPose((0,0,0), (0,0,0,1))
 
         if display_mode == "all_points" :
@@ -339,6 +340,7 @@ class PathPlanner(object):
 
         for point in r :
             waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
+            
             idx += self.group_id_offset[group]
             idx += len(waypoint_markers)
             for m in waypoint_markers: markers.markers.append(m)
@@ -365,6 +367,10 @@ class PathPlanner(object):
         return markers
 
     def create_marker_array_from_joint_array(self, group, names, joints, root_frame, idx, alpha) :
+
+        # print names
+        # print joints
+        # print root_frame
 
         markers = []
         T_acc = kdl.Frame()
@@ -519,7 +525,7 @@ class PathPlanner(object):
             if type(plan) == trajectory_msgs.msg.JointTrajectory : 
                 self.stored_plans[group_name] = self.get_subgroup_plan(plan, group_name)
             else :
-                print type(plan)
+                # print type(plan)
                 self.stored_plans[group_name] = plan[group_name]
             # else :
             #     rospy.logerr("PathPlanner::get_stored_plans_from_result() -- unknown return type from planner")
@@ -602,11 +608,11 @@ class PathPlanner(object):
         for group_name in group_names :
             ret[group_name] = False
 
-            rospy.logdebug(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
-            rospy.logdebug(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
+            rospy.loginfo(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
+            rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
 
             waypoints = []
-            rospy.logdebug(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
+            rospy.loginfo(str("PathPlanner::create_path_plan() -- transforming input waypoint list for " + group_name + " to frame: " + self.get_group_planning_frame(group_name)))
             
             for p in goals[idx] :
                 p.header.stamp = rospy.Time(0)
@@ -615,7 +621,12 @@ class PathPlanner(object):
                 pt.pose.orientation.w = 1.0
                 pt.header.frame_id = group_planning_frame
                 if p.header.frame_id != group_planning_frame :
-                    self.tf_listener.waitForTransform(p.header.frame_id, group_planning_frame, rospy.Time(0), rospy.Duration(3.0))
+                    rospy.sleep(1)
+                    group_planning_frame = group_planning_frame.lstrip("/")
+                    p.header.frame_id = p.header.frame_id.lstrip("/")
+                    print "waiting to transform ", p.header.frame_id, " to ", group_planning_frame
+                    self.tf_listener.waitForTransform(group_planning_frame, p.header.frame_id, rospy.Time(0), rospy.Duration(5.0))
+                    print "done waiting"
                     pt = self.tf_listener.transformPose(group_planning_frame, p)
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
@@ -624,7 +635,11 @@ class PathPlanner(object):
         rospy.loginfo("PathPlanner::create_path_plan() -- planning Cartesian path(s)")
 
         try :
-            stored_plan = self.plan_cartesian_paths(group_names, waypoints_list)       
+            p = self.plan_cartesian_paths(group_names, waypoints_list)     
+            if p:
+                stored_plan = p  
+            else :
+                return ret
         except :
             rospy.logerr("PathPlanner::create_path_plan() -- failed planning Cartesian path(s)")
             return ret
