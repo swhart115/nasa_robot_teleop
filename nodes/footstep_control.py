@@ -100,9 +100,9 @@ class FootstepControl(object) :
                 self.foot_color_map[foot] = c
     
 
-    def set_footstep_poses(self, poses, lift_heights=None, feet=None) :
+    def set_footstep_poses(self, poses, lift_heights=None, feet=None, transform_poses=True) :
         self.clear_footsteps()
-        if self.translate_poses_to_markers(poses, lift_heights, feet) :
+        if self.translate_poses_to_markers(poses, lift_heights, feet, transform_poses) :
             self.create_foot_interactive_markers()
             self.lift_heights = lift_heights
             self.feet = feet
@@ -114,7 +114,7 @@ class FootstepControl(object) :
         self.create_foot_interactive_markers()
 
 
-    def translate_poses_to_markers(self, poses, lift_heights, feet) :       
+    def translate_poses_to_markers(self, poses, lift_heights, feet, transform_poses=True) :       
 
         if not poses :
             rospy.logwarn("FootstepControl::translate() -- can't make markers no poses given!")
@@ -144,9 +144,11 @@ class FootstepControl(object) :
         for id in range(len(poses)) :
             m = Marker()      
             try :
-                self.tf_listener.waitForTransform(self.frame_id, str("/" + poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
-                # self.tf_listener.waitForTransform(self.frame_id, str(poses[id].header.frame_id), rospy.Time(0), rospy.Duration(3.0))
-                ps = self.tf_listener.transformPose(self.frame_id, poses[id])
+                if transform_poses :
+                    self.tf_listener.waitForTransform(self.frame_id, str("/" + poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
+                    ps = self.tf_listener.transformPose(self.frame_id, poses[id])
+                else :
+                    ps = poses[id]
                 m.header = ps.header
                 m.pose = ps.pose
             except :
@@ -337,9 +339,12 @@ class FootstepControl(object) :
         self.update_footstep_markers_from_server()
         if len(self.footstep_markers)>0 and self.footstep_plan_valid :
             step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
-            # print "==== FINAL STEP POSES ==="
-            # print step_poses
-            # print "======="
+            
+            for id in range(len(step_poses)) :
+                if self.frame_id != step_poses[id].header.frame_id :
+                    self.tf_listener.waitForTransform(self.frame_id, str("/" + step_poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
+                    step_poses[id] = self.tf_listener.transformPose(self.frame_id, step_poses[id])
+
             ret = self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
             rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
@@ -401,7 +406,7 @@ class FootstepControl(object) :
             # new_step = self.tf_listener.transformPose("nav_goal", step)     
             step_poses.append(step)
             
-        self.set_footstep_poses(step_poses, recalled.lift_heights, recalled.feet)
+        self.set_footstep_poses(step_poses, recalled.lift_heights, recalled.feet, False)
         
 
     def get_footstep_files(self) :
