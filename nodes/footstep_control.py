@@ -302,15 +302,19 @@ class FootstepControl(object) :
             
 
     def get_foot_poses(self, markers, filter=False) :
-        pose_array = []      
-        for id in range(len(markers.keys())):
+        pose_array = [] 
+
+        d = []
+        for id in markers.keys() :
+            d.append(int(id))
+            d.sort()
+            
+        for id in d:
             if str(id) in self.footstep_change_map or not filter :
                 im = markers[str(id)]
-
                 # lookup the foot name
                 for foot in self.feet_names :
                     if foot in im.description : foot_name = foot
-
                 p = PoseStamped()
                 p.header = im.header
                 p.pose = self.remove_display_offset(im.pose, foot_name)
@@ -326,27 +330,6 @@ class FootstepControl(object) :
             self.full_footstep_controls[sid] = True
 
     def delete_footstep(self, feedback) :
-        # print "-----------"
-        # print "-----------"
-        # print "-----------"
-        # print feedback
-        # print "-----------"
-        # print self.footstep_markers
-        # print "-----------"
-        # print "-----------"
-        # print "keys:"
-        # print self.footstep_markers.keys()
-        # print "controls:"
-        # print self.full_footstep_controls
-        # print "footstep_change_map:"
-        # print self.footstep_change_map 
-        # print "lift_heights:"
-        # print self.lift_heights
-        # print "footstep_marker_menus:"
-        # print self.footstep_marker_menus.keys()
-        # print "footstep_poses:"
-        # print self.footstep_poses
-        # print "-----------"
 
         key = feedback.marker_name
         footstep_name = self.footstep_markers[key].description
@@ -361,7 +344,8 @@ class FootstepControl(object) :
         del self.footstep_poses[key]
         del self.footstep_marker_menus[key]
         
-        self.lift_heights = self.lift_heights[0:idx]+self.lift_heights[idx:len(self.lift_heights)-1]
+        self.lift_heights = self.lift_heights[0:int(key)]+self.lift_heights[int(key):len(self.lift_heights)-1]
+        self.feet.pop(int(key))
         
         self.server.erase(key)
  
@@ -384,6 +368,10 @@ class FootstepControl(object) :
                 self.server.erase(idx)
                 self.server.insert(fm, self.footstep_marker_callback)
                 self.server.applyChanges()
+
+        print self.footstep_markers.keys()
+        print self.feet
+
 
     def clear_footsteps(self) :
         for m in self.footstep_markers.keys():
@@ -410,21 +398,18 @@ class FootstepControl(object) :
 
     def update_footstep_markers_from_server(self) :  
         rospy.loginfo(str("FootstepControl::update_footstep_markers_from_server()"))
-         
         for m in self.footstep_markers.keys() :
             self.footstep_markers[m].pose = self.server.get(m).pose
 
     def execute_footstep_path(self) :
         rospy.loginfo(str("FootstepControl::execute_footstep_path() -- executing footstep path: " + str(self.footstep_plan_valid)))
         self.update_footstep_markers_from_server()
-        if len(self.footstep_markers)>0 and self.footstep_plan_valid :
+        if len(self.footstep_markers.keys())>0 and self.footstep_plan_valid :
             step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
-            
             for id in range(len(step_poses)) :
                 if self.frame_id != step_poses[id].header.frame_id :
                     self.tf_listener.waitForTransform(self.frame_id, str("/" + step_poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
                     step_poses[id] = self.tf_listener.transformPose(self.frame_id, step_poses[id])
-
             ret = self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
             rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
@@ -451,7 +436,6 @@ class FootstepControl(object) :
         self.update_footstep_markers_from_server()
         step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
 
-        print step_poses
         for idx in range(len(step_poses)) :
             step_poses[idx].header.stamp = rospy.Time(0)
             self.tf_listener.waitForTransform("nav_goal", step_poses[idx].header.frame_id, rospy.Time(0), rospy.Duration(3.0))
@@ -480,6 +464,8 @@ class FootstepControl(object) :
 
         step_poses = []
         for idx in range(len(recalled.step_poses)) :
+            # if not idx in recalled.step_poses.keys() :
+            #     continue 
             step = recalled.step_poses[idx]
             step.header.stamp = rospy.Time(0)
             # self.tf_listener.waitForTransform("nav_goal", step.header.frame_id, rospy.Time(0), rospy.Duration(3.0))
