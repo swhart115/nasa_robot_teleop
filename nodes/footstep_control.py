@@ -72,6 +72,7 @@ class FootstepControl(object) :
         
         self.footstep_menu_options = []
         self.footstep_menu_options.append("Toggle Full Controls")
+        self.footstep_menu_options.append("Snap To Points")
         self.footstep_menu_options.append("Add Footstep Before")
         self.footstep_menu_options.append("Add Footstep After")
         self.footstep_menu_options.append("Add Alternate Footstep")
@@ -298,6 +299,8 @@ class FootstepControl(object) :
                 self.add_footstep(feedback, "after")
             elif handle == self.footstep_menu_handles["Add Alternate Footstep"] :
                 self.add_footstep(feedback, "alternate")
+            elif handle == self.footstep_menu_handles["Snap To Points"] :
+                self.snap_to_points(feedback)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
@@ -332,6 +335,24 @@ class FootstepControl(object) :
             self.full_footstep_controls[sid] = not self.full_footstep_controls[sid]
         else :
             self.full_footstep_controls[sid] = True
+
+    def snap_to_points(self, feedback) :
+
+        print "snap_to_points"
+        pose = geometry_msgs.msg.PoseStamped()
+        pose.pose = feedback.pose
+        pose.header.frame_id
+        
+        print "Sending Initial Pose:"
+        print pose
+        new_pose = self.path_planner.snap_footstep_to_points(pose)
+
+        if new_pose :
+            rospy.loginfo("FootstepControl::snap_to_points() -- got new footstep pose")
+            print new_pose
+            self.server.setPose(feedback.marker_name, new_pose)
+        else :
+            rospy.logwarn("FootstepControl::snap_to_points() -- no footstep  pose")
 
     def delete_footstep(self, feedback) :
 

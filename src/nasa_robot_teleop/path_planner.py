@@ -947,6 +947,10 @@ class PathPlanner(object):
         rospy.logerr("PathPlanner::set_accommodate_terrain_in_navigation() -- not implemented")
         raise NotImplementedError
 
+    def snap_footstep_to_points(self, pose) :
+        rospy.logerr("PathPlanner::snap_footstep_to_points() -- not implemented")
+        raise NotImplementedError
+
     #### NAVIGATION FUNCTIONS  
     def plan_navigation_path(self, waypoints) :
         rospy.logerr("PathPlanner::plan_navigation_path() -- not implemented")
