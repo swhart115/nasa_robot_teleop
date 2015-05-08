@@ -71,6 +71,9 @@ class InteractiveControl:
 
         self.group_pose_data = {}
         self.control_frames = {}
+        ###> KRAMER tool offsets
+        self.tool_offsets = {}
+        ###< KRAMER tool offsets
 
         self.end_effector_display = {}
 
@@ -113,6 +116,10 @@ class InteractiveControl:
         self.cartesian_menu_options.append(("Execute", False))
         self.cartesian_menu_options.append(("Plan On Move", True))
         self.cartesian_menu_options.append(("Execute On Plan", True))
+        ###> KRAMER tool offsets
+        self.cartesian_menu_options.append(("Set Tool Offset", True))
+        self.cartesian_menu_options.append(("Clear Tool Offset", False))
+        ###< KRAMER tool offsets
         self.cartesian_menu_options.append(("Show Path", True))       
         self.cartesian_menu_options.append(("Toggle Joint Control", False))
         self.cartesian_menu_options.append(("Stored Poses", False))       
@@ -286,10 +293,14 @@ class InteractiveControl:
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         self.markers[group].scale = 0.2
 
+        ###> KRAMER tool offsets
+        self.tool_offsets[group] = geometry_msgs.msg.Pose()
+        self.tool_offsets[group].orientation.w = 1.0
+        ###< KRAMER tool offsets
+
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
         self.server.insert(self.markers[group], self.process_feedback)
-        # self.markers[group].controls.append(menu_control)
 
         self.reset_group_marker(group)
         
@@ -1051,6 +1062,14 @@ class InteractiveControl:
                 if (feedback.marker_name,"Toggle Joint Control") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
                         self.toggle_posture_control(feedback.marker_name)
+                ###> KRAMER tool offsets
+                if (feedback.marker_name,"Set Tool Offset") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Set Tool Offset")] :
+                        self.store_tool_offset(feedback.marker_name)
+                if (feedback.marker_name,"Clear Tool Offset") in self.group_menu_handles:
+                    if handle == self.group_menu_handles[(feedback.marker_name,"Clear Tool Offset")] :
+                        self.clear_tool_offset(feedback.marker_name)
+                ###< KRAMER tool offsets
             
         
         self.marker_menus[feedback.marker_name].reApply( self.server )
