@@ -70,6 +70,8 @@ class InteractiveControl:
         self.posture_markers_on = {}
 
         self.group_pose_data = {}
+        # TODO: remove local copy? looks like it's always accessed using
+        #       'self.path_planner.get_control_frame(group)'
         self.control_frames = {}
         ###> KRAMER tool offsets
         self.tool_offsets = {}
@@ -811,6 +813,26 @@ class InteractiveControl:
 
         self.server.applyChanges()
         self.posture_markers_on[group] = not self.posture_markers_on[group] 
+
+    ###> KRAMER tool offsets
+    def store_tool_offset(self, group) :
+        # being neither a python guy nor intimate with this code,
+        # I'm not sure if these checks are really necessary
+        if not group in self.tool_offsets.keys() :
+            return
+        if not group in self.get_groups('cartesian') :
+            return
+        # TODO -- going to need these to calculate offset
+        #control_frame = self.path_planner.get_control_frame(group)
+        #im = self.server.get(group)
+        #pt = geometry_msgs.msg.Pose()
+
+    def clear_tool_offset(self, group) :
+        if not group in self.tool_offsets.keys():
+            return
+        self.tool_offsets[group] = geometry_msgs.msg.Pose()
+        self.tool_offsets[group].orientation.w = 1.0
+    ###> KRAMER tool offsets
 
     def setup_joint_menus(self, group) :
         for m,c in self.joint_menu_options :
