@@ -179,7 +179,7 @@ class NavigationWaypointControl(threading.Thread) :
         waypoint.header.frame_id = self.frame_id
         waypoint.name = key
         waypoint.description = str("NavigationMarker:"+self.get_next_id())
-        waypoint.scale = 0.25
+        waypoint.scale = 0.5
         waypoint.pose = offset
         waypoint_id = len(self.waypoint_markers)
 
@@ -214,7 +214,8 @@ class NavigationWaypointControl(threading.Thread) :
 
         self.waypoint_controls[key] = full_controls
 
-        cyl = createCylinder(waypoint_id, height=height/2.0, radius=0.25)
+
+        cyl = createCylinder(waypoint_id, height=height/2.0, radius=0.2)
 
 
         def rgb(minimum, maximum, value):

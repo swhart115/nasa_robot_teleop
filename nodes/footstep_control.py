@@ -73,6 +73,7 @@ class FootstepControl(object) :
         self.foot_display_offsets = {}
         self.footstep_change_map = []
         self.foot_color_map = {}
+        self.start_foot_color_map = {}
         self.feet_names = []
 
         self.lift_heights = None
@@ -96,8 +97,15 @@ class FootstepControl(object) :
                 c.r = 0.5
                 c.b = 0.5
                 c.g = 0.75-0.5*(float(self.feet_names.index(foot))/float(len(self.feet_names)-1))
-                c.a = 1.0
+                c.a = 0.8
                 self.foot_color_map[foot] = c
+
+                c2 = ColorRGBA()
+                c2.r = (float(self.feet_names.index(foot))/float(len(self.feet_names)-1))
+                c2.b = (float(self.feet_names.index(foot))/float(len(self.feet_names)-1))*.25
+                c2.g = 1-(float(self.feet_names.index(foot))/float(len(self.feet_names)-1))
+                c2.a = 1
+                self.start_foot_color_map[foot] = c2
     
 
     def set_footstep_poses(self, poses, lift_heights=None, feet=None, transform_poses=True) :
@@ -179,6 +187,7 @@ class FootstepControl(object) :
             rospy.logerr("FootstepControl::create_foot_interactive_markers() -- no foot names found!")
             return
 
+        first_foot = True
         for m in self.footstep_array.markers :
 
             # lookup the foot name
@@ -195,7 +204,16 @@ class FootstepControl(object) :
                 self.footstep_poses[str(m.id)] = m.pose
 
             # get the foot offsets and colors
-            foot_color = self.foot_color_map[foot_name]
+            if first_foot :
+                foot_color = copy.deepcopy(self.start_foot_color_map[foot_name])
+                # foot_color.g = 1
+                # foot_color.r = 0.0
+                # foot_color.b = 0.0
+                first_foot = False
+            else :
+                foot_color = copy.deepcopy(self.foot_color_map[foot_name])
+                
+    
             foot_pose = self.add_display_offset(self.footstep_poses[str(m.id)], foot_name)
 
             # create the interactive marker. it will consist of a "foot" and a "toe" 
