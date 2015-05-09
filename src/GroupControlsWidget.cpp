@@ -23,6 +23,8 @@ void GroupControlsWidget::setupWidgets() {
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
     QObject::connect(ui->toggle_joint_control_button, SIGNAL(clicked()), this, SLOT(toggleJointControlRequest()));
     QObject::connect(ui->go_to_stored_pose_button, SIGNAL(clicked()), this, SLOT(storedPoseRequest()));
+    QObject::connect(ui->set_tool_offset_button, SIGNAL(clicked()), this, SLOT(setToolOffsetClicked()));
+    QObject::connect(ui->clear_tool_offset_button, SIGNAL(clicked()), this, SLOT(clearToolOffsetClicked()));
 
     QObject::connect(ui->plan_on_move, SIGNAL(stateChanged(int)), this, SLOT(planOnMoveClicked(int)));
     QObject::connect(ui->execute_on_plan, SIGNAL(stateChanged(int)), this, SLOT(executeOnPlanClicked(int)));
@@ -422,6 +424,31 @@ bool GroupControlsWidget::toggleJointControlRequest() {
     }
 }
 
+void GroupControlsWidget::setToolOffsetClicked() {
+    ROS_INFO("GroupControlsWidget::setToolOffsetClicked()");    
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SET_TOOL_OFFSET;
+    srv.request.group_name.push_back(group_name);
+    if (service_client_->call(srv)) {
+        ROS_INFO("GroupControlsWidget::setToolOffsetClicked() -- success");
+        setGroupDataFromResponse(srv.response);
+    } else {
+        ROS_ERROR("GroupControlsWidget::setToolOffsetClicked() -- failed to call service");
+    }
+}
+
+void GroupControlsWidget::clearToolOffsetClicked() {
+    ROS_INFO("GroupControlsWidget::clearToolOffsetClicked()");    
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::CLEAR_TOOL_OFFSET;
+    srv.request.group_name.push_back(group_name);
+    if (service_client_->call(srv)) {
+        ROS_INFO("GroupControlsWidget::clearToolOffsetClicked() -- success");
+        setGroupDataFromResponse(srv.response);
+    } else {
+        ROS_ERROR("GroupControlsWidget::clearToolOffsetClicked() -- failed to call service");
+    }
+}
 
 bool GroupControlsWidget::storedPoseRequest() {
 

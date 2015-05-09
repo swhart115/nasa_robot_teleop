@@ -23,6 +23,7 @@ from geometry_msgs.msg import TransformStamped
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
+from tool_frame_manager.srv import *
 
 # helper files
 from nasa_robot_teleop.util.marker_helper import *
@@ -118,12 +119,11 @@ class InteractiveControl:
         self.cartesian_menu_options.append(("Execute", False))
         self.cartesian_menu_options.append(("Plan On Move", True))
         self.cartesian_menu_options.append(("Execute On Plan", True))
-        ###> KRAMER tool offsets
-        self.cartesian_menu_options.append(("Set Tool Offset", True))
-        self.cartesian_menu_options.append(("Clear Tool Offset", False))
-        ###< KRAMER tool offsets
         self.cartesian_menu_options.append(("Show Path", True))       
         self.cartesian_menu_options.append(("Toggle Joint Control", False))
+        ###> KRAMER tool offsets
+        self.cartesian_menu_options.append(("Tool Offset", False))
+        ###< KRAMER tool offsets
         self.cartesian_menu_options.append(("Stored Poses", False))       
         self.cartesian_menu_options.append(("Sync To Actual", False))
         self.cartesian_menu_options.append(("Joint Mask", False))
@@ -735,6 +735,15 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SAVE_FOOTSTEP_PATH :
             self.navigation_controls.save_footstep_path(req.footstep_filename)
         
+        elif req.action_type == InteractiveControlsInterfaceRequest.SET_TOOL_OFFSET :
+            # TODO: safe to assume only one group name?
+            for g in req.group_name :
+                self.store_tool_offset(g)
+        elif req.action_type == InteractiveControlsInterfaceRequest.CLEAR_TOOL_OFFSET :
+            # TODO: safe to assume only one group name?
+            for g in req.group_name :
+                self.clear_tool_offset(g)
+
         self.server.applyChanges()
 
         resp = self.populate_service_response()
@@ -814,26 +823,6 @@ class InteractiveControl:
         self.server.applyChanges()
         self.posture_markers_on[group] = not self.posture_markers_on[group] 
 
-    ###> KRAMER tool offsets
-    def store_tool_offset(self, group) :
-        # being neither a python guy nor intimate with this code,
-        # I'm not sure if these checks are really necessary
-        if not group in self.tool_offsets.keys() :
-            return
-        if not group in self.get_groups('cartesian') :
-            return
-        # TODO -- going to need these to calculate offset
-        #control_frame = self.path_planner.get_control_frame(group)
-        #im = self.server.get(group)
-        #pt = geometry_msgs.msg.Pose()
-
-    def clear_tool_offset(self, group) :
-        if not group in self.tool_offsets.keys():
-            return
-        self.tool_offsets[group] = geometry_msgs.msg.Pose()
-        self.tool_offsets[group].orientation.w = 1.0
-    ###> KRAMER tool offsets
-
     def setup_joint_menus(self, group) :
         for m,c in self.joint_menu_options :
             if m == "Stored Poses" :
@@ -864,6 +853,8 @@ class InteractiveControl:
                 self.setup_joint_mask_menu(group)
             elif m in tolerance_modes :
                 self.setup_tolerance_menu(group, m)
+            elif m == "Tool Offset" :
+                self.setup_tool_offset_menu(group)
             else :
                 self.setup_simple_menu_item(group, m, c)
 
@@ -873,6 +864,14 @@ class InteractiveControl:
     def setup_simple_menu_item(self, group, item, checkbox=False) :
         self.group_menu_handles[(group,item)] = self.marker_menus[group].insert( item, callback=self.process_feedback )
         if checkbox : self.marker_menus[group].setCheckState( self.group_menu_handles[(group,item)], MenuHandler.UNCHECKED )      
+
+    ###> KRAMER tool offsets
+    def setup_tool_offset_menu(self, group) :
+        m = "Tool Offset"
+        sub_menu_handle = self.marker_menus[group].insert(m)
+        self.group_menu_handles[(group,m,'Set Offset')] = self.marker_menus[group].insert('Set Offset',parent=sub_menu_handle,callback=self.tool_offset_callback)
+        self.group_menu_handles[(group,m,'Clear Offset')] = self.marker_menus[group].insert('Clear Offset',parent=sub_menu_handle,callback=self.tool_offset_callback)
+    ###< KRAMER tool offsets
 
     def setup_stored_pose_menu(self, group) :
         m = "Stored Poses"
@@ -966,6 +965,33 @@ class InteractiveControl:
                             self.path_planner.set_joint_mask(feedback.marker_name, joint_mask)
         self.marker_menus[feedback.marker_name].reApply( self.server )
         self.server.applyChanges()
+
+    ###> KRAMER tool offsets
+    def tool_offset_callback(self, feedback) :
+        if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
+            if self.group_menu_handles[(group,"Tool Offset", "Set Offset")] == feedback.menu_entry_id :
+                self.store_tool_offset(feedback.marker_name)
+            elif self.group_menu_handles[(group,"Tool Offset", "Clear Offset")] == feedback.menu_entry_id :
+                self.clear_tool_offset(feedback.marker_name)
+
+    def store_tool_offset(self, group) :
+        if not group in self.get_groups('cartesian') :
+            return
+        im = self.server.get(group)
+        pt = geometry_msgs.msg.PoseStamped()
+        pt.header = im.header
+        pt.pose = im.pose
+        self.path_planner.set_tool_offset(group, pt)
+    
+    def clear_tool_offset(self, group) :
+        if not group in self.get_groups('cartesian') :
+            return
+        im = self.server.get(group)
+        pt = geometry_msgs.msg.PoseStamped()
+        pt.header = im.header
+        pt.pose.orientation.w = 1.0
+        self.path_planner.set_tool_offset(group, pt)
+    ####> KRAMER tool offsets
 
     def stored_pose_callback(self, feedback) :
         for p in self.path_planner.get_stored_state_list(feedback.marker_name) :
@@ -1084,14 +1110,6 @@ class InteractiveControl:
                 if (feedback.marker_name,"Toggle Joint Control") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Toggle Joint Control")] :
                         self.toggle_posture_control(feedback.marker_name)
-                ###> KRAMER tool offsets
-                if (feedback.marker_name,"Set Tool Offset") in self.group_menu_handles:
-                    if handle == self.group_menu_handles[(feedback.marker_name,"Set Tool Offset")] :
-                        self.store_tool_offset(feedback.marker_name)
-                if (feedback.marker_name,"Clear Tool Offset") in self.group_menu_handles:
-                    if handle == self.group_menu_handles[(feedback.marker_name,"Clear Tool Offset")] :
-                        self.clear_tool_offset(feedback.marker_name)
-                ###< KRAMER tool offsets
             
         
         self.marker_menus[feedback.marker_name].reApply( self.server )

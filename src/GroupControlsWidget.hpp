@@ -42,6 +42,8 @@ namespace rviz_interactive_controls_panel {
         bool executeRequest();
         bool toggleJointControlRequest();
         bool storedPoseRequest();
+        void setToolOffsetClicked();
+        void clearToolOffsetClicked();
 
         void planOnMoveClicked(int d);
         void executeOnPlanClicked(int d);

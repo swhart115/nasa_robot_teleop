@@ -962,6 +962,10 @@ class PathPlanner(object):
         rospy.logerr("PathPlanner::plan_cartesian_paths() -- not implemented")
         raise NotImplementedError
 
+    def set_tool_offset(self, group, pose_stamped) :
+        rospy.logerr("PathPlanner::set_tool_offset() -- not implemented")
+        raise NotImplementedError
+
 
     #### JOINT FUNCTIONS
     def plan_joint_goals(self, group_names, goals) :

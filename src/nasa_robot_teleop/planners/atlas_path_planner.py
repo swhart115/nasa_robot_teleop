@@ -21,6 +21,7 @@ import trajectory_msgs.msg
 import control_msgs.msg
 import std_msgs.msg
 from drc_msgs.msg import Pose2D
+from tool_frame_manager.srv import ConfigureToolFrame
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
@@ -824,6 +825,30 @@ class AtlasPathPlanner(PathPlanner) :
             p = self.get_plan()
             return p
         else :
+            return None
+
+    def set_tool_offset(self, group, pose_stamped) :
+        rospy.logwarn(str("AtlasPathPlanner::set_tool_offset()"))
+        try : 
+            rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("AtlasPathPlanner::set_tool_offset(): " + str(e))
+            return None
+        
+        try :
+            rospy.logdebug(str("AtlasPathPlanner::set_tool_offset() -- calling service"))
+            req = ConfigureToolFrame()
+            if 'left' in group :
+                req.hand = ConfigureToolFrameRequest.LEFT
+            else :
+                req.hand = ConfigureToolFrameRequest.RIGHT
+            req.tool = ConfigureToolFrameRequest.ARBITRARY
+            req.arbitrary_tool = pose_stamped
+
+            set_frame = rospy.ServiceProxy("/configure_tool_frames", ConfigureToolFrame)
+            resp = set_frame(req)
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::set_tool_offset() " + str(e)))
             return None
 
 

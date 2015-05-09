@@ -25,6 +25,8 @@ int8 action_type
   int8 SYNC_NAVIGATION_TO_ROBOT_ORIENTATION = 23
   int8 SYNC_NAVIGATION_TO_PATH_ORIENTATION = 24
   int8 SAVE_FOOTSTEP_PATH = 25
+  int8 SET_TOOL_OFFSET = 26
+  int8 CLEAR_TOOL_OFFSET = 27
   
   
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
