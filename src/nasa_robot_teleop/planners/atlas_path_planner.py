@@ -627,7 +627,11 @@ class AtlasPathPlanner(PathPlanner) :
             roll,pitch,yaw = euler_from_quaternion((pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w))
             out = PoseStamped()
             out.header.frame_id = pose.header.frame_id
-            out.pose = snap_srv(SnapStepRequest(Pose2D( pose.pose.position.x,  pose.pose.position.y, yaw))).pose
+            pose2d = Pose2D( pose.pose.position.x,  pose.pose.position.y, yaw)
+
+            print "2D pose:"
+            print pose2d
+            out.pose = snap_srv(SnapStepRequest(pose2d)).pose
 
             return out
         except rospy.ServiceException as e:

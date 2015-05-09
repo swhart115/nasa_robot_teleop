@@ -341,18 +341,26 @@ class FootstepControl(object) :
         print "snap_to_points"
         pose = geometry_msgs.msg.PoseStamped()
         pose.pose = feedback.pose
-        pose.header.frame_id
+        pose.header.frame_id = feedback.header.frame_id
         
-        print "Sending Initial Pose:"
-        print pose
+
+        key = feedback.marker_name
+        footstep_name = self.footstep_markers[key].description
+        foot = footstep_name[0:footstep_name.index("/")]
+
+        print "Sending Initial Pose for foot ", foot, ":"
         new_pose = self.path_planner.snap_footstep_to_points(pose)
 
         if new_pose :
             rospy.loginfo("FootstepControl::snap_to_points() -- got new footstep pose")
             print new_pose
-            self.server.setPose(feedback.marker_name, new_pose)
+
+            new_pose.pose = self.add_display_offset(new_pose.pose, foot)
+
+            self.server.setPose(feedback.marker_name, new_pose.pose)
+            self.server.applyChanges()
         else :
-            rospy.logwarn("FootstepControl::snap_to_points() -- no footstep  pose")
+            rospy.logwarn("FootstepControl::snap_to_points() -- no footstep pose")
 
     def delete_footstep(self, feedback) :
 
@@ -371,8 +379,7 @@ class FootstepControl(object) :
         self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
         
         
-    def add_footstep(self, feedback, mode) :
-    
+    def add_footstep(self, feedback, mode) :   
 
         key = feedback.marker_name
         footstep_name = self.footstep_markers[key].description
