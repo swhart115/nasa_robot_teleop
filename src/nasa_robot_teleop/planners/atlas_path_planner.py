@@ -21,7 +21,9 @@ import trajectory_msgs.msg
 import control_msgs.msg
 import std_msgs.msg
 from drc_msgs.msg import Pose2D
-from tool_frame_manager.srv import ConfigureToolFrame
+###> KRAMER tool offsets
+from tool_frame_manager.srv import *
+###< KRAMER tool offsets
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
@@ -827,8 +829,8 @@ class AtlasPathPlanner(PathPlanner) :
         else :
             return None
 
+    ###> KRAMER tool offsets
     def set_tool_offset(self, group, pose_stamped) :
-        rospy.logwarn(str("AtlasPathPlanner::set_tool_offset()"))
         try : 
             rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
         except rospy.ROSException as e:
@@ -837,11 +839,14 @@ class AtlasPathPlanner(PathPlanner) :
         
         try :
             rospy.logdebug(str("AtlasPathPlanner::set_tool_offset() -- calling service"))
-            req = ConfigureToolFrame()
+            req = ConfigureToolFrameRequest()
             if 'left' in group :
                 req.hand = ConfigureToolFrameRequest.LEFT
-            else :
+            elif 'right' in group :
                 req.hand = ConfigureToolFrameRequest.RIGHT
+            else :
+                rospy.logwarn("AtlasPathPlanner::set_tool_offset(): unknown hand/side")
+                return None
             req.tool = ConfigureToolFrameRequest.ARBITRARY
             req.arbitrary_tool = pose_stamped
 
@@ -850,6 +855,7 @@ class AtlasPathPlanner(PathPlanner) :
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasPathPlanner::set_tool_offset() " + str(e)))
             return None
+    ###< KRAMER tool offsets
 
 
     def plan_navigation_path(self, waypoints) :

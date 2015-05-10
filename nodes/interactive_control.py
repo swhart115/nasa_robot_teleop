@@ -23,7 +23,6 @@ from geometry_msgs.msg import TransformStamped
 from interactive_markers.interactive_marker_server import *
 from interactive_markers.menu_handler import *
 from visualization_msgs.msg import Marker
-from tool_frame_manager.srv import *
 
 # helper files
 from nasa_robot_teleop.util.marker_helper import *
@@ -74,9 +73,6 @@ class InteractiveControl:
         # TODO: remove local copy? looks like it's always accessed using
         #       'self.path_planner.get_control_frame(group)'
         self.control_frames = {}
-        ###> KRAMER tool offsets
-        self.tool_offsets = {}
-        ###< KRAMER tool offsets
 
         self.end_effector_display = {}
 
@@ -294,11 +290,6 @@ class InteractiveControl:
         self.markers[group].controls = make6DOFControls()
         self.markers[group].header.frame_id = self.path_planner.get_control_frame(group)
         self.markers[group].scale = 0.2
-
-        ###> KRAMER tool offsets
-        self.tool_offsets[group] = geometry_msgs.msg.Pose()
-        self.tool_offsets[group].orientation.w = 1.0
-        ###< KRAMER tool offsets
 
         # insert marker and menus
         self.markers[group].controls.append(menu_control)
@@ -735,6 +726,7 @@ class InteractiveControl:
         elif req.action_type == InteractiveControlsInterfaceRequest.SAVE_FOOTSTEP_PATH :
             self.navigation_controls.save_footstep_path(req.footstep_filename)
         
+        ###> KRAMER tool offsets
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_TOOL_OFFSET :
             # TODO: safe to assume only one group name?
             for g in req.group_name :
@@ -743,6 +735,7 @@ class InteractiveControl:
             # TODO: safe to assume only one group name?
             for g in req.group_name :
                 self.clear_tool_offset(g)
+        ###< KRAMER tool offsets
 
         self.server.applyChanges()
 
@@ -968,12 +961,15 @@ class InteractiveControl:
 
     ###> KRAMER tool offsets
     def tool_offset_callback(self, feedback) :
+        # provides context menu item callback
         if feedback.event_type == InteractiveMarkerFeedback.MENU_SELECT:
-            if self.group_menu_handles[(group,"Tool Offset", "Set Offset")] == feedback.menu_entry_id :
+            if self.group_menu_handles[(feedback.marker_name,"Tool Offset", "Set Offset")] == feedback.menu_entry_id :
                 self.store_tool_offset(feedback.marker_name)
-            elif self.group_menu_handles[(group,"Tool Offset", "Clear Offset")] == feedback.menu_entry_id :
+            elif self.group_menu_handles[(feedback.marker_name,"Tool Offset", "Clear Offset")] == feedback.menu_entry_id :
                 self.clear_tool_offset(feedback.marker_name)
 
+    # TODO: 'store_tool_offset' and 'clear_tool_offset' could be
+    #    consolidated, but I'm not sure about python conventions...
     def store_tool_offset(self, group) :
         if not group in self.get_groups('cartesian') :
             return
@@ -981,15 +977,22 @@ class InteractiveControl:
         pt = geometry_msgs.msg.PoseStamped()
         pt.header = im.header
         pt.pose = im.pose
+        # TODO: better way to check quaternion
+        if pt.pose.orientation.x == 0 and pt.pose.orientation.y == 0 and pt.pose.orientation.z == 0 and pt.pose.orientation.w == 0 :
+            pt.pose.orientation.w = 1.0
         self.path_planner.set_tool_offset(group, pt)
     
     def clear_tool_offset(self, group) :
         if not group in self.get_groups('cartesian') :
             return
+        self.reset_group_marker(group)
         im = self.server.get(group)
         pt = geometry_msgs.msg.PoseStamped()
         pt.header = im.header
-        pt.pose.orientation.w = 1.0
+        pt.pose = im.pose
+        # TODO: better way to check quaternion
+        if pt.pose.orientation.x == 0 and pt.pose.orientation.y == 0 and pt.pose.orientation.z == 0 and pt.pose.orientation.w == 0 :
+            pt.pose.orientation.w = 1.0
         self.path_planner.set_tool_offset(group, pt)
     ####> KRAMER tool offsets
 
