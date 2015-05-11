@@ -14,6 +14,7 @@
   <depend package="rviz"/>
   <depend package="actionlib"/>
   <depend package="actionlib_msgs"/>
+  <depend package="tool_frame_manager"/>
   <export>
       <rviz plugin="${prefix}/plugin_description.xml"/>
   </export>

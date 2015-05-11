@@ -48,6 +48,7 @@
   <run_depend>rviz</run_depend>
   <run_depend>actionlib</run_depend>
   <run_depend>actionlib_msgs</run_depend>
+  <run_depend>tool_frame_manager</run_depend>
   
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
