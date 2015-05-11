@@ -11,7 +11,6 @@ roslib.load_manifest('step_finder')
 roslib.load_manifest('walk_controller')
 roslib.load_manifest('auto_walker')
 roslib.load_manifest('reactive_walker')
-
 roslib.load_manifest('matec_msgs')
 
 import geometry_msgs.msg
@@ -20,10 +19,12 @@ import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
 import std_msgs.msg
+
 from drc_msgs.msg import Pose2D
-###> KRAMER tool offsets
+from geometry_msgs.msg import PoseStamped,Pose2D
+from tf.transformations import euler_from_quaternion
+
 from tool_frame_manager.srv import *
-###< KRAMER tool offsets
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
@@ -532,7 +533,7 @@ class AtlasPathPlanner(PathPlanner) :
             rospy.logerr("AtlasPathPlanner::execute_auto_walker() -- didnt get lift heights or feet indices")
             return False
 
-        if len(footsteps) != len(lift_heights) or len(footsteps) != len(feet) :
+        if len(footsteps) != len(lift_heights) or len(footsteps) != len(feet) :           
             rospy.logerr("AtlasPathPlanner::execute_auto_walker() -- size mismatch for footsteps info")
             return False
 
@@ -612,6 +613,32 @@ class AtlasPathPlanner(PathPlanner) :
 
     def set_accommodate_terrain_in_navigation(self, val) :
         rospy.set_param("~atlas/auto_walker/assume_flat_ground", not bool(val))
+
+    def snap_footstep_to_points(self, pose) :
+
+        try :
+            rospy.wait_for_service("/step_snap_server", self.wait_for_service_timeout)
+        except rospy.ServiceException as e:
+            print e 
+            return None
+            
+        snap_srv = rospy.ServiceProxy('/step_snap_server', SnapStep)
+
+        try:
+            roll,pitch,yaw = euler_from_quaternion((pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w))
+            out = PoseStamped()
+            out.header.frame_id = pose.header.frame_id
+            pose2d = Pose2D( pose.pose.position.x,  pose.pose.position.y, yaw)
+
+            print "2D pose:"
+            print pose2d
+            out.pose = snap_srv(SnapStepRequest(pose2d)).pose
+
+            return out
+        except rospy.ServiceException as e:
+            print e
+
+        return None
 
     ##################################
     ######## PLANNING METHODS ########

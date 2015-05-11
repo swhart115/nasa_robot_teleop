@@ -52,35 +52,37 @@ class FootstepControl(object) :
             self.tf_listener = tf.TransformListener()
 
         self.path_planner = None
-
-        self.footstep_marker_menus = {}
-        self.footstep_menu_handles = {}
-
-        self.footstep_markers = {}
-        self.full_footstep_controls = {}
-        self.footstep_poses = {}
-       
-        self.footstep_menu_options = []
-        self.footstep_menu_options.append("Toggle Full Controls")
-        self.footstep_menu_options.append("Save Footsteps")
-        # self.footstep_menu_options.append("Execute")
-        
-        self.footstep_plan_valid = False
-
-        self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
-        self.path_pub = rospy.Publisher("/planner/path", Path, queue_size=1)      
-        
-        self.foot_display_offsets = {}
-        self.footstep_change_map = []
-        self.foot_color_map = {}
-        self.start_foot_color_map = {}
         self.feet_names = []
+        self.footstep_plan_valid = False
+        self.foostep_filename = ""
 
         self.lift_heights = None
         self.feet = None
 
-        self.foostep_filename = ""
-
+        self.footstep_marker_menus = {}
+        self.footstep_menu_handles = {}
+        self.footstep_markers = {}
+        self.footstep_poses = {}
+        self.foot_display_offsets = {}
+        self.footstep_change_map = []
+        
+        self.full_footstep_controls = {}
+        self.foot_color_map = {}
+        self.start_foot_color_map = {}
+        
+        self.footstep_menu_options = []
+        self.footstep_menu_options.append("Toggle Full Controls")
+        self.footstep_menu_options.append("Snap To Points")
+        self.footstep_menu_options.append("Add Footstep Before")
+        self.footstep_menu_options.append("Add Footstep After")
+        self.footstep_menu_options.append("Add Alternate Footstep")
+        self.footstep_menu_options.append("Delete Footstep")
+        self.footstep_menu_options.append("Save Footsteps")
+        # self.footstep_menu_options.append("Execute")
+        
+        self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
+        self.path_pub = rospy.Publisher("/planner/path", Path, queue_size=1)      
+        
         random.seed(rospy.Time.now().secs)
 
         self.get_footstep_files()
@@ -132,7 +134,12 @@ class FootstepControl(object) :
         
         self.footstep_array = MarkerArray()
         num_feet = len(self.feet_names)
-        
+        foot_inc = {}
+        full_foot_inc = 0
+
+        for f in self.feet_names :
+            foot_inc[f] = 0
+
         if feet != None :
             if len(feet) != len(poses) :
                 rospy.logerr("FootstepControl::translate_poses_to_markers() -- size mismatch between foot lables and poses!!")
@@ -171,9 +178,13 @@ class FootstepControl(object) :
                     foot_name = "left"
                 else :
                     foot_name = "right"
-                m.text = foot_name + "/" + str(id/2)            
+                # m.text = foot_name + "/" + str(foot_inc[foot_name])          
+                m.text = foot_name + "/" + str(full_foot_inc)          
+                foot_inc[foot_name] += 1
+                full_foot_inc += 1          
             except :
                 m.text = self.feet_names[(id+start_foot_id)%num_feet] + "/" + str(id/2)            
+                rospy.logerr(str("FootstepControl::translate() -- what?"))
 
             rospy.loginfo(str("FootstepControl::translate() -- Adding foot[" + str(m.text) + "] at (" + str(m.pose.position.x) + ", " + str(m.pose.position.y) + ")_[" + str(m.header.frame_id) + "]"))
             self.footstep_array.markers.append(m)
@@ -267,19 +278,8 @@ class FootstepControl(object) :
             self.footstep_marker_menus[footstep_marker.name] = MenuHandler()
             for menu_opt in self.footstep_menu_options :
                 self.footstep_menu_handles[menu_opt] = self.footstep_marker_menus[footstep_marker.name].insert( menu_opt, callback=self.footstep_marker_callback )
-            self.footstep_marker_menus[footstep_marker.name].apply(self.server, footstep_marker.name)
-            
-        #     marker_names.append(footstep_marker.name)
-
-
-        # for n in self.footstep_markers.keys() :
-        #     if n not in marker_names :
-        #         self.server.erase(n)
-        #         del self.footstep_poses[n]
-        #         del self.footstep_markers[n]
-        #         if n in self.full_footstep_controls.keys() :
-        #             del self.full_footstep_controls[n]
-                
+            self.footstep_marker_menus[footstep_marker.name].apply(self.server, footstep_marker.name)    
+                       
         self.footstep_plan_valid = True
         self.server.applyChanges()
 
@@ -291,6 +291,16 @@ class FootstepControl(object) :
                 self.create_foot_interactive_markers()
             elif handle == self.footstep_menu_handles["Save Footsteps"] :
                 self.save_footsteps()
+            elif handle == self.footstep_menu_handles["Delete Footstep"] :
+                self.delete_footstep(feedback)
+            elif handle == self.footstep_menu_handles["Add Footstep Before"] :
+                self.add_footstep(feedback, "before")
+            elif handle == self.footstep_menu_handles["Add Footstep After"] :
+                self.add_footstep(feedback, "after")
+            elif handle == self.footstep_menu_handles["Add Alternate Footstep"] :
+                self.add_footstep(feedback, "alternate")
+            elif handle == self.footstep_menu_handles["Snap To Points"] :
+                self.snap_to_points(feedback)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
@@ -299,15 +309,19 @@ class FootstepControl(object) :
             
 
     def get_foot_poses(self, markers, filter=False) :
-        pose_array = []      
-        for id in range(len(markers.keys())):
+        pose_array = [] 
+
+        d = []
+        for id in markers.keys() :
+            d.append(int(id))
+            d.sort()
+            
+        for id in d:
             if str(id) in self.footstep_change_map or not filter :
                 im = markers[str(id)]
-
                 # lookup the foot name
                 for foot in self.feet_names :
                     if foot in im.description : foot_name = foot
-
                 p = PoseStamped()
                 p.header = im.header
                 p.pose = self.remove_display_offset(im.pose, foot_name)
@@ -321,6 +335,124 @@ class FootstepControl(object) :
             self.full_footstep_controls[sid] = not self.full_footstep_controls[sid]
         else :
             self.full_footstep_controls[sid] = True
+
+    def snap_to_points(self, feedback) :
+
+        print "snap_to_points"
+        pose = geometry_msgs.msg.PoseStamped()
+        pose.pose = feedback.pose
+        pose.header.frame_id = feedback.header.frame_id
+        
+
+        key = feedback.marker_name
+        footstep_name = self.footstep_markers[key].description
+        foot = footstep_name[0:footstep_name.index("/")]
+
+        print "Sending Initial Pose for foot ", foot, ":"
+        new_pose = self.path_planner.snap_footstep_to_points(pose)
+
+        if new_pose :
+            rospy.loginfo("FootstepControl::snap_to_points() -- got new footstep pose")
+            print new_pose
+
+            new_pose.pose = self.add_display_offset(new_pose.pose, foot)
+
+            self.server.setPose(feedback.marker_name, new_pose.pose)
+            self.server.applyChanges()
+        else :
+            rospy.logwarn("FootstepControl::snap_to_points() -- no footstep pose")
+
+    def delete_footstep(self, feedback) :
+
+        key = feedback.marker_name
+        footstep_name = self.footstep_markers[key].description
+        rospy.loginfo(str("FootstepControl::delete_footstep() -- deleting footstep with key: " + key + " (also known as: " + footstep_name + ")"))
+
+        new_markers = copy.deepcopy(self.footstep_markers)
+        del new_markers[key]
+        new_lift_heights = self.lift_heights[0:int(key)]+self.lift_heights[int(key):len(self.lift_heights)-1]
+        new_feet = copy.deepcopy(self.feet)
+        new_feet.pop(int(key))
+
+        new_poses = self.get_foot_poses(new_markers, filter=False)
+   
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+        
+        
+    def add_footstep(self, feedback, mode) :   
+
+        key = feedback.marker_name
+        footstep_name = self.footstep_markers[key].description
+
+        rospy.loginfo(str("FootstepControl::adding footstep() " + mode + " -- key: " + key + " (also known as: " + footstep_name + ")"))
+
+        foot = footstep_name[0:footstep_name.index("/")]
+        foot_id = int(footstep_name[footstep_name.index("/")+1:len(footstep_name)])
+
+        new_markers = copy.deepcopy(self.footstep_markers)
+        new_poses = self.get_foot_poses(new_markers, filter=False)
+        new_lift_heights = copy.deepcopy(self.lift_heights)
+        new_feet = copy.deepcopy(self.feet)         
+
+        current_pose = geometry_msgs.msg.PoseStamped()
+        current_pose.pose = feedback.pose
+        current_pose.header.frame_id = self.frame_id
+        new_pose = copy.deepcopy(current_pose)
+
+        idx = int(feedback.marker_name)
+        current_foot = self.feet[idx]
+        current_lift_height = self.lift_heights[idx]
+
+        if mode == "before":
+           
+            new_pose.pose.position.x -= 0.1
+            new_pose.pose.position.y -= 0.1
+            new_pose.pose = self.remove_display_offset(new_pose.pose, foot)
+
+            lhl = list(new_lift_heights)
+            lhl.insert(idx,new_lift_heights[idx])
+            new_lift_heights = tuple(lhl)
+            new_feet.insert(idx,new_feet[idx])
+            new_poses.insert(idx,new_pose)
+
+        elif mode == "after" :
+
+            new_pose.pose.position.x += 0.1
+            new_pose.pose.position.y += 0.1
+            new_pose.pose = self.remove_display_offset(new_pose.pose, foot)
+
+            lhl = list(new_lift_heights)
+            lhl.insert(idx+1,new_lift_heights[idx])
+            new_lift_heights = tuple(lhl)
+            
+            new_feet.insert(idx+1,new_feet[idx])
+            new_poses.insert(idx+1,new_pose)
+        
+        elif mode == "alternate" :
+
+            if foot == "left" :
+                new_pose.pose.position.y -= 0.15
+            else :
+                new_pose.pose.position.y += 0.15
+
+            new_pose.pose = self.remove_display_offset(new_pose.pose, foot)
+
+            lhl = list(new_lift_heights)
+            lhl.insert(idx+1,new_lift_heights[idx])
+            new_lift_heights = tuple(lhl)
+            
+            other_foot = copy.deepcopy(new_feet[idx])
+            other_foot.foot = 1-other_foot.foot
+            new_feet.insert(idx+1,other_foot)
+            new_poses.insert(idx+1,new_pose)
+
+
+        else :
+            rospy.logerr(str("FootstepControl::add_footstep() -- unknown mode: " + mode))
+
+
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+
 
 
     def clear_footsteps(self) :
@@ -348,21 +480,18 @@ class FootstepControl(object) :
 
     def update_footstep_markers_from_server(self) :  
         rospy.loginfo(str("FootstepControl::update_footstep_markers_from_server()"))
-         
         for m in self.footstep_markers.keys() :
             self.footstep_markers[m].pose = self.server.get(m).pose
 
     def execute_footstep_path(self) :
         rospy.loginfo(str("FootstepControl::execute_footstep_path() -- executing footstep path: " + str(self.footstep_plan_valid)))
         self.update_footstep_markers_from_server()
-        if len(self.footstep_markers)>0 and self.footstep_plan_valid :
+        if len(self.footstep_markers.keys())>0 and self.footstep_plan_valid :
             step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
-            
             for id in range(len(step_poses)) :
                 if self.frame_id != step_poses[id].header.frame_id :
                     self.tf_listener.waitForTransform(self.frame_id, str("/" + step_poses[id].header.frame_id), rospy.Time(0), rospy.Duration(5.0))
                     step_poses[id] = self.tf_listener.transformPose(self.frame_id, step_poses[id])
-
             ret = self.path_planner.execute_navigation_plan(step_poses, self.lift_heights, self.feet)
             rospy.loginfo(str("FootstepControl::execute_footstep_path() -- returned: " + str(ret)))            
             self.footstep_plan_valid = False
@@ -389,7 +518,6 @@ class FootstepControl(object) :
         self.update_footstep_markers_from_server()
         step_poses = self.get_foot_poses(self.footstep_markers, filter=False)
 
-        print step_poses
         for idx in range(len(step_poses)) :
             step_poses[idx].header.stamp = rospy.Time(0)
             self.tf_listener.waitForTransform("nav_goal", step_poses[idx].header.frame_id, rospy.Time(0), rospy.Duration(3.0))
@@ -418,6 +546,8 @@ class FootstepControl(object) :
 
         step_poses = []
         for idx in range(len(recalled.step_poses)) :
+            # if not idx in recalled.step_poses.keys() :
+            #     continue 
             step = recalled.step_poses[idx]
             step.header.stamp = rospy.Time(0)
             # self.tf_listener.waitForTransform("nav_goal", step.header.frame_id, rospy.Time(0), rospy.Duration(3.0))
