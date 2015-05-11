@@ -43,6 +43,7 @@ class PathPlanner(object):
         self.base_frames = {}
         self.control_frames = {}
         self.control_meshes = {}
+        self.parent_frames = {}
 
         # self.control_offset = {}
         self.group_id_offset = {}
@@ -74,7 +75,8 @@ class PathPlanner(object):
 
         self.path_visualization = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
         self.joint_state_sub = rospy.Subscriber(str(self.robot_name + "/joint_states"), sensor_msgs.msg.JointState, self.joint_state_callback)
-      
+        self.tf_sub = rospy.Subscriber('/tf', tf.msg.tfMessage, self.tf_callback)
+
         self.tf_listener = tf.TransformListener()
   
         if not self.create_models(config_file) :
@@ -197,7 +199,12 @@ class PathPlanner(object):
             # check to see if the group has an associated end effector, and add it if so
             if self.group_types[group_name] == "cartesian" :
                 if self.has_end_effector_link(group_name) :
-                    ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+                    # print "PathPlanner::add_planning_group() -- ee link name: ", self.get_end_effector_link(group_name)
+                    try :
+                        ee_link = self.urdf_model.link_map[self.get_end_effector_link(group_name)]
+                        rospy.loginfo("PathPlanner::add_planning_group() -- got ee_link for cartesian group")
+                    except :    
+                        rospy.logwarn(str("PathPlanner::add_planning_group() -- unable to get " + self.get_end_effector_link(group_name) + " link from URDF for cartesian group"))
                     self.control_frames[group_name] = self.get_end_effector_link(group_name)
                     for ee in self.srdf_model.end_effectors.keys() :
                         if self.srdf_model.end_effectors[ee].parent_group == group_name :
@@ -217,7 +224,11 @@ class PathPlanner(object):
                             
             elif self.group_types[group_name] == "endeffector" :
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
-                ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
+                try :
+                    ee_link = self.urdf_model.link_map[self.control_frames[group_name]]
+                    rospy.loginfo("PathPlanner::add_planning_group() -- got ee_link for endeffector group")
+                except :
+                    rospy.logwarn(str("PathPlanner::add_planning_group() -- unable to get " + self.get_end_effector_link(group_name) + " link from URDF for endeffector group"))
                 try :
                     self.control_meshes[group_name] = ee_link.visual.geometry.filename
                 except :
@@ -237,6 +248,23 @@ class PathPlanner(object):
             r = int(random.random()*10000000)
             if not r in self.group_id_offset.values() :
                 return r
+
+    def get_urdf_parent(self, link) :
+    
+        link_in_urdf = link in self.urdf_model.link_map.keys()
+
+        new_link = link
+
+        while not link_in_urdf :
+            if not new_link in self.parent_frames.keys() :
+                rospy.logwarn(str("PathPlanner::get_urdf_parent() -- can't find a urdf link for " + new_link))
+                return None
+            new_link = self.parent_frames[new_link]
+            link_in_urdf = new_link in self.urdf_model.link_map.keys()
+            if link_in_urdf :
+                rospy.loginfo(str("PathPlanner::get_urdf_parent() -- found urdf parent link " + new_link))
+
+        return new_link
 
 
     def get_group_links(self, group) :
@@ -339,8 +367,12 @@ class PathPlanner(object):
             r = [joint_trajectory.points[num_points-1]]
 
         for point in r :
-            waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
-            
+
+            try :
+                waypoint_markers, end_pose, last_link = self.create_marker_array_from_joint_array(group, joint_trajectory.joint_names, point.positions, self.get_group_planning_frame(group), idx, self.plan_color[3])
+            except :
+                return None        
+    
             idx += self.group_id_offset[group]
             idx += len(waypoint_markers)
             for m in waypoint_markers: markers.markers.append(m)
@@ -384,7 +416,12 @@ class PathPlanner(object):
         joint = first_joint_name
      
         parent_link = self.urdf_model.link_map[self.urdf_model.joint_map[first_joint_name].parent]
-        last_link = self.urdf_model.link_map[self.get_control_frame(group)]
+     
+        last_link_name = self.get_urdf_parent(self.get_control_frame(group))
+        if not last_link_name :
+            return None
+
+        last_link = self.urdf_model.link_map[last_link_name]
         # full_names = self.get_joint_chain(parent_link.name, last_link.name)
         full_names = get_chain(self.urdf_model, parent_link.name, last_link.name, joints=True, links=False, fixed=True)
 
@@ -624,9 +661,9 @@ class PathPlanner(object):
                     rospy.sleep(1)
                     group_planning_frame = group_planning_frame.lstrip("/")
                     p.header.frame_id = p.header.frame_id.lstrip("/")
-                    print "waiting to transform ", p.header.frame_id, " to ", group_planning_frame
+                    # print "waiting to transform ", p.header.frame_id, " to ", group_planning_frame
                     self.tf_listener.waitForTransform(group_planning_frame, p.header.frame_id, rospy.Time(0), rospy.Duration(5.0))
-                    print "done waiting"
+                    # print "done waiting"
                     pt = self.tf_listener.transformPose(group_planning_frame, p)
                 waypoints.append(copy.deepcopy(pt))               
             waypoints_list.append(waypoints)
@@ -851,6 +888,12 @@ class PathPlanner(object):
 
     def joint_state_callback(self, data):
         self.currentState = data
+
+    def tf_callback(self, data) :
+        for t in data.transforms :
+            if not t.child_frame_id in self.parent_frames.keys() :
+                self.parent_frames[t.child_frame_id] = t.header.frame_id
+                # print "setting parent frame of ", t.child_frame_id, " to ", t.header.frame_id
 
 
     ############################

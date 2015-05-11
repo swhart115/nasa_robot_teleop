@@ -12,6 +12,7 @@ roslib.load_manifest('walk_controller')
 roslib.load_manifest('auto_walker')
 roslib.load_manifest('reactive_walker')
 roslib.load_manifest('matec_msgs')
+roslib.load_manifest('tool_frame_manager')
 
 import geometry_msgs.msg
 import visualization_msgs.msg
@@ -176,7 +177,7 @@ class AtlasPathPlanner(PathPlanner) :
         if not group_name in self.srdf_model.groups :
             return False
 
-        rospy.logdebug(str("AtlasPathPlanner::load_group_from_srdf() -- group: " + group_name))
+        rospy.loginfo(str("AtlasPathPlanner::load_group_from_srdf() -- group: " + group_name))
 
         self.groups[group_name] = PlanGroupConfiguration()
         self.groups[group_name].joint_map = self.lookup_joint_map(group_name)
@@ -201,6 +202,11 @@ class AtlasPathPlanner(PathPlanner) :
 
         root = self.srdf_model.get_base_link(group_name)
         tip = self.srdf_model.get_tip_link(group_name)
+            
+        tip = self.get_urdf_parent(tip)
+        if not tip :
+            return None
+
         joint_list = []
 
         if root == tip == '' :

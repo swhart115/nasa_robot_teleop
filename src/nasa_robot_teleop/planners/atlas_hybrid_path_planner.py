@@ -296,6 +296,18 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
         root = self.srdf_model.get_base_link(group_name)
         tip = self.srdf_model.get_tip_link(group_name)
+            
+        tip_in_urdf = tip in self.urdf_model.link_map.keys()
+
+        while not tip_in_urdf :
+            if not tip in self.parent_frames.keys() :
+                rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- can't find a tip node for " + group_name))
+                return None
+            tip = self.parent_frames[tip]
+            tip_in_urdf = tip in self.urdf_model.link_map.keys()
+            if tip_in_urdf :
+                rospy.loginfo(str("AtlasPathPlanner::lookup_joint_map() -- found urdf tip " + tip + " for group " + group_name))
+                
         joint_list = []
 
         if root == tip == '' :
