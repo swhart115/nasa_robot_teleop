@@ -73,6 +73,7 @@ class FootstepControl(object) :
         self.footstep_menu_options = []
         self.footstep_menu_options.append("Toggle Full Controls")
         self.footstep_menu_options.append("Snap To Points")
+        self.footstep_menu_options.append("Snap PATH To Points")
         self.footstep_menu_options.append("Add Footstep Before")
         self.footstep_menu_options.append("Add Footstep After")
         self.footstep_menu_options.append("Add Alternate Footstep")
@@ -300,7 +301,9 @@ class FootstepControl(object) :
             elif handle == self.footstep_menu_handles["Add Alternate Footstep"] :
                 self.add_footstep(feedback, "alternate")
             elif handle == self.footstep_menu_handles["Snap To Points"] :
-                self.snap_to_points(feedback)
+                self.snap_to_points(feedback.pose, feedback.header.frame_id, feedback.marker_name)
+            elif handle == self.footstep_menu_handles["Snap PATH To Points"] :
+                self.snap_path_to_points()
 
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
@@ -336,19 +339,24 @@ class FootstepControl(object) :
         else :
             self.full_footstep_controls[sid] = True
 
-    def snap_to_points(self, feedback) :
+    def snap_path_to_points(self) :
 
-        print "snap_to_points"
+        for f in self.footstep_poses.keys() :
+            self.snap_to_points(self.footstep_poses[f], self.frame_id, f)
+
+    def snap_to_points(self, pose_in, frame_id, name) :
+
         pose = geometry_msgs.msg.PoseStamped()
-        pose.pose = feedback.pose
-        pose.header.frame_id = feedback.header.frame_id
-        
+        pose.pose = pose_in
+        pose.header.frame_id = frame_id      
 
-        key = feedback.marker_name
+        if frame_id != self.frame_id :
+            self.tf_listener.waitForTransform(self.frame_id, frame_id, rospy.Time(0), rospy.Duration(5.0))
+            pose = self.tf_listener.transformPose(self.frame_id, pose)
+
+        key = name
         footstep_name = self.footstep_markers[key].description
         foot = footstep_name[0:footstep_name.index("/")]
-
-        print "Sending Initial Pose for foot ", foot, ":"
         new_pose = self.path_planner.snap_footstep_to_points(pose)
 
         if new_pose :

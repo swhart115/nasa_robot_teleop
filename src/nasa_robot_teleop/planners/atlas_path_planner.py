@@ -622,8 +622,8 @@ class AtlasPathPlanner(PathPlanner) :
     def snap_footstep_to_points(self, pose) :
 
         try :
-            rospy.wait_for_service("/step_snap_server", self.wait_for_service_timeout)
-        except rospy.ServiceException as e:
+            rospy.wait_for_service("/step_snap_server", 0.25)
+        except Exception as e:
             print e 
             return None
             
