@@ -42,7 +42,7 @@ set(SRC_FILES
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED roscpp rospy rviz std_msgs trajectory_msgs geometry_msgs message_generation control_msgs moveit_msgs genmsg actionlib_msgs actionlib)
+find_package(catkin REQUIRED roscpp rospy rviz std_msgs trajectory_msgs geometry_msgs message_generation control_msgs moveit_msgs genmsg actionlib_msgs actionlib tool_frame_manager)
 
 
 ## System dependencies are found with CMake's conventions

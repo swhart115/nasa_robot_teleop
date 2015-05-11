@@ -307,7 +307,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
             tip_in_urdf = tip in self.urdf_model.link_map.keys()
             if tip_in_urdf :
                 rospy.loginfo(str("AtlasPathPlanner::lookup_joint_map() -- found urdf tip " + tip + " for group " + group_name))
-                
+
         joint_list = []
 
         if root == tip == '' :
@@ -1206,6 +1206,30 @@ class AtlasHybridPathPlanner(PathPlanner) :
             return None
     ###< KRAMER tool offsets
 
+     def clear_tool_offset(self, group) :
+        try : 
+            rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("AtlasHybridPathPlanner::clear_tool_offset(): " + str(e))
+            return None
+        
+        try :
+            rospy.logdebug(str("AtlasHybridPathPlanner::clear_tool_offset() -- calling service"))
+            req = ConfigureToolFrameRequest()
+            if 'left' in group :
+                req.hand = ConfigureToolFrameRequest.LEFT
+            elif 'right' in group :
+                req.hand = ConfigureToolFrameRequest.RIGHT
+            else :
+                rospy.logwarn("AtlasHybridPathPlanner::clear_tool_offset(): unknown hand/side")
+                return None
+            req.tool = ConfigureToolFrameRequest.DEFAULT
+
+            clear_frame = rospy.ServiceProxy("/configure_tool_frames", ConfigureToolFrame)
+            resp = clear_frame(req)
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasHybridPathPlanner::clear_tool_offset() " + str(e)))
+            return None
 
     def plan_navigation_path(self, waypoints) :
 

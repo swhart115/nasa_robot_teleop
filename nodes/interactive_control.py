@@ -981,19 +981,13 @@ class InteractiveControl:
         if pt.pose.orientation.x == 0 and pt.pose.orientation.y == 0 and pt.pose.orientation.z == 0 and pt.pose.orientation.w == 0 :
             pt.pose.orientation.w = 1.0
         self.path_planner.set_tool_offset(group, pt)
+        self.reset_group_marker(group)
     
     def clear_tool_offset(self, group) :
         if not group in self.get_groups('cartesian') :
             return
+        self.path_planner.clear_tool_offset(group)
         self.reset_group_marker(group)
-        im = self.server.get(group)
-        pt = geometry_msgs.msg.PoseStamped()
-        pt.header = im.header
-        pt.pose = im.pose
-        # TODO: better way to check quaternion
-        if pt.pose.orientation.x == 0 and pt.pose.orientation.y == 0 and pt.pose.orientation.z == 0 and pt.pose.orientation.w == 0 :
-            pt.pose.orientation.w = 1.0
-        self.path_planner.set_tool_offset(group, pt)
     ####> KRAMER tool offsets
 
     def stored_pose_callback(self, feedback) :

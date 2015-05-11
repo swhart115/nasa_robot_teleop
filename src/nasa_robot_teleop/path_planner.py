@@ -1013,6 +1013,9 @@ class PathPlanner(object):
         rospy.logerr("PathPlanner::set_tool_offset() -- not implemented")
         raise NotImplementedError
 
+    def clear_tool_offset(self, group) :
+        rospy.logerr("PathPlanner::clear_tool_offset() -- not implemented")
+        raise NotImplementedError
 
     #### JOINT FUNCTIONS
     def plan_joint_goals(self, group_names, goals) :

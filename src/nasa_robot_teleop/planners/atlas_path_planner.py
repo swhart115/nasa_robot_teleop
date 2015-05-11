@@ -890,6 +890,30 @@ class AtlasPathPlanner(PathPlanner) :
             return None
     ###< KRAMER tool offsets
 
+    def clear_tool_offset(self, group) :
+        try : 
+            rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
+        except rospy.ROSException as e:
+            rospy.logerr("AtlasPathPlanner::clear_tool_offset(): " + str(e))
+            return None
+        
+        try :
+            rospy.logdebug(str("AtlasPathPlanner::clear_tool_offset() -- calling service"))
+            req = ConfigureToolFrameRequest()
+            if 'left' in group :
+                req.hand = ConfigureToolFrameRequest.LEFT
+            elif 'right' in group :
+                req.hand = ConfigureToolFrameRequest.RIGHT
+            else :
+                rospy.logwarn("AtlasPathPlanner::clear_tool_offset(): unknown hand/side")
+                return None
+            req.tool = ConfigureToolFrameRequest.DEFAULT
+
+            clear_frame = rospy.ServiceProxy("/configure_tool_frames", ConfigureToolFrame)
+            resp = clear_frame(req)
+        except rospy.ServiceException, e:
+            rospy.logerr(str("AtlasPathPlanner::clear_tool_offset() " + str(e)))
+            return None
 
     def plan_navigation_path(self, waypoints) :
 
@@ -1060,7 +1084,7 @@ class AtlasPathPlanner(PathPlanner) :
 
     def get_plan(self) :    
 
-        rospy.sleep(.2)
+        rospy.sleep(.5)
         try:
             req = VisualizeManipulationPlanRequest()
             req.plan_names.append(self.last_plan_name)
