@@ -37,6 +37,12 @@ class SRDFModel :
         # self.full_group_links = {}
         self.joint_mask = {}
 
+        self.parent_map = {}
+
+    def set_parent_map(self, pm) :
+        # print "SETTING PARENT MAP"
+        self.parent_map = pm
+
     def get_group_links(self, group) :
         return self.group_links[group]
 
@@ -177,13 +183,19 @@ class SRDFModel :
 
     def expand_with_urdf(self) :
         rospy.logdebug("SRDFModel::expanding_with_urdf()")
-
+        
         for g in self.get_groups() :
-
-            if g not in self.base_links:
+           
+            if g not in self.base_links.keys():
                 self.base_links[g] = None
-            if g not in self.tip_links:
+            if g not in self.tip_links.keys():
                 self.tip_links[g] = None
+
+            effective_tip = None
+            
+            if self.tip_links[g] :
+                effective_tip = self.get_urdf_parent(self.tip_links[g])
+          
      
             if not self.base_links[g] :
                 # print "oops, no base link for group: ", g
@@ -201,8 +213,9 @@ class SRDFModel :
                 self.group_joints[g] = []
 
             if len(self.group_joints[g]) == 0 :
-                if is_chain(self.urdf, self.tip_links[g], self.base_links[g]) :
-                    self.group_joints[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=True, links=False, fixed=False)
+                
+                if is_chain(self.urdf, effective_tip, self.base_links[g]) :
+                    self.group_joints[g] = get_chain(self.urdf, self.base_links[g], effective_tip, joints=True, links=False, fixed=False)
                 else :
                     for l in self.group_links[g] :
                         jnt = get_link_joint(l, self.urdf)
@@ -215,19 +228,19 @@ class SRDFModel :
                     self.group_links[g] = []
 
             if len(self.group_links[g]) == 0 :
-                if is_chain(self.urdf, self.tip_links[g], self.base_links[g]) :
-                    self.group_links[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=False, links=True, fixed=False)
+                if is_chain(self.urdf, effective_tip, self.base_links[g]) :
+                    self.group_links[g] = get_chain(self.urdf, self.base_links[g], effective_tip, joints=False, links=True, fixed=False)
                 else :
                     # print "just getting links manually for ", g
                     self.group_links[g] = [get_joint_parent_link(j, self.urdf) for j in self.group_joints[g]]
                     # self.full_group_links[g] = self.group_links[g] 
                     # print [get_joint_child_link(j, self.urdf) for j in self.group_joints[g]]
 
-            self.is_chain[g] = is_chain(self.urdf, self.tip_links[g], self.base_links[g])
+            self.is_chain[g] = is_chain(self.urdf, effective_tip, self.base_links[g])
 
             if self.is_chain[g] :
-                self.full_group_joints[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=True, links=False, fixed=False)
-                # self.full_group_links[g] = get_chain(self.urdf, self.base_links[g], self.tip_links[g], joints=False, links=True, fixed=False)                   
+                self.full_group_joints[g] = get_chain(self.urdf, self.base_links[g], effective_tip, joints=True, links=False, fixed=False)
+                # self.full_group_links[g] = get_chain(self.urdf, self.base_links[g], effective_tip, joints=False, links=True, fixed=False)                   
             else :
                 self.full_group_joints[g] = self.group_joints[g]
                             
@@ -237,12 +250,30 @@ class SRDFModel :
             # print "Group: ", g
             # print " base: ", self.base_links[g]
             # print " tip: ", self.tip_links[g]
+            # print " effective tip: ", effective_tip
             # print " joints (spec): ", self.group_joints[g]
             # print " joints (full): ", self.full_group_joints[g]
             # print " joint mask: ", self.joint_mask[g]
             # print " links  (spec): ", self.group_links[g]
             # print " is chain: ", 
             # print "====================\n"
+
+    def get_urdf_parent(self, link) :
+        
+        link_in_urdf = link in self.urdf.link_map.keys()
+
+        new_link = link
+
+        while not link_in_urdf :
+            if not new_link in self.parent_map.keys() :
+                rospy.logwarn(str("SRDFModel::get_urdf_parent() -- can't find a urdf link for " + new_link))
+                return None
+            new_link = self.parent_map[new_link]
+            link_in_urdf = new_link in self.urdf.link_map.keys()
+            if link_in_urdf :
+                rospy.loginfo(str("SRDFModel::get_urdf_parent() -- found urdf parent link " + new_link))
+
+        return new_link
 
     def compute_joint_masks(self) :
          for g in self.get_groups() :

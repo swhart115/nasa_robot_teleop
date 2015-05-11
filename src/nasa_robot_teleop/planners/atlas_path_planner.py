@@ -327,7 +327,6 @@ class AtlasPathPlanner(PathPlanner) :
 
         ret = {}
 
-        print "EXECUTE GROUPS: ", group_names
         for group_name in group_names :
         
             rospy.loginfo(str("AtlasPathPlanner::execute_plans(" + group_name + ")"))

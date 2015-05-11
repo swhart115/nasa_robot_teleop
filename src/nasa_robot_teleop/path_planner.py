@@ -36,6 +36,9 @@ class PathPlanner(object):
         self.robot_name = robot_name
         self.config_file = config_file
 
+        self.urdf_model = None
+        self.srdf_model = None
+
         self.active_groups = []
         self.group_types = {}
         self.group_controllers = {}
@@ -78,6 +81,7 @@ class PathPlanner(object):
         self.tf_sub = rospy.Subscriber('/tf', tf.msg.tfMessage, self.tf_callback)
 
         self.tf_listener = tf.TransformListener()
+        rospy.sleep(1)
   
         if not self.create_models(config_file) :
             rospy.logerr("PathPlanner::init() -- failed creating RDF models")
@@ -262,7 +266,7 @@ class PathPlanner(object):
             new_link = self.parent_frames[new_link]
             link_in_urdf = new_link in self.urdf_model.link_map.keys()
             if link_in_urdf :
-                rospy.loginfo(str("PathPlanner::get_urdf_parent() -- found urdf parent link " + new_link))
+                rospy.logdebug(str("PathPlanner::get_urdf_parent() -- found urdf parent link " + new_link))
 
         return new_link
 
@@ -893,7 +897,16 @@ class PathPlanner(object):
         for t in data.transforms :
             if not t.child_frame_id in self.parent_frames.keys() :
                 self.parent_frames[t.child_frame_id] = t.header.frame_id
+                
+        if self.srdf_model :
+            self.srdf_model.set_parent_map(self.parent_frames)
                 # print "setting parent frame of ", t.child_frame_id, " to ", t.header.frame_id
+                # if self.urdf_model :
+                #     if not t.child_frame_id in self.urdf_model.links :
+                #         print "adding ", t.child_frame_id, " to URDF model"
+                #         self.urdf_model.links.append(t.child_frame_id)
+                #         new_link = Link(name=t.child_frame_id)
+                #         self.urdf_model.link_map.append(new_link)
 
 
     ############################

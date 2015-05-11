@@ -191,7 +191,6 @@ def get_mesh_marker_for_link(link_name, urdf) :
 
 
 def get_chain(urdf, root, tip, joints=True, links=True, fixed=True):
-    # print "getting chain from ", root, " to ", tip
     chain = []
     if links:
         chain.append(tip)
