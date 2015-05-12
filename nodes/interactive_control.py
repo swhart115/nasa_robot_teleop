@@ -1000,6 +1000,9 @@ class InteractiveControl:
                 self.reset_group_marker(feedback.marker_name)
 
     def posture_feedback(self, feedback) :
+        self.server.setPose(feedback.marker_name, feedback.pose)
+        self.server.applyChanges()
+        
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.joint_data.name :
                 jpos = self.get_current_jpos(feedback.marker_name)
@@ -1033,7 +1036,9 @@ class InteractiveControl:
                 self.path_planner.create_joint_plan([group], [js])
         
     def process_feedback(self, feedback) :
-
+        self.server.setPose(feedback.marker_name, feedback.pose)
+        self.server.applyChanges()
+        
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.get_groups('cartesian') :
                 if self.auto_plan[feedback.marker_name] :

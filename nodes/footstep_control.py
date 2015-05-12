@@ -120,6 +120,9 @@ class FootstepControl(object) :
 
 
     def footstep_callback(self, data) :
+        self.server.setPose(data.marker_name, data.pose)
+        self.server.applyChanges()
+        
         self.clear_footsteps()
         self.footstep_array = data
         self.create_foot_interactive_markers()

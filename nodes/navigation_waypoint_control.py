@@ -252,7 +252,9 @@ class NavigationWaypointControl(threading.Thread) :
         self.server.applyChanges()
 
     def toggle_waypoint_controls(self, feedback) :
-
+        self.server.setPose(feedback.marker_name, feedback.pose)
+        self.server.applyChanges()
+        
         name = feedback.marker_name
         
         if not self.waypoint_controls[name] :
@@ -472,6 +474,8 @@ class NavigationWaypointControl(threading.Thread) :
         self.footstep_controls.save_footsteps()
         
     def navigation_marker_callback(self, feedback) :
+        self.server.setPose(feedback.marker_name, feedback.pose)
+        self.server.applyChanges()
         self.waypoint_poses[feedback.marker_name] = feedback.pose
        
 
@@ -483,7 +487,7 @@ class NavigationWaypointControl(threading.Thread) :
             self.waypoint_marker_menus[waypoint_id].reApply( self.server )
         self.server.applyChanges()
 
-    def load_footstep_path_callback(self, feedback) :
+    def load_footstep_path_callback(self, feedback) :       
         for f in self.footstep_controls.get_footstep_files() :
             if self.waypoint_menu_handles[("Load Footstep Path",f)] == feedback.menu_entry_id :
                 rospy.logwarn(str("FootstepControl::load_footsteps_path -- " + f))
