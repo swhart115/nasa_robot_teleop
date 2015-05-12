@@ -170,10 +170,11 @@ class PathPlanner(object):
 
     def add_planning_group(self, group_name, group_type, joint_tolerance=0.05, position_tolerances=[.02]*3, orientation_tolerances=[.05]*3) :
 
-        rospy.logdebug(str("PathPlanner::add_planning_group() -- " + group_name))
+        rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
 
+        print self.srdf_model.get_groups()
         if not group_name in self.srdf_model.get_groups() :
-            rospy.logdebug(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
+            rospy.loginfo(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
             if group_name in self.active_groups :
                 self.active_groups.remove(group_name)
             return False
@@ -202,6 +203,7 @@ class PathPlanner(object):
 
             # check to see if the group has an associated end effector, and add it if so
             if self.group_types[group_name] == "cartesian" :
+                print "hello: ", group_name
                 if self.has_end_effector_link(group_name) :
                     # print "PathPlanner::add_planning_group() -- ee link name: ", self.get_end_effector_link(group_name)
                     try :

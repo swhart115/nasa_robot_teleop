@@ -230,6 +230,7 @@ class InteractiveControl:
         if not group_type :           
             group_type = self.get_group_type(group)
 
+        print "setup group: ", group
         if not self.path_planner.add_planning_group(group, group_type) :
             self.group_map[group_type].remove(group)
             rospy.logerr(str("InteractiveControl::setup_group() -- planner rejected group: " + group + " of type: " + group_type))
@@ -568,7 +569,7 @@ class InteractiveControl:
             else :
                 for g in group_store :
                     self.path_planner.clear_goal_target(g)
-                self.path_planner.create_path_plan(group_store,pt_store)
+                self.path_planner.create_path_plan(group_store, pt_store)
 
             self.server.applyChanges()
 
@@ -1002,7 +1003,7 @@ class InteractiveControl:
     def posture_feedback(self, feedback) :
         self.server.setPose(feedback.marker_name, feedback.pose)
         self.server.applyChanges()
-        
+
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             if feedback.marker_name in self.joint_data.name :
                 jpos = self.get_current_jpos(feedback.marker_name)

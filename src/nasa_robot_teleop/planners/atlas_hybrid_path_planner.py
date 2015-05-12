@@ -11,21 +11,20 @@ roslib.load_manifest('step_finder')
 roslib.load_manifest('walk_controller')
 roslib.load_manifest('auto_walker')
 roslib.load_manifest('reactive_walker')
-
 roslib.load_manifest('matec_msgs')
+roslib.load_manifest('tool_frame_manager')
 
 import geometry_msgs.msg
 import visualization_msgs.msg
 import sensor_msgs.msg
 import trajectory_msgs.msg
 import control_msgs.msg
-import moveit_msgs.msg
-###> KRAMER tool offsets
-from tool_frame_manager.srv import *
-###< KRAMER tool offsets
-
 import std_msgs.msg
+import moveit_msgs.msg
+from tool_frame_manager.srv import *
 from drc_msgs.msg import Pose2D
+from geometry_msgs.msg import PoseStamped,Pose2D
+from tf.transformations import euler_from_quaternion
 
 import actionlib
 import moveit_commander
@@ -297,16 +296,9 @@ class AtlasHybridPathPlanner(PathPlanner) :
         root = self.srdf_model.get_base_link(group_name)
         tip = self.srdf_model.get_tip_link(group_name)
             
-        tip_in_urdf = tip in self.urdf_model.link_map.keys()
-
-        while not tip_in_urdf :
-            if not tip in self.parent_frames.keys() :
-                rospy.logwarn(str("AtlasPathPlanner::lookup_joint_map() -- can't find a tip node for " + group_name))
-                return None
-            tip = self.parent_frames[tip]
-            tip_in_urdf = tip in self.urdf_model.link_map.keys()
-            if tip_in_urdf :
-                rospy.loginfo(str("AtlasPathPlanner::lookup_joint_map() -- found urdf tip " + tip + " for group " + group_name))
+        tip = self.get_urdf_parent(tip)
+        if not tip :
+            return None
 
         joint_list = []
 
@@ -324,10 +316,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
             joint_name_map.ids.append(self.joint_names.index(j))
 
         return joint_name_map
-
-    # def joint_name_callback(self, msg) :
-    #     self.joint_names = msg.data
-    #     rospy.loginfo("GOT JOINT NAMES!!")
 
     def get_joint_names(self) :
         rospy.loginfo("AtlasHybridPathPlanner::get_joint_names() -- getting joint names from service")
@@ -1206,7 +1194,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
             return None
     ###< KRAMER tool offsets
 
-     def clear_tool_offset(self, group) :
+    def clear_tool_offset(self, group) :
         try : 
             rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
         except rospy.ROSException as e:
@@ -1230,6 +1218,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         except rospy.ServiceException, e:
             rospy.logerr(str("AtlasHybridPathPlanner::clear_tool_offset() " + str(e)))
             return None
+
 
     def plan_navigation_path(self, waypoints) :
 

@@ -844,22 +844,23 @@ class AtlasPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
 
-        rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
-        try :
-            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        except :
-            rospy.logerr(str("AtlasPathPlanner::plan_cartesian_paths() -- could not get feedback message on: /planned_manipulation/feedback"))
-            return None
+        return None
+        # rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- polling feedback")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        # except :
+        #     rospy.logerr(str("AtlasPathPlanner::plan_cartesian_paths() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #     return None
             
-        while not fb_msg.planning_complete:
-            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        # while not fb_msg.planning_complete:
+        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
 
-        rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
-        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
-            p = self.get_plan()
-            return p
-        else :
-            return None
+        # rospy.loginfo("AtlasPathPlanner::plan_cartesian_paths() -- PLANNING COMPLETE")
+        # if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
+        #     p = self.get_plan()
+        #     return p
+        # else :
+        #     return None
 
     ###> KRAMER tool offsets
     def set_tool_offset(self, group, pose_stamped) :
