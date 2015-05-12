@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import random
+from itertools import islice
 
 import rospy
 import roslib; roslib.load_manifest('nasa_robot_teleop')
@@ -101,6 +102,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/reactive_walk/enqueue", False)
 
         rospy.set_param("~atlas/manipulation_mode", "atlas")
+        rospy.set_param("~atlas/moveit/downsample_rate", 0.1)
 
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
         self.joint_action_client = actionlib.SimpleActionClient('/base_joint_interpolator/server', control_msgs.msg.FollowJointTrajectoryAction)
@@ -800,7 +802,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
             rospy.logerr("AtlasHybridPathPlanner::direct_move() -- problems")
 
     def get_navigation_modes(self) :
-        return ["WALK_CONTROLLER", "AUTO_WALKER", "REACTIVE_WALKER"]
+        return ["AUTO_WALKER", "REACTIVE_WALKER"]
 
     def get_navigation_mode(self) :
         return rospy.get_param("~atlas/navigation_mode")
@@ -1113,6 +1115,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                 try :
                     self.moveit_groups[group_name].set_pose_target(goals[idx])       
                     plan = self.moveit_groups[group_name].plan()
+                    plan = self.downsample_plan(plan)
                     if self.auto_execute[group_name] :
                         self.stored_plans[group_name] = plan.joint_trajectory
                         self.plan_generated[group_name] = True
@@ -1150,6 +1153,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                         # this jump parameter often makes it fail---more investigation needed here.
                         # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
                         (plan, fraction) = self.moveit_groups[group_name].compute_cartesian_path(stripped_path, 0.01, 0)  
+                        plan = self.downsample_plan(plan)
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths_moveit(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
@@ -1166,7 +1170,33 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
         return traj_results
 
-    ###> KRAMER tool offsets
+
+    def downsample_plan(self, plan) :
+
+        if not isinstance(plan, moveit_msgs.msg.RobotTrajectory) :
+            rospy.logwarn("AtlasHybridPathPlanner::downsample_plan() -- incorrect plan type")
+            return plan
+
+        proportion = rospy.get_param("~atlas/moveit/downsample_rate")
+        num_points = len(plan.joint_trajectory.points)
+        if num_points == 0 :
+            rospy.logwarn("AtlasHybridPathPlanner::downsample_plan() -- no points in traj!")
+            return plan
+
+        new_traj = trajectory_msgs.msg.JointTrajectory()
+        new_traj.header = plan.joint_trajectory.header
+        new_traj.joint_names = plan.joint_trajectory.joint_names
+
+        new_traj.points = list(islice(plan.joint_trajectory.points, 0, num_points, int(1/proportion)))
+        new_traj.points.append(plan.joint_trajectory.points[num_points-1])
+        plan.joint_trajectory = new_traj
+
+        rospy.logwarn(str("Downsampling trajectory from " + str(num_points) + " to " +str(len(plan.joint_trajectory.points))))
+        return plan
+
+
+
+
     def set_tool_offset(self, group, pose_stamped) :
         try : 
             rospy.wait_for_service("/configure_tool_frames", self.wait_for_service_timeout)
