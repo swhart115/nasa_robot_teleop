@@ -349,6 +349,7 @@ class FootstepControl(object) :
 
     def snap_to_points(self, pose_in, frame_id, name) :
 
+        print pose_in
         pose = geometry_msgs.msg.PoseStamped()
         pose.pose = pose_in
         pose.header.frame_id = frame_id      
@@ -364,11 +365,17 @@ class FootstepControl(object) :
 
         if new_pose :
             rospy.loginfo("FootstepControl::snap_to_points() -- got new footstep pose")
-            print new_pose
+           
+            new_pose.pose = self.add_display_offset(new_pose.pose, foot)
+
+            if frame_id != self.frame_id :
+                print "transforming back to ", frame_id
+                self.tf_listener.waitForTransform(self.frame_id, frame_id, rospy.Time(0), rospy.Duration(5.0))
+                new_pose = self.tf_listener.transformPose(frame_id, new_pose)
 
             new_pose.pose = self.add_display_offset(new_pose.pose, foot)
 
-            self.server.setPose(feedback.marker_name, new_pose.pose)
+            self.server.setPose(name, new_pose.pose)
             self.server.applyChanges()
         else :
             rospy.logwarn("FootstepControl::snap_to_points() -- no footstep pose")
