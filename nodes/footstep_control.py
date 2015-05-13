@@ -396,7 +396,56 @@ class FootstepControl(object) :
    
         self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
         
+
+    def swap_footstep(self, id1, id2) :   
         
+        id1_str = str(id1)
+        id2_str = str(id2)
+        if id1_str not in self.footstep_markers.keys() :
+            rospy.logerr(str("FootstepControl::swap_footstep() -- no foostep ID: " + id1_str))
+            return
+        if id2_str not in self.footstep_markers.keys() :
+            rospy.logerr(str("FootstepControl::swap_footstep() -- no foostep ID: " + id2_str))
+            return 
+
+        new_markers = copy.deepcopy(self.footstep_markers)
+        new_lift_heights = copy.deepcopy(self.lift_heights)
+        new_feet = copy.deepcopy(self.feet)      
+
+        # print "--------------"
+        # print "original markers: "
+        # print new_markers
+        swap_marker = new_markers[id1_str]
+        new_markers[id1_str] = new_markers[id2_str]
+        new_markers[id2_str] = swap_marker
+        # print "new markers: "
+        # print new_markers
+
+        # print "--------------"
+        # print "original lift_heights: "
+        # print new_lift_heights
+        new_lift_heights = list(new_lift_heights)
+        swap_lift_height = new_lift_heights[id1]
+        new_lift_heights[id1] = new_lift_heights[id2]
+        new_lift_heights[id2] = swap_lift_height
+        new_lift_heights = tuple(new_lift_heights)
+        # print "new lift_heights: "
+        # print new_lift_heights
+
+        # print "--------------"
+        # print "original feet: "
+        # print new_feet
+        swap_foot = new_feet[id1]
+        new_feet[id1] = new_feet[id2]
+        new_feet[id2] = swap_foot
+        # print "new feet: "
+        # print new_feet
+        # print "--------------"
+
+        new_poses = self.get_foot_poses(new_markers, filter=False)
+
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+
     def add_footstep(self, feedback, mode) :   
 
         key = feedback.marker_name

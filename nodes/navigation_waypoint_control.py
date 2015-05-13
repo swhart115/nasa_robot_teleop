@@ -76,7 +76,8 @@ class NavigationWaypointControl(threading.Thread) :
         self.waypoint_menu_options.append("Request Footstep Plan")
         self.waypoint_menu_options.append("Execute Footstep Plan")
         self.waypoint_menu_options.append("Snap PATH To Points")
-
+        self.waypoint_menu_options.append("Swap Start Feet")
+        
         self.use_footstep_planner = True
 
         self.last_waypoint_height = 2.0
@@ -469,6 +470,8 @@ class NavigationWaypointControl(threading.Thread) :
                 self.save_footstep_path("")
             elif handle == self.waypoint_menu_handles["Snap PATH To Points"] :
                 self.snap_path_to_points()
+            elif handle == self.waypoint_menu_handles["Swap Start Feet"] :
+                self.footstep_controls.swap_footstep(0,1)
 
     def save_footstep_path(self, filename) :
         self.footstep_controls.set_footstep_filename(filename)
@@ -484,7 +487,7 @@ class NavigationWaypointControl(threading.Thread) :
             self.footstep_controls.snap_path_to_points()
         else :
             rospy.logwarn("NavigationControl::snap_path_to_points() -- has no footstep controls")
-            
+
     def setup_stored_footstep_menu(self, waypoint_id) :
         m = "Load Footstep Path"
         sub_menu_handle = self.waypoint_marker_menus[waypoint_id].insert(m)
