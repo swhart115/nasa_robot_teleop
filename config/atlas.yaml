@@ -4,5 +4,5 @@ cartesian:
   - left_arm
   - right_arm
 endeffector:
-  - right_robotiq_hand
-  - left_robotiq_hand
+  - right_hand
+  - left_hand

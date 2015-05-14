@@ -1,8 +1,0 @@
-joint:
-  - head
-cartesian:
-  - left_tool
-  - right_tool
-endeffector:
-  - right_robotiq_hand
-  - left_sri_hand

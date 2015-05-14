@@ -65,7 +65,7 @@ class PathPlanner(object):
         self.marker_store = {}
         self.command_topics = {}
         self.plan_color = (0.5,0.1,0.75,.5)
-        self.path_increment = 5
+        self.path_increment = 1
 
         self.gripper_action = {}
         self.gripper_client = {}

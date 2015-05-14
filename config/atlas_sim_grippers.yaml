@@ -1,5 +1,5 @@
 GripperAction:
-  - name: right_robotiq_hand
+  - name: right_hand
     action: /atlas/gripper/server
-  - name: left_sri_hand
+  - name: left_hand
     action: /atlas/gripper/server
