@@ -2,7 +2,7 @@
 <launch>
   <arg name="spew" default="screen" />
 
-  <node pkg="topic_tools" type="relay" name="topic_relay"
+  <node pkg="topic_tools" type="relay" name="$(anon topic_relay)"
     args="/joint_states /atlas/joint_states" output="$(arg spew)" />
 
   <!--
@@ -16,8 +16,8 @@
   <include file="$(find nasa_robot_teleop)/launch/atlas_sim.launch" />
 
   <!--
-  -->
   <node pkg="rviz" type="rviz" name="$(anon rviz)" output="$(arg spew)"
-    args="-d $(find nasa_robot_teleop)/config/atlas_basic.rviz" />
+    args="-d $(find nasa_robot_teleop)/config/atlas_sim.rviz" />
+  -->
 
 </launch>

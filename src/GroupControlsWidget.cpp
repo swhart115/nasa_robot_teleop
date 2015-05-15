@@ -342,6 +342,7 @@ bool GroupControlsWidget::planRequest() {
 
     srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::PLAN_TO_MARKER;
     fillPlanRequest(srv);
+    ROS_WARN("GroupControlsWidget: making PLAN_TO_MARKER call");    
     if (service_client_->call(srv)) {
         ROS_INFO("GroupControlsWidget::planRequest() -- success");
         return setGroupDataFromResponse(srv.response);
