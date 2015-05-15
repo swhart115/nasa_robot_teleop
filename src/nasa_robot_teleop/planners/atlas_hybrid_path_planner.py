@@ -114,7 +114,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
-        # self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
+        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/feedback', matec_actions.msg.PlannedManipulationFeedback, self.planner_feedback)
         # self.planner_viz_feedback_sub = rospy.Subscriber('/planned_manipulation/plan_visual', control_msgs.msg.FollowJointTrajectoryGoal, self.planner_viz_feedback)
       
         self.action_clients = {}
@@ -1071,29 +1071,31 @@ class AtlasHybridPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- sending goal")
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
-        rospy.sleep(0.5)
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
-        try :
-            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        except :
-            rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-            return None
         
-        while not fb_msg.planning_complete:
-            rospy.sleep(0.01)
-            try :
-                fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-                # print fb_msg
-            except :
-                rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-                return None
+        return None
+        # rospy.sleep(0.5)
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        # except :
+        #     rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #     return None
+        
+        # while not fb_msg.planning_complete:
+        #     rospy.sleep(0.01)
+        #     try :
+        #         fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        #         # print fb_msg
+        #     except :
+        #         rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #         return None
 
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
-        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
-            p = self.get_plan()
-            return p
-        else :
-            return None
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
+        # if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
+        #     p = self.get_plan()
+        #     return p
+        # else :
+        #     return None
 
 
     def plan_cartesian_goals_moveit(self, group_names, goals) :
@@ -1387,6 +1389,8 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
     def planner_feedback(self, msg) :
         
+        rospy.loginfo("in planner_feedback")
+
         if self.last_plan_name == "" :
             return 
         
@@ -1423,7 +1427,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
     def get_plan(self) :    
 
-        rospy.sleep(0.2)
+        rospy.sleep(1)
         try:
             rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
             req = VisualizeManipulationPlanRequest()
