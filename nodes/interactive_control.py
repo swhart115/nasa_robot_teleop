@@ -380,7 +380,7 @@ class InteractiveControl:
                 resp.group_type.append(self.get_group_type(g))
                 resp.plan_found.append(self.path_planner.is_plan_generated(g))
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with basic joint data")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with basic joint data")
             
             try :
                 jm = JointMask()
@@ -389,7 +389,7 @@ class InteractiveControl:
                 resp.joint_names.append(self.path_planner.get_joint_map(g))
                 # print "Setting joint mask for: ", g, " to: ", resp.joint_mask
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with joint_mask")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with joint_mask")
             
             try :
                 if g in self.auto_execute.keys() :
@@ -397,7 +397,7 @@ class InteractiveControl:
                 else :
                     resp.execute_on_plan.append(False)
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with auto_execute")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with auto_execute")
                     
             try :
                 if g in self.auto_plan.keys() :
@@ -405,7 +405,7 @@ class InteractiveControl:
                 else :
                     resp.plan_on_move.append(False)
             except:
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with plan_on_move")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with plan_on_move")
 
             try :
                 if g in self.path_planner.display_modes.keys() :
@@ -413,7 +413,7 @@ class InteractiveControl:
                 else :
                     resp.path_visualization_mode.append("last_point")
             except:
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with path_visualization_mode")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with path_visualization_mode")
 
             try :
                 pose_list = StringArray()
@@ -421,7 +421,7 @@ class InteractiveControl:
                     pose_list.data.append(p)
                 resp.stored_pose_list.append(pose_list)
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with stored_poses")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with stored_poses")
 
             try :               
                 ta = ToleranceInfoArray()
@@ -435,7 +435,7 @@ class InteractiveControl:
                 resp.tolerance_setting.append(ta)
 
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerance settings")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with tolerance settings")
             
 
         try :
@@ -450,7 +450,7 @@ class InteractiveControl:
                 resp.tolerance.append(t)
 
         except :
-            rospy.logdebug("InteractiveControl::populate_service_response() -- problem with tolerances")
+            rospy.loginfo("InteractiveControl::populate_service_response() -- problem with tolerances")
 
         if self.navigation_controls :
 
@@ -460,24 +460,24 @@ class InteractiveControl:
                 for nwp in self.navigation_controls.get_waypoints() :
                     resp.navigation_waypoint_name.append(nwp)
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem with nav waypoints settings")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem with nav waypoints settings")
 
             # try :            
             #     resp.left_foot_first = (self.path_planner.get_start_foot() == "left")
             # except :
-            #     rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+            #     rospy.loginfo("InteractiveControl::populate_service_response() -- problem getting start foot")
 
             try :            
                 resp.navigation_modes = self.path_planner.get_navigation_modes()
                 resp.navigation_mode = self.path_planner.get_navigation_mode()                
                 resp.accommodate_terrain_in_navigation = self.path_planner.accommodate_terrain_in_navigation()
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting navigation modes")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem getting navigation modes")
 
             try :            
                 resp.plan_footsteps = self.navigation_controls.planning_footsteps()
             except :
-                rospy.logdebug("InteractiveControl::populate_service_response() -- problem getting start foot")
+                rospy.loginfo("InteractiveControl::populate_service_response() -- problem getting start foot")
 
         else :
             resp.has_navigation_controls = False
@@ -812,7 +812,7 @@ class InteractiveControl:
 
     def set_gripper_actions(self, actions) :
         for a in actions :
-            rospy.logdebug(str("InteractiveControl::set_gripper_actions() -- found " + a['name'] + " gripper action: " + a['action']))
+            rospy.loginfo(str("InteractiveControl::set_gripper_actions() -- found " + a['name'] + " gripper action: " + a['action']))
             self.gripper_action[a['name']] = a['action']
         self.path_planner.set_gripper_actions(actions)
 

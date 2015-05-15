@@ -114,7 +114,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         
         self.goal_region_pub = rospy.Publisher(str('/' + self.robot_name + '/planned_path_visualization'), visualization_msgs.msg.MarkerArray, latch=False, queue_size=10)
 
-        # self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/feedback', matec_actions.msg.PlannedManipulationActionFeedback, self.planner_feedback)
+        self.planner_feedback_sub = rospy.Subscriber('/planned_manipulation/feedback', matec_actions.msg.PlannedManipulationFeedback, self.planner_feedback)
         # self.planner_viz_feedback_sub = rospy.Subscriber('/planned_manipulation/plan_visual', control_msgs.msg.FollowJointTrajectoryGoal, self.planner_viz_feedback)
       
         self.action_clients = {}
@@ -197,7 +197,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         self.joint_tolerance[group_name] = joint_tolerance
         
         if not self.load_group_from_srdf(group_name) :
-            rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem loading SRDF for group: " + group_name))
+            rospy.logerr(str("AtlasHybridPathPlanner()::setup_group() -- Robot " + self.robot_name + " has problem loading SRDF for group: " + group_name))
             return False
         
         try :
@@ -212,7 +212,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
             self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
 
         except :
-            rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up controller for: " + group_name))
+            rospy.logerr(str("AtlasHybridPathPlanner()::setup_group() -- Robot " + self.robot_name + " has problem setting up controller for: " + group_name))
             r = False
 
         try :
@@ -220,20 +220,20 @@ class AtlasHybridPathPlanner(PathPlanner) :
             self.moveit_groups[group_name].set_goal_joint_tolerance(joint_tolerance)
 
             if len(self.position_tolerances[group_name]) != 3 or len(self.orientation_tolerances[group_name]) != 3 :
-                rospy.logwarn("MoveItPathPlanner::setup_group() tolerance vectors of wrong size. Just using first val")
+                rospy.logwarn("AtlasHybridPathPlanner::setup_group() tolerance vectors of wrong size. Just using first val")
                 self.position_tolerances[group_name] = [self.position_tolerances[group_name][0]]*3
                 self.orientation_tolerances[group_name] = [self.orientation_tolerances[group_name][0]]*3
             else :
                 if not(self.position_tolerances[group_name][0] == self.position_tolerances[group_name][1] == self.position_tolerances[group_name][2]) :
                     self.position_tolerances[group_name] = [self.position_tolerances[group_name][0]]*3
-                    rospy.logwarn("MoveItPathPlanner::setup_group() dimensional position tolerances not supported. Just using first val")
+                    rospy.logwarn("AtlasHybridPathPlanner::setup_group() dimensional position tolerances not supported. Just using first val")
                 if not(self.orientation_tolerances[group_name][0] == self.orientation_tolerances[group_name][1] == self.orientation_tolerances[group_name][2]) :
                     self.orientation_tolerances[group_name] = [self.orientation_tolerances[group_name][0]]*3
-                    rospy.logwarn("MoveItPathPlanner::setup_group() dimensional orientation tolerances not supported. Just using first val")                              
+                    rospy.logwarn("AtlasHybridPathPlanner::setup_group() dimensional orientation tolerances not supported. Just using first val")                              
             self.moveit_groups[group_name].set_goal_position_tolerance(position_tolerances[0])
             self.moveit_groups[group_name].set_goal_orientation_tolerance(self.orientation_tolerances[group_name][0])
         except :
-            rospy.logerr(str("MoveItInterface()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
+            rospy.logerr(str("AtlasHybridPathPlanner()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
         return r 
 
@@ -246,7 +246,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                 rospy.loginfo("Controller yaml: " + controllers_file)
                 controller_config = yaml.load(file(controllers_file, 'r'))
             except :
-                rospy.logerr("PathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
+                rospy.logerr("AtlasHybridPathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
             joint_list = self.get_group_joints(group_name)
             jn = joint_list[0]
             for j in joint_list:
@@ -264,7 +264,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                 if jn in c['joints'] :
                     self.group_controllers[group_name] = c['name'] + ns
 
-        rospy.loginfo(str("PathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
+        rospy.loginfo(str("AtlasHybridPathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
 
     def load_group_from_srdf(self, group_name) :
@@ -1071,29 +1071,31 @@ class AtlasHybridPathPlanner(PathPlanner) :
         rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- sending goal")
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
-        rospy.sleep(0.5)
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
-        try :
-            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        except :
-            rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-            return None
         
-        while not fb_msg.planning_complete:
-            rospy.sleep(0.01)
-            try :
-                fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-                # print fb_msg
-            except :
-                rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-                return None
+        return None
+        # rospy.sleep(0.5)
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        # except :
+        #     rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #     return None
+        
+        # while not fb_msg.planning_complete:
+        #     rospy.sleep(0.01)
+        #     try :
+        #         fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        #         # print fb_msg
+        #     except :
+        #         rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #         return None
 
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
-        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
-            p = self.get_plan()
-            return p
-        else :
-            return None
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
+        # if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
+        #     p = self.get_plan()
+        #     return p
+        # else :
+        #     return None
 
 
     def plan_cartesian_goals_moveit(self, group_names, goals) :
@@ -1423,7 +1425,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
     def get_plan(self) :    
 
-        rospy.sleep(0.2)
+        rospy.sleep(1)
         try:
             rospy.wait_for_service('/planned_manipulation/visualize', 3.0)
             req = VisualizeManipulationPlanRequest()

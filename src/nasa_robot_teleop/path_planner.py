@@ -89,11 +89,11 @@ class PathPlanner(object):
 
     def create_models(self, config_file) :
 
-        rospy.logdebug("PathPlanner::create_models() -- Creating Robot Model from URDF....")
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from URDF....")
         self.urdf_model = urdf.Robot.from_parameter_server()
         if self.urdf_model == None : return False
 
-        rospy.logdebug("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
+        rospy.loginfo("PathPlanner::create_models() -- Creating Robot Model from SRDF....")
         self.srdf_model = SRDFModel(self.robot_name)
         if self.srdf_model == None : return False
 
@@ -104,9 +104,9 @@ class PathPlanner(object):
             self.joint_names = self.srdf_model.get_joint_names(g)
 
         try :
-            rospy.logdebug(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
+            rospy.loginfo(str("PathPlanner::create_models() -- SRDF Filename: " + config_file))
             if self.srdf_model.parse_from_file(config_file) :
-                rospy.logdebug("PathPlanner::create_models() -- SRDF created")
+                rospy.loginfo("PathPlanner::create_models() -- SRDF created")
             # self.srdf_model.print_groups()
             return True
         except :
@@ -226,7 +226,7 @@ class PathPlanner(object):
                     try :
                         self.control_meshes[group_name] = get_child_mesh(self.urdf_model, tip_link)
                     except :
-                        rospy.logdebug("PathPlanner::add_planning_group() -- no tip mesh found")
+                        rospy.loginfo("PathPlanner::add_planning_group() -- no tip mesh found")
                             
             elif self.group_types[group_name] == "endeffector" :
                 self.control_frames[group_name] = self.srdf_model.group_end_effectors[group_name].parent_link
@@ -268,7 +268,7 @@ class PathPlanner(object):
             new_link = self.parent_frames[new_link]
             link_in_urdf = new_link in self.urdf_model.link_map.keys()
             if link_in_urdf :
-                rospy.logdebug(str("PathPlanner::get_urdf_parent() -- found urdf parent link " + new_link))
+                rospy.loginfo(str("PathPlanner::get_urdf_parent() -- found urdf parent link " + new_link))
 
         return new_link
 
@@ -355,7 +355,7 @@ class PathPlanner(object):
     # convert the JointTractory msg to a MarkerArray msg that can be vizualized in RViz
     def joint_trajectory_to_marker_array(self, joint_trajectory, group, display_mode) :
 
-        rospy.logdebug(str("PathPlanner::joint_trajectory_to_marker_array() -- creating purple viz of joint traj from " + str(len(joint_trajectory.points)) + " points. mode = " + str(display_mode)))
+        rospy.loginfo(str("PathPlanner::joint_trajectory_to_marker_array() -- creating purple viz of joint traj from " + str(len(joint_trajectory.points)) + " points. mode = " + str(display_mode)))
         markers = visualization_msgs.msg.MarkerArray()
         markers.markers = []
         # joint_start = self.robot.get_current_state().joint_state
@@ -599,8 +599,8 @@ class PathPlanner(object):
         idx = 0
         # clear flags
         for group_name in group_names :
-            rospy.logdebug(str("PathPlanner::create_joint_plan() ===== PathPlanner Group Name: " + group_name))
-            rospy.logdebug(str("PathPlanner::create_joint_plan() ===== Generating Joint Plan "))
+            rospy.loginfo(str("PathPlanner::create_joint_plan() ===== PathPlanner Group Name: " + group_name))
+            rospy.loginfo(str("PathPlanner::create_joint_plan() ===== Generating Joint Plan "))
             self.plan_generated[group_name] = False
             ret[group_name] = False
                    
@@ -633,7 +633,7 @@ class PathPlanner(object):
             except:
                 rospy.logwarn("PathPlanner::create_joint_plan() -- no feedback available")
 
-        rospy.logdebug("PathPlanner::create_joint_plan() -- finished")
+        rospy.loginfo("PathPlanner::create_joint_plan() -- finished")
 
         return ret
 
@@ -778,7 +778,7 @@ class PathPlanner(object):
 
                 self.gripper_client[a['name']] = actionlib.SimpleActionClient(a['action'], GripperCommandAction)
 
-                rospy.logdebug("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['action'] + ") for group " + a['name'] + " -- looking for server")
+                rospy.loginfo("PathPlanner::set_gripper_action() -- set_gripper_action(" + a['action'] + ") for group " + a['name'] + " -- looking for server")
                 if not self.gripper_client[a['name']].wait_for_server(rospy.Duration(2.0)) :
                     rospy.logerr("PathPlanner::run_gripper_action() -- wait for server timeout")
                     self.clear_gripper_actions()
@@ -806,7 +806,7 @@ class PathPlanner(object):
         else :
             rospy.logerr(str("PathPlanner::execute_gripper_action() -- no plan for group" + group_name + " yet generated."))
             r = False
-        rospy.logdebug(str("PathPlanner::execute_gripper_action() -- plan execution: " + str(r)))
+        rospy.loginfo(str("PathPlanner::execute_gripper_action() -- plan execution: " + str(r)))
         return r
 
     # for end-effectors that dont take JointTrajectory inputs (e.g., the PR2), this method will let you bypass this
