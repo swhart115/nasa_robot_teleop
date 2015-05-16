@@ -455,18 +455,12 @@ class NavigationWaypointControl(threading.Thread) :
             elif handle == self.waypoint_menu_handles["Delete Waypoint"] :
                 self.delete_waypoint(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Request Footstep Plan"] :
-                rospy.logwarn(str("NavigationWaypointControl::waypoint_menu_callback() -- Request Footstep Plan"))
-                print feedback
                 self.request_navigation_plan(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Toggle Full Control"] :
                 self.toggle_waypoint_controls(feedback)
             elif handle == self.waypoint_menu_handles["Execute Footstep Plan"] :
-                rospy.logwarn(str("NavigationWaypointControl::waypoint_menu_callback() -- Execute Footstep Plan"))
-                print feedback
                 self.footstep_controls.execute_footstep_path()
             elif handle == self.waypoint_menu_handles["Move Directly"] :
-                rospy.logwarn(str("NavigationWaypointControl::waypoint_menu_callback() -- Move Directly"))
-                print feedback
                 self.direct_move(feedback.marker_name)
             elif handle == self.waypoint_menu_handles["Sync Orientation to Robot"] :
                 self.sync_orientation_to_robot()

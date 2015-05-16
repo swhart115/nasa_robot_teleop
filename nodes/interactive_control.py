@@ -500,7 +500,7 @@ class InteractiveControl:
                 self.toggle_posture_control(g)
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
-            rospy.logwarn("InteractiveControl::handle_configure() -- EXECUTE_PLAN")
+            rospy.logdebug("InteractiveControl::handle_configure() -- EXECUTE_PLAN")
             for g in req.group_name :
                 self.reset_group_marker(g)
             # KRAMER -- relay converted call
@@ -509,7 +509,7 @@ class InteractiveControl:
             self.relay_configure_as_feedback(req)
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
-            rospy.logwarn("InteractiveControl::handle_configure() -- EXECUTE_STORED_PLAN")
+            rospy.logdebug("InteractiveControl::handle_configure() -- EXECUTE_STORED_PLAN")
             # KRAMER -- relay converted call
             #for idx in range(len(req.group_name)) :
             #    g = req.group_name[idx]
@@ -523,8 +523,8 @@ class InteractiveControl:
               
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
 
-            rospy.logwarn("InteractiveControl::handle_configure() -- PLAN_TO_MARKER")
-            print req
+            rospy.logdebug("InteractiveControl::handle_configure() -- PLAN_TO_MARKER")
+            #print req
 
             group_store = []
             pt_store = []
@@ -586,8 +586,8 @@ class InteractiveControl:
             #    self.path_planner.create_path_plan(group_store, pt_store)
             req.group_name = group_store
             req.goal_pose = [item for sublist in pt_store for item in sublist]
-            rospy.logwarn("InteractiveControl::handle_configure() -- updated PLAN_TO_MARKER")
-            print req
+            rospy.logdebug("InteractiveControl::handle_configure() -- updated PLAN_TO_MARKER")
+            #print req
             self.server.applyChanges()
             self.relay_configure_as_feedback(req)
 
@@ -710,8 +710,8 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem deleting nav waypoint")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH :
-            rospy.logwarn("InteractiveControl::handle_configure() -- PLAN_NAVIGATION_PATH")
-            print req
+            rospy.logdebug("InteractiveControl::handle_configure() -- PLAN_NAVIGATION_PATH")
+            #print req
             try :
                 if len(req.navigation_waypoint_name) > 0 :
                     if req.navigation_mode in self.path_planner.get_navigation_modes() :
@@ -726,8 +726,8 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem planning to nav waypoint")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH :
-            rospy.logwarn("InteractiveControl::handle_configure() -- EXECUTE_NAVIGATION_PATH")
-            print req
+            rospy.logdebug("InteractiveControl::handle_configure() -- EXECUTE_NAVIGATION_PATH")
+            #print req
             try :
                 # KRAMER -- relay converted call
                 #self.navigation_controls.footstep_controls.execute_footstep_path()
@@ -736,8 +736,8 @@ class InteractiveControl:
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing nav waypoint")
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
-            rospy.logwarn("InteractiveControl::handle_configure() -- EXECUTE_DIRECT_MOVE")
-            print req
+            rospy.logdebug("InteractiveControl::handle_configure() -- EXECUTE_DIRECT_MOVE")
+            #print req
             try :
                 # KRAMER -- relay converted call
                 #self.navigation_controls.direct_move(req.navigation_waypoint_name[0])
@@ -1061,7 +1061,7 @@ class InteractiveControl:
                 self.path_planner.create_joint_plan([group], [js])
         
     def relay_configure_as_feedback(self, req) :
-        rospy.logwarn("InteractiveControl::relay_configure_as_feedback()")
+        rospy.logdebug("InteractiveControl::relay_configure_as_feedback()")
         # handle cartesian/navigation/etc separately based on action_type
         if req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
             self.relay_cartesian_as_feedback(req)
@@ -1071,8 +1071,8 @@ class InteractiveControl:
             self.relay_storedpose_as_feedback(req)
 
     def relay_cartesian_as_feedback(self, req) :
-        rospy.logwarn("InteractiveControl::relay_cartesian_as_feedback()")
-        print req
+        rospy.logdebug("InteractiveControl::relay_cartesian_as_feedback()")
+        #print req
         # note: header, pose, menu_entry_id depends on req.action_type
         #       pub one message per group in group_name[]
         for idx in range(len(req.group_name)) :
@@ -1097,8 +1097,8 @@ class InteractiveControl:
                 self.srv_to_fb_pub.publish(fbMsg)
 
     def relay_navigation_as_feedback(self, req) :
-        rospy.logwarn("InteractiveControl::relay_navigation_as_feedback()")
-        print req
+        rospy.logdebug("InteractiveControl::relay_navigation_as_feedback()")
+        #print req
         # note: header, pose, menu_entry_id depends on req.action_type
         #       pub one message per group in group_name[]
         for idx in range(len(req.navigation_waypoint_name)) :
@@ -1117,12 +1117,12 @@ class InteractiveControl:
                 fbMsg.menu_entry_id = self.navigation_controls.waypoint_menu_handles["Execute Footstep Plan"]
             elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
                 fbMsg.menu_entry_id = self.navigation_controls.waypoint_menu_handles["Move Directly"]
-            rospy.logwarn("InteractiveControl::relay_navigation_as_feedback() -- constructed feedback message")
-            print fbMsg
+            rospy.logdebug("InteractiveControl::relay_navigation_as_feedback() -- constructed feedback message")
+            #print fbMsg
             self.srv_to_fb_pub.publish(fbMsg)
 
     def relay_storedpose_as_feedback(self, req) :
-        rospy.logwarn("InteractiveControl::relay_storedpose_as_feedback()")
+        rospy.logdebug("InteractiveControl::relay_storedpose_as_feedback()")
         # note: header, pose, menu_entry_id depends on req.action_type
         #       pub one message per group in group_name[]
         for idx in range(len(req.group_name)) :
@@ -1134,7 +1134,6 @@ class InteractiveControl:
             fbMsg.mouse_point_valid = False
             fbMsg.event_type = InteractiveMarkerFeedback.MENU_SELECT
             if req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE and idx < len(req.stored_pose_name) :
-                # TODO: need to set header?
                 fbMsg.menu_entry_id = self.group_menu_handles[(req.group_name[idx],"Stored Poses",req.stored_pose_name[idx])]
                 #rospy.logwarn("InteractiveControl::relay_storedpose_as_feedback() -- constructed feedback message")
                 #print fbMsg
@@ -1197,16 +1196,16 @@ class InteractiveControl:
                             self.path_planner.set_display_mode(feedback.marker_name, "all_points")
                 if (feedback.marker_name,"Execute") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Execute")] :
-                        rospy.logwarn(str("InteractiveControl::process_feedback() -- Execute"))
-                        print feedback
+                        rospy.logdebug(str("InteractiveControl::process_feedback() -- Execute"))
+                        #print feedback
                         self.reset_group_marker(feedback.marker_name)
                         r = self.path_planner.execute([feedback.marker_name])
                         if not r :
                             rospy.logerr(str("InteractiveControl::process_feedback() -- failed planner execution for group: " + feedback.marker_name + ". re-synching..."))
                 if (feedback.marker_name,"Plan") in self.group_menu_handles:
                     if handle == self.group_menu_handles[(feedback.marker_name,"Plan")] :
-                        rospy.logwarn(str("InteractiveControl::process_feedback() -- Plan"))
-                        print feedback
+                        rospy.logdebug(str("InteractiveControl::process_feedback() -- Plan"))
+                        #print feedback
                         pt = geometry_msgs.msg.PoseStamped()
                         pt.header = feedback.header
                         pt.pose = feedback.pose
