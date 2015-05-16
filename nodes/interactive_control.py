@@ -103,7 +103,7 @@ class InteractiveControl:
 
         # KRAMER -- relay converted call
         # pub to relay 'configure' service calls to IM server 'feedback' sub
-        self.srv_to_fb_pub = rospy.Publisher(str(self.robot_name + "_interactive_controls_server/feedback"), visualization_msgs.msg.InteractiveMarkerFeedback);
+        self.srv_to_fb_pub = rospy.Publisher(str(self.robot_name + "_interactive_controls_server/feedback"), visualization_msgs.msg.InteractiveMarkerFeedback, queue_size=10);
 
         # set up menu info
         self.joint_menu_options = []
@@ -585,12 +585,11 @@ class InteractiveControl:
             #        self.path_planner.clear_goal_target(g)
             #    self.path_planner.create_path_plan(group_store, pt_store)
             req.group_name = group_store
-            req.goal_pose = pt_store[0]
+            req.goal_pose = [item for sublist in pt_store for item in sublist]
             rospy.logwarn("InteractiveControl::handle_configure() -- updated PLAN_TO_MARKER")
             print req
-            self.relay_configure_as_feedback(req)
-
             self.server.applyChanges()
+            self.relay_configure_as_feedback(req)
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SET_JOINT_MAP :
             for idx in range(len(req.group_name)) :
@@ -1066,7 +1065,7 @@ class InteractiveControl:
         # handle cartesian/navigation/etc separately based on action_type
         if req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
             self.relay_cartesian_as_feedback(req)
-        elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PLAN or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
+        elif req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH or req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
             self.relay_navigation_as_feedback(req)
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
             self.relay_storedpose_as_feedback(req)
@@ -1084,17 +1083,18 @@ class InteractiveControl:
             #fbMsg.mouse_point =   # don't care?
             fbMsg.mouse_point_valid = False
             fbMsg.event_type = InteractiveMarkerFeedback.MENU_SELECT
-            if req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER :
+            if req.action_type == InteractiveControlsInterfaceRequest.PLAN_TO_MARKER and idx < len(req.goal_pose) :
                 fbMsg.header = req.goal_pose[idx].header
                 fbMsg.pose = req.goal_pose[idx].pose
                 fbMsg.menu_entry_id = self.group_menu_handles[(req.group_name[idx],"Plan")]
+                self.srv_to_fb_pub.publish(fbMsg)
             elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_PLAN :
-                fbMsg.header = req.goal_pose[idx].header
+                #fbMsg.header = req.goal_pose[idx].header
                 #fbMsg.pose = req.goal_pose[idx].pose
                 fbMsg.menu_entry_id = self.group_menu_handles[(req.group_name[idx],"Execute")]
-            rospy.logwarn("InteractiveControl::relay_cartesian_as_feedback() -- constructed feedback message")
-            print fbMsg
-            self.srv_to_fb_pub.publish(fbMsg)
+                #rospy.logwarn("InteractiveControl::relay_cartesian_as_feedback() -- constructed feedback message")
+                #print fbMsg
+                self.srv_to_fb_pub.publish(fbMsg)
 
     def relay_navigation_as_feedback(self, req) :
         rospy.logwarn("InteractiveControl::relay_navigation_as_feedback()")
@@ -1113,7 +1113,7 @@ class InteractiveControl:
             if req.action_type == InteractiveControlsInterfaceRequest.PLAN_NAVIGATION_PATH :
                 #fbMsg.pose = req.goal_pose[idx].pose
                 fbMsg.menu_entry_id = self.navigation_controls.waypoint_menu_handles["Request Footstep Plan"]
-            elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PLAN :
+            elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_NAVIGATION_PATH :
                 fbMsg.menu_entry_id = self.navigation_controls.waypoint_menu_handles["Execute Footstep Plan"]
             elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
                 fbMsg.menu_entry_id = self.navigation_controls.waypoint_menu_handles["Move Directly"]
@@ -1133,12 +1133,12 @@ class InteractiveControl:
             #fbMsg.mouse_point =   # don't care
             fbMsg.mouse_point_valid = False
             fbMsg.event_type = InteractiveMarkerFeedback.MENU_SELECT
-            if req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE :
+            if req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_STORED_POSE and idx < len(req.stored_pose_name) :
                 # TODO: need to set header?
                 fbMsg.menu_entry_id = self.group_menu_handles[(req.group_name[idx],"Stored Poses",req.stored_pose_name[idx])]
-            rospy.logwarn("InteractiveControl::relay_storedpose_as_feedback() -- constructed feedback message")
-            print fbMsg
-            self.srv_to_fb_pub.publish(fbMsg)
+                #rospy.logwarn("InteractiveControl::relay_storedpose_as_feedback() -- constructed feedback message")
+                #print fbMsg
+                self.srv_to_fb_pub.publish(fbMsg)
 
     def process_feedback(self, feedback) :
         self.server.setPose(feedback.marker_name, feedback.pose)
