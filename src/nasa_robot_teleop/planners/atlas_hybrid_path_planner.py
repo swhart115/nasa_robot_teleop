@@ -72,6 +72,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         self.joint_names = []
         self.feet_names = ['left', 'right']
         self.wait_for_service_timeout = 5.0
+        self.last_plan_name = ""
 
         self.manipulation_mode = "moveit"
 
@@ -131,7 +132,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
         except :
             rospy.logwarn("AtlasHybridPathPlanner::init() -- timeout out waiting for visualization service: /planned_manipulation/visualize")  
 
-        self.last_plan_name = ""
         self.get_joint_names()
 
         self.navigation_mode = rospy.get_param("~atlas/navigation_mode")
@@ -204,12 +204,13 @@ class AtlasHybridPathPlanner(PathPlanner) :
             controller_name = self.lookup_controller_name(group_name)  # FIXME
             msg_type = control_msgs.msg.FollowJointTrajectoryActionGoal
             
-            # topic_name = "/" + controller_name + "/command"
-            topic_name = "/" + controller_name + "/goal"
-            action_name = "/" + controller_name
-            rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
-            self.action_clients[group_name] = actionlib.SimpleActionClient(action_name, control_msgs.msg.FollowJointTrajectoryAction)
-            self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
+            if controller_name != "" :
+                # topic_name = "/" + controller_name + "/command"
+                topic_name = "/" + controller_name + "/goal"
+                action_name = "/" + controller_name
+                rospy.loginfo(str("COMMAND TOPIC: " + topic_name))
+                self.action_clients[group_name] = actionlib.SimpleActionClient(action_name, control_msgs.msg.FollowJointTrajectoryAction)
+                self.command_topics[group_name] = rospy.Publisher(topic_name, msg_type, queue_size=10)
 
         except :
             rospy.logerr(str("AtlasHybridPathPlanner()::setup_group() -- Robot " + self.robot_name + " has problem setting up controller for: " + group_name))
@@ -248,21 +249,25 @@ class AtlasHybridPathPlanner(PathPlanner) :
             except :
                 rospy.logerr("AtlasHybridPathPlanner::lookup_controller_name() -- Error loading controllers.yaml")
             joint_list = self.get_group_joints(group_name)
-            jn = joint_list[0]
-            for j in joint_list:
-                if j in self.urdf_model.joint_map :
-                    if self.urdf_model.joint_map[j].type != "fixed" :
-                        jn = j
-                        break
-            self.group_controllers[group_name] = ""
-            for c in controller_config['controller_list'] :
-                ns = ""
-                try :
-                    ns = "/" + c['action_ns']
-                except :
-                    pass
-                if jn in c['joints'] :
-                    self.group_controllers[group_name] = c['name'] + ns
+            if len(joint_list) > 0 :
+                jn = joint_list[0]
+                for j in joint_list:
+                    if j in self.urdf_model.joint_map :
+                        if self.urdf_model.joint_map[j].type != "fixed" :
+                            jn = j
+                            break
+                self.group_controllers[group_name] = ""
+                for c in controller_config['controller_list'] :
+                    ns = ""
+                    try :
+                        ns = "/" + c['action_ns']
+                    except :
+                        pass
+                    if jn in c['joints'] :
+                        self.group_controllers[group_name] = c['name'] + ns
+            else :
+                rospy.logwarn(str("AtlasHybridPathPlanner::lookup_controller_name() -- group " + group_name + " has no joints, not looking for controller"))
+                return ""
 
         rospy.loginfo(str("AtlasHybridPathPlanner::lookup_controller_name() -- Found Controller " + self.group_controllers[group_name]  + " for group " + group_name))
         return self.group_controllers[group_name]
@@ -281,9 +286,9 @@ class AtlasHybridPathPlanner(PathPlanner) :
 
         if N==0 :
             rospy.logwarn(str("AtlasHybridPathPlanner::load_group_from_srdf(" + group_name + ") -- no joint names found in the map!"))
-            return False
-
-        last_joint = self.groups[group_name].joint_map.names[N-1]
+            # return False
+        else :
+            last_joint = self.groups[group_name].joint_map.names[N-1]
 
         self.groups[group_name].group_name = group_name
         self.groups[group_name].group_id = self.srdf_model.groups.index(group_name)
@@ -525,16 +530,20 @@ class AtlasHybridPathPlanner(PathPlanner) :
                     N = len(jt.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
                     # N = len(jt.goal.trajectory.points)
-                    #self.command_topics[group_name].publish(jt)
+                    #if group_name in self.command_topics.keys() :
+                        #self.command_topics[group_name].publish(jt)
                     self.plan_generated[group_name] = False
 
-                    if not self.action_clients[group_name].wait_for_server(rospy.Duration(3.0)) :
-                        rospy.logerr("MoveItPathPlanner::execute_plans() -- wait for action_clients timeout")
-                        ret[group_name] = False
+                    if group_name in self.action_clients.keys() :
+                        if not self.action_clients[group_name].wait_for_server(rospy.Duration(3.0)) :
+                            rospy.logerr("MoveItPathPlanner::execute_plans() -- wait for action_clients timeout")
+                            ret[group_name] = False
 
-                    rospy.logwarn("MoveItPathPlanner::execute_on_plan() -- sending goal")
-                    self.action_clients[group_name].send_goal(jt)
-                    ret[group_name] = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+                        rospy.logwarn("MoveItPathPlanner::execute_on_plan() -- sending goal")
+                        self.action_clients[group_name].send_goal(jt)
+                        ret[group_name] = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+                    else :
+                        ret[group_name] = True
             else :
                 rospy.logwarn(str("MoveItPathPlanner::execute_plans() -- no plan for group " + group_name + " yet generated."))
                 ret[group_name] = False
@@ -1072,30 +1081,30 @@ class AtlasHybridPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
         
-        return None
-        # rospy.sleep(0.5)
-        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
-        # try :
-        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        # except :
-        #     rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-        #     return None
+        # return None
+        rospy.sleep(0.5)
+        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
+        try :
+            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        except :
+            rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+            return None
         
-        # while not fb_msg.planning_complete:
-        #     rospy.sleep(0.01)
-        #     try :
-        #         fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        #         # print fb_msg
-        #     except :
-        #         rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-        #         return None
+        while not fb_msg.planning_complete:
+            rospy.sleep(0.01)
+            try :
+                fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+                # print fb_msg
+            except :
+                rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+                return None
 
-        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
-        # if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
-        #     p = self.get_plan()
-        #     return p
-        # else :
-        #     return None
+        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
+        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
+            p = self.get_plan()
+            return p
+        else :
+            return None
 
 
     def plan_cartesian_goals_moveit(self, group_names, goals) :
@@ -1159,6 +1168,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths_moveit(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
+                            rospy.loginfo(str("MoveItPathPlanner::plan_cartesian_paths_moveit(" + group_name + ") -- found plan with fraction: " + str(fraction)))
                             traj_results[group_name] = plan.joint_trajectory   
                             if self.auto_execute[group_name] :
                                 self.stored_plans[group_name] = plan.joint_trajectory

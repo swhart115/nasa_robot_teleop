@@ -64,7 +64,7 @@ class PathPlanner(object):
         self.auto_execute = {}
         self.marker_store = {}
         self.command_topics = {}
-        self.plan_color = (0.5,0.1,0.75,.5)
+        self.plan_color = (0.5,0.1,0.75,1)
         self.path_increment = 1
 
         self.gripper_action = {}
@@ -172,7 +172,6 @@ class PathPlanner(object):
 
         rospy.loginfo(str("PathPlanner::add_planning_group() -- " + group_name))
 
-        print self.srdf_model.get_groups()
         if not group_name in self.srdf_model.get_groups() :
             rospy.loginfo(str("PathPlanner::add_planning_group() -- skipping " + group_name + "(not valid/active SRDF group)"))
             if group_name in self.active_groups :
@@ -203,7 +202,6 @@ class PathPlanner(object):
 
             # check to see if the group has an associated end effector, and add it if so
             if self.group_types[group_name] == "cartesian" :
-                print "hello: ", group_name
                 if self.has_end_effector_link(group_name) :
                     # print "PathPlanner::add_planning_group() -- ee link name: ", self.get_end_effector_link(group_name)
                     try :
@@ -385,15 +383,21 @@ class PathPlanner(object):
             try :
                 if self.has_end_effector_link(group) and self.group_types[group] == "cartesian":
                     ee_group = self.srdf_model.end_effectors[self.end_effector_map[group]].group
+                    # print "ee_group: ", ee_group
                     ee_root_frame = self.end_effector_display[ee_group].get_root_frame()
+                    # print "ee_root_frame: ", ee_root_frame
+                    # print "last_link: ", last_link
                     if last_link != ee_root_frame :
-                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(5.0))
+                        self.tf_listener.waitForTransform(last_link, ee_root_frame, rospy.Time(0), rospy.Duration(3.0))
                         (trans, rot) = self.tf_listener.lookupTransform(last_link, ee_root_frame, rospy.Time(0))
                         rot = normalize_vector(rot)
                         ee_offset = toPose(trans, rot)
 
                     offset_pose = toMsg(end_pose*fromMsg(ee_offset))
+                    # print "getting ee markers..."
                     end_effector_markers = self.end_effector_display[ee_group].get_current_position_marker_array(offset=offset_pose, scale=1, color=self.plan_color, root=self.get_group_planning_frame(group), idx=idx)
+                    # print "ee markers:"
+                    # print end_effector_markers
                     for m in end_effector_markers.markers: markers.markers.append(m)
                     idx += len(end_effector_markers.markers)
             except :

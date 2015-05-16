@@ -230,7 +230,6 @@ class InteractiveControl:
         if not group_type :           
             group_type = self.get_group_type(group)
 
-        print "setup group: ", group
         if not self.path_planner.add_planning_group(group, group_type) :
             self.group_map[group_type].remove(group)
             rospy.logerr(str("InteractiveControl::setup_group() -- planner rejected group: " + group + " of type: " + group_type))
@@ -309,7 +308,7 @@ class InteractiveControl:
         idx = 0
         for jg_link in jg_links :  
             try :
-                marker = get_mesh_marker_for_link(jg_link, self.urdf)
+                marker = get_marker_for_link(jg_link, self.urdf)
                 if marker != None :
                     marker.color.r = 1
                     marker.color.g = 1
@@ -340,7 +339,7 @@ class InteractiveControl:
         idx = 0
         for ee_link in ee_links :
             try :
-                end_effector_marker = get_mesh_marker_for_link(ee_link, self.urdf)
+                end_effector_marker = get_marker_for_link(ee_link, self.urdf)
                 # TODO set frames of markers to be actual robot link frames
                 if end_effector_marker != None :
                     end_effector_marker.color.r = 1

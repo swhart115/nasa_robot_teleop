@@ -68,6 +68,9 @@ def link_has_shape(link) :
     except :
         return ""
 
+def link_has_visual(link) :
+    return link_has_shape(link) or link_has_mesh(link)
+
 def get_shape_properties(link) :
     try :
         if link.visual :
@@ -142,7 +145,7 @@ def get_joint_parent_link(joint, urdf) :
         return urdf.joint_map[joint].parent
     return None
     
-def get_mesh_marker_for_link(link_name, urdf) :
+def get_marker_for_link(link_name, urdf) :
     
     try :
         marker = visualization_msgs.msg.Marker()
@@ -154,16 +157,46 @@ def get_mesh_marker_for_link(link_name, urdf) :
         marker.header.stamp = rospy.Time(0)
         marker.ns = link_name
 
-        marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
-        marker.mesh_resource = link.visual.geometry.filename
-        marker.mesh_use_embedded_materials = True
+        if isinstance(link.visual.geometry, Sphere) :
+            radius = link.visual.geometry.radius
+            marker.type = visualization_msgs.msg.Marker.SPHERE
+            marker.scale.x = radius*2.0
+            marker.scale.y = radius*2.0
+            marker.scale.z = radius*2.0                               
 
-        s = [1.0, 1.0, 1.0]
+        elif isinstance(link.visual.geometry, Box) :
+            size = link.visual.geometry.size
+            marker.type = visualization_msgs.msg.Marker.CUBE
+            marker.scale.x = size[0]
+            marker.scale.y = size[1]
+            marker.scale.z = size[2]
+            
+        elif isinstance(link.visual.geometry, Cylinder) :
+            radius = link.visual.geometry.radius
+            length = link.visual.geometry.length
+            marker.type = visualization_msgs.msg.Marker.CYLINDER
+            marker.scale.x = radius*2.0
+            marker.scale.y = radius*2.0
+            marker.scale.z = length
+
+        elif isinstance(link.visual.geometry, Mesh) :
+            filename = link.visual.geometry.filename
+            scale = link.visual.geometry.scale    
+            marker.type = visualization_msgs.msg.Marker.MESH_RESOURCE
+            marker.mesh_resource = filename
+            if scale :
+                marker.scale.x = scale[0]
+                marker.scale.y = scale[1]
+                marker.scale.z = scale[2]
+            else :
+                marker.scale.x = 1.0
+                marker.scale.y = 1.0
+                marker.scale.z = 1.0
+
+            marker.mesh_use_embedded_materials = True
+
         q = [0.0, 0.0, 0.0, 1.0]
-        
-        if not link.visual.geometry.scale == None :
-            s = link.visual.geometry.scale
-        
+              
         if not link.visual.origin.rpy == None:
             q = (kdl.Rotation.RPY(link.visual.origin.rpy[0],link.visual.origin.rpy[1],link.visual.origin.rpy[2])).GetQuaternion()
     
@@ -179,9 +212,6 @@ def get_mesh_marker_for_link(link_name, urdf) :
         marker.pose = p
 
         marker.action = visualization_msgs.msg.Marker.ADD
-        marker.scale.x = s[0]
-        marker.scale.y = s[1]
-        marker.scale.z = s[2]
         marker.text = link_name
 
     except :
