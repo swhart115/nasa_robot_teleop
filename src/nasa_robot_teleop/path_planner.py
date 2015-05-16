@@ -319,6 +319,12 @@ class PathPlanner(object):
         else :
             return False
 
+    def is_execution_complete(self, group) :
+        if group in self.execution_status :
+            return self.execution_status[group]
+        else :
+            return False
+
     #############################
     ##### path pub methods ######
     #############################
@@ -654,7 +660,8 @@ class PathPlanner(object):
 
         for group_name in group_names :
             ret[group_name] = False
-
+            self.plan_generated[group_name] = False
+            self.execution_status[group_name] = False
             rospy.loginfo(str("PathPlanner::create_path_plan() ---- PathPlanner Group Name: " + group_name))
             rospy.loginfo(str("PathPlanner::create_path_plan() ---- Creating Path Plan"))
 
@@ -685,6 +692,7 @@ class PathPlanner(object):
             p = self.plan_cartesian_paths(group_names, waypoints_list)     
             if p:
                 stored_plan = p  
+                print "storing plan"
             else :
                 return ret
         except :
@@ -697,11 +705,13 @@ class PathPlanner(object):
                 # check to make sure the plan has a non-0 amount of waypoints
                 if self.stored_plans[group_name] :
                     self.plan_generated[group_name] = self.check_valid_plan(self.stored_plans[group_name].points)
+                    ret[group_name] = True
                 # if the plan was found publish it to be displayed in RViz as a MarkerArray
                 if self.plan_generated[group_name] :
                     self.publish_path_data(self.stored_plans[group_name], group_name)
             except:
                 rospy.logwarn("PathPlanner::create_path_plan() -- no feedback available")
+            print "plan generated for ", group_name, ": ", self.plan_generated[group_name]
             ret[group_name] = self.plan_generated[group_name]
         return ret
    
@@ -724,6 +734,7 @@ class PathPlanner(object):
         all_ret = {}
         manip_ret = {}
         for group_name in group_names :
+            # self.plan_generated[group_name] = False
             rospy.loginfo("PathPlanner::execute() -- " + group_name)
             if self.group_types[group_name] == "endeffector" and self.gripper_client:
                 rospy.loginfo("PathPlanner::execute() -- using gripper service")

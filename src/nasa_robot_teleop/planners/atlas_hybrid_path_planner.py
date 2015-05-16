@@ -486,7 +486,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
                 continue
 
             plan_name += str("/") + group_name
-            ret[group_name] = True
+            ret[group_name] = False
 
         req = ExecuteManipulationPlanRequest()
         rospy.logwarn(str("AtlasHybridPathPlanner::execute_plans for " + plan_name ))
@@ -522,17 +522,18 @@ class AtlasHybridPathPlanner(PathPlanner) :
             if self.plan_generated[group_name] and self.stored_plans[group_name] :
                 rospy.loginfo(str("MoveItPathPlanner::execute_plans() -- executing plan for group: " + group_name))
                 if self.actionlib :
-                    rospy.logdebug("MoveItPathPlanner::execute_plans() -- using actionlib")
+                    rospy.loginfo("MoveItPathPlanner::execute_plans() -- using actionlib")
                     ret[group_name] = self.go(group_name, wait)
                 else :
-                    rospy.logdebug("MoveItPathPlanner::execute_plans() -- publishing to topic")
+                    rospy.loginfo("MoveItPathPlanner::execute_plans() -- publishing to topic")
                     jt = self.translate_trajectory_msg(group_name, self.stored_plans[group_name])             
                     N = len(jt.trajectory.points)
                     rospy.logwarn(str("executing path of " + str(N) + " points"))
                     # N = len(jt.goal.trajectory.points)
                     #if group_name in self.command_topics.keys() :
                         #self.command_topics[group_name].publish(jt)
-                    self.plan_generated[group_name] = False
+                    # self.plan_generated[group_name] = False
+                    # self.execution_status[group_name] = False
 
                     if group_name in self.action_clients.keys() :
                         if not self.action_clients[group_name].wait_for_server(rospy.Duration(3.0)) :
@@ -542,12 +543,13 @@ class AtlasHybridPathPlanner(PathPlanner) :
                         rospy.logwarn("MoveItPathPlanner::execute_on_plan() -- sending goal")
                         self.action_clients[group_name].send_goal(jt)
                         ret[group_name] = True # no better way for monitoring success here as it is just an open-loop way of publishing the path
+                        self.execution_status[group_name] = True
                     else :
                         ret[group_name] = True
             else :
                 rospy.logwarn(str("MoveItPathPlanner::execute_plans() -- no plan for group " + group_name + " yet generated."))
                 ret[group_name] = False
-            rospy.logdebug(str("MoveItPathPlanner::execute_plans() -- plan execution: " + str(ret[group_name])))
+            rospy.loginfo(str("MoveItPathPlanner::execute_plans() -- plan execution: " + str(ret[group_name])))
         return ret
 
     def go(self, group_name, wait=False) :
@@ -555,8 +557,8 @@ class AtlasHybridPathPlanner(PathPlanner) :
             rospy.logerr(str("MoveItPathPlanner::go() -- group name \'" + str(group_name) + "\' not found"))
             return False
         else :
-            return self.moveit_groups[group_name].go(wait)
-
+            self.execution_status[group_name] =  self.moveit_groups[group_name].go(wait)
+            return self.execution_status[group_name]
 
     def execute_navigation_plan(self, footsteps=None, lift_heights=None, feet=None, goals=None) :
 
@@ -945,7 +947,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
             return self.plan_cartesian_goals_moveit(group_names, goals)
     
     def plan_cartesian_paths(self, group_names, paths) :
-
         self.manipulation_mode = rospy.get_param("~atlas/manipulation_mode")
         if self.manipulation_mode == "atlas" :
             p = self.plan_cartesian_paths_atlas(group_names, paths)
@@ -998,6 +999,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         for g in group_names :
             goal.plan_name += str("/") + g
             self.plan_generated[g] = False
+            self.execution_status[g] = False
 
         self.last_plan_name = goal.plan_name
         rospy.logwarn("Setting plan_name: " + self.last_plan_name)
@@ -1081,30 +1083,30 @@ class AtlasHybridPathPlanner(PathPlanner) :
         # Sends the goal to the action server.
         self.cartesian_reach_client.send_goal(goal)
         
-        # return None
-        rospy.sleep(0.5)
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
-        try :
-            fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-        except :
-            rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-            return None
+        return None
+        # rospy.sleep(0.5)
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- polling feedback")
+        # try :
+        #     fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        # except :
+        #     rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #     return None
         
-        while not fb_msg.planning_complete:
-            rospy.sleep(0.01)
-            try :
-                fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
-                # print fb_msg
-            except :
-                rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
-                return None
+        # while not fb_msg.planning_complete:
+        #     rospy.sleep(0.01)
+        #     try :
+        #         fb_msg = rospy.wait_for_message("/planned_manipulation/feedback", matec_actions.msg.PlannedManipulationFeedback, 5.0)
+        #         # print fb_msg
+        #     except :
+        #         rospy.logerr(str("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- could not get feedback message on: /planned_manipulation/feedback"))
+        #         return None
 
-        rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
-        if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
-            p = self.get_plan()
-            return p
-        else :
-            return None
+        # rospy.loginfo("AtlasHybridPathPlanner::plan_cartesian_paths_atlas() -- PLANNING COMPLETE")
+        # if fb_msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :    
+        #     p = self.get_plan()
+        #     return p
+        # else :
+        #     return None
 
 
     def plan_cartesian_goals_moveit(self, group_names, goals) :
@@ -1127,9 +1129,10 @@ class AtlasHybridPathPlanner(PathPlanner) :
                     self.moveit_groups[group_name].set_pose_target(goals[idx])       
                     plan = self.moveit_groups[group_name].plan()
                     plan = self.downsample_plan(plan)
+                    self.plan_generated[group_name] = True
+                    self.execution_status[group_name] = False                                
                     if self.auto_execute[group_name] :
                         self.stored_plans[group_name] = plan.joint_trajectory
-                        self.plan_generated[group_name] = True
                         self.execute([group_name], from_stored=True)  
                     traj_results[group_name] = plan.joint_trajectory
                 except :
@@ -1164,15 +1167,18 @@ class AtlasHybridPathPlanner(PathPlanner) :
                         # this jump parameter often makes it fail---more investigation needed here.
                         # also, this will create Cartesian trajectories at a 1cm resolution through all the input waypoints.
                         (plan, fraction) = self.moveit_groups[group_name].compute_cartesian_path(stripped_path, 0.01, 0)  
+                        print "fraction: ", fraction
                         plan = self.downsample_plan(plan)
+
                         if fraction < 0 :
                             rospy.logwarn(str("MoveItPathPlanner::plan_cartesian_paths_moveit(" + group_name + ") -- failed, fraction: " + str(fraction)))
                         else :
                             rospy.loginfo(str("MoveItPathPlanner::plan_cartesian_paths_moveit(" + group_name + ") -- found plan with fraction: " + str(fraction)))
                             traj_results[group_name] = plan.joint_trajectory   
+                            self.plan_generated[group_name] = True
+                            self.execution_status[group_name] = False
                             if self.auto_execute[group_name] :
                                 self.stored_plans[group_name] = plan.joint_trajectory
-                                self.plan_generated[group_name] = True
                                 self.execute([group_name], from_stored=True)         
                     except :
                         rospy.logerr("MoveItInterface::plan_cartesian_paths_moveit() -- Generating Cartesian Path Plan Failed")
@@ -1404,29 +1410,34 @@ class AtlasHybridPathPlanner(PathPlanner) :
         
         groups = self.last_plan_name.split("/")
         groups.remove("")
-        if msg.planning_complete :
-            if msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :
-                new_plan_found = False
-                for g in groups :
-                    if not self.plan_generated[g] :
-                        new_plan_found = True
-                    self.plan_generated[g] = True
-                
-                if new_plan_found:
-                    jt = self.get_plan() 
-                    if isinstance(jt, trajectory_msgs.msg.JointTrajectory) :    
-                        jt_ordered, group = self.process_plan(jt)  
-                        self.publish_path_data(jt_ordered, group)
 
-                    else :
-                        rospy.logwarn("AtlasHybridPathPlanner::planner_feedback() -- bad JointTrajectory msg") 
-
-        if msg.execution_complete :
-            if msg.execution_progress > rospy.get_param("~atlas/planned_manipulation/execution_success_threshold") :
-                self.execution_status[self.last_plan_name] = True
+        for g in groups :
+            
+            if msg.execution_progress > 0 and not msg.execution_complete :
+                self.plan_generated[g] = False
+                print "forcing plan gen false"
             else :
-                self.execution_status[self.last_plan_name] = False
+                if msg.planning_complete :
+                    new_plan_found = False
+                    if msg.planning_progress > rospy.get_param("~atlas/planned_manipulation/planning_success_threshold") :
+                        if not self.plan_generated[g] :
+                            new_plan_found = True
+                            self.plan_generated[g] = True
+                            print "planning is now complete"
 
+                    if new_plan_found:
+                        jt = self.get_plan() 
+                        if isinstance(jt, trajectory_msgs.msg.JointTrajectory) :    
+                            jt_ordered, group = self.process_plan(jt)  
+                            self.publish_path_data(jt_ordered, group)
+                        else :
+                            rospy.logwarn("AtlasHybridPathPlanner::planner_feedback() -- bad JointTrajectory msg") 
+
+            if msg.execution_complete :
+                if msg.execution_progress > rospy.get_param("~atlas/planned_manipulation/execution_success_threshold") :
+                    self.execution_status[g] = True
+                    print "execution status is now complete"
+        
 
     def planner_viz_feedback(self, data) :
         jt = data.trajectory
