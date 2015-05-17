@@ -345,6 +345,7 @@ class FootstepControl(object) :
     def snap_path_to_points(self) :
 
         for f in self.footstep_poses.keys() :
+            rospy.sleep(0.25)
             self.snap_to_points(self.footstep_poses[f], self.frame_id, f)
 
     def snap_to_points(self, pose_in, frame_id, name) :
