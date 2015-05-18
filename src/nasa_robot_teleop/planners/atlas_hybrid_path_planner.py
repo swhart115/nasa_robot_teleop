@@ -217,8 +217,12 @@ class AtlasHybridPathPlanner(PathPlanner) :
             r = False
 
         try :
-            self.moveit_groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
-            self.moveit_groups[group_name].set_goal_joint_tolerance(joint_tolerance)
+
+            try :
+                self.moveit_groups[group_name] = moveit_commander.MoveGroupCommander(group_name)
+                self.moveit_groups[group_name].set_goal_joint_tolerance(joint_tolerance)
+            except :
+                rospy.logwarn("AtlasHybridPathPlanner::setup_group() -- problem connecting to moveit server")
 
             if len(self.position_tolerances[group_name]) != 3 or len(self.orientation_tolerances[group_name]) != 3 :
                 rospy.logwarn("AtlasHybridPathPlanner::setup_group() tolerance vectors of wrong size. Just using first val")
@@ -231,8 +235,12 @@ class AtlasHybridPathPlanner(PathPlanner) :
                 if not(self.orientation_tolerances[group_name][0] == self.orientation_tolerances[group_name][1] == self.orientation_tolerances[group_name][2]) :
                     self.orientation_tolerances[group_name] = [self.orientation_tolerances[group_name][0]]*3
                     rospy.logwarn("AtlasHybridPathPlanner::setup_group() dimensional orientation tolerances not supported. Just using first val")                              
-            self.moveit_groups[group_name].set_goal_position_tolerance(position_tolerances[0])
-            self.moveit_groups[group_name].set_goal_orientation_tolerance(self.orientation_tolerances[group_name][0])
+            try :
+                self.moveit_groups[group_name].set_goal_position_tolerance(position_tolerances[0])
+                self.moveit_groups[group_name].set_goal_orientation_tolerance(self.orientation_tolerances[group_name][0])
+            except :
+                rospy.logwarn("AtlasHybridPathPlanner::setup_group() -- problem connecting to moveit server")
+
         except :
             rospy.logerr(str("AtlasHybridPathPlanner()::setup_group() -- Robot " + self.robot_name + " has problem setting up MoveIt! commander group for: " + group_name))
             r = False
