@@ -22,11 +22,12 @@ int8 action_type
   int8 SET_NAVIGATION_MODE = 20
   int8 SET_ACCOMMODATE_TERRAIN_IN_NAVIGATION = 21
   int8 EXECUTE_DIRECT_MOVE = 22
-  int8 SYNC_NAVIGATION_TO_ROBOT_ORIENTATION = 23
-  int8 SYNC_NAVIGATION_TO_PATH_ORIENTATION = 24
-  int8 SAVE_FOOTSTEP_PATH = 25
-  int8 SET_TOOL_OFFSET = 26
-  int8 CLEAR_TOOL_OFFSET = 27
+  int8 SYNC_NAVIGATION_TO_ROBOT_LOCATION = 23
+  int8 SYNC_NAVIGATION_TO_ROBOT_ORIENTATION = 24
+  int8 SYNC_NAVIGATION_TO_PATH_ORIENTATION = 25
+  int8 SAVE_FOOTSTEP_PATH = 26
+  int8 SET_TOOL_OFFSET = 27
+  int8 CLEAR_TOOL_OFFSET = 28
   
   
 # name of groups to add, remove, or index into for below structures (i.e., the order of this list defines the data below)
@@ -54,7 +55,7 @@ ToleranceInfo[] tolerance
 bool[] execute_on_plan
 bool[] plan_on_move
 
-# the names of the navigation_points that will be deleted
+# the names of the navigation_points that will be considered
 string[] navigation_waypoint_name
 
 # current setting of navigation waypoint flags

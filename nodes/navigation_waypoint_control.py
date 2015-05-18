@@ -391,6 +391,27 @@ class NavigationWaypointControl(threading.Thread) :
             self.server.setPose(n, ps)
         self.server.applyChanges()
 
+    def sync_location_to_robot(self, markers=None) :
+
+        if self.reference_frame :
+            self.tf_listener.waitForTransform(self.frame_id, self.reference_frame, rospy.Time(0), rospy.Duration(5.0))
+            (trans, rot) = self.tf_listener.lookupTransform(self.frame_id, self.reference_frame, rospy.Time(0))       
+            ref_pose = toPose(trans, rot)
+        else :
+            ref_pose = Pose()
+            ref_pose.orientation.w = 1
+
+        if not markers :
+            markers = self.waypoint_markers
+            
+        for id in markers :
+            # ps = Pose()
+            n = self.get_waypoint_name(id)
+            # p = self.server.get(n)  
+            # ps = ref_pose
+            self.server.setPose(n, ref_pose)
+        self.server.applyChanges()
+
     def sync_orientation_to_path(self) :
 
         if self.reference_frame :

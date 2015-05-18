@@ -710,7 +710,8 @@ class InteractiveControl:
 
         elif req.action_type == InteractiveControlsInterfaceRequest.EXECUTE_DIRECT_MOVE :
             try :
-                self.navigation_controls.direct_move(req.navigation_waypoint_name[0])
+                if len(req.navigation_waypoint_name) > 0 : 
+                    self.navigation_controls.direct_move(req.navigation_waypoint_name[0])
             except :
                 rospy.logerr("InteractiveControl::handle_configure() -- problem executing direct move")
 
@@ -719,6 +720,12 @@ class InteractiveControl:
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_ROBOT_ORIENTATION :
             self.navigation_controls.sync_orientation_to_robot()
+
+        elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_ROBOT_LOCATION :
+            if len(req.navigation_waypoint_name) > 0 :
+                self.navigation_controls.sync_location_to_robot(req.navigation_waypoint_name)
+            else :
+                self.navigation_controls.sync_location_to_robot()
 
         elif req.action_type == InteractiveControlsInterfaceRequest.SYNC_NAVIGATION_TO_PATH_ORIENTATION :
             self.navigation_controls.sync_orientation_to_path()

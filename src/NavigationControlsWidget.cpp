@@ -25,6 +25,7 @@ void NavigationControlsWidget::setupWidgets() {
     QObject::connect(ui->execute_button, SIGNAL(clicked()), this, SLOT(executeRequest()));
     QObject::connect(ui->direct_move_button, SIGNAL(clicked()), this, SLOT(directMoveRequest()));
     QObject::connect(ui->sync_to_robot_orientation_button, SIGNAL(clicked()), this, SLOT(syncToRobotOrientationRequest()));
+    QObject::connect(ui->sync_to_robot_location_button, SIGNAL(clicked()), this, SLOT(syncToRobotLocationRequest()));
     QObject::connect(ui->sync_to_path_orientation_button, SIGNAL(clicked()), this, SLOT(syncToPathOrientationRequest()));
     QObject::connect(ui->save_footstep_path_button, SIGNAL(clicked()), this, SLOT(saveFootstepPathRequest()));
 
@@ -54,12 +55,12 @@ void NavigationControlsWidget::setupDisplay() {
         ui->nav_mode_box->setCurrentIndex(index);
     }
 
-    if(plan_found) {
+/*    if(plan_found) {
         ui->plan_label->setText(QString("PLAN FOUND"));
     } else {
         ui->plan_label->setText(QString("NO PLAN"));
     }
-
+*/
     if(accommodate_terrain) {
         ui->accommodate_terrain->setCheckState(Qt::Checked);
     } else {    
@@ -167,6 +168,32 @@ bool NavigationControlsWidget::syncToRobotOrientationRequest() {
         ROS_ERROR("NavigationControlsWidget::syncToRobotOrientationRequest() -- failed to call service");
         return false;
     }
+
+}
+
+bool NavigationControlsWidget::syncToRobotLocationRequest() {
+
+    ROS_INFO("NavigationControlsWidget::syncToRobotLocationRequest()");    
+
+    nasa_robot_teleop::InteractiveControlsInterface srv;
+
+    srv.request.action_type = nasa_robot_teleop::InteractiveControlsInterfaceRequest::SYNC_NAVIGATION_TO_ROBOT_LOCATION;
+
+    QListWidgetItem *item = ui->waypoint_list->currentItem();
+    if(item) {
+        srv.request.navigation_waypoint_name.push_back(item->text().toStdString());
+    }
+    if (service_client_->call(srv))
+    {
+        ROS_INFO("NavigationControlsWidget::syncToRobotLocationRequest() -- success");
+        return setDataFromResponse(srv.response);
+    }
+    else
+    {
+        ROS_ERROR("NavigationControlsWidget::syncToRobotLocationRequest() -- failed to call service");
+        return false;
+    }
+
 }
 
 bool NavigationControlsWidget::syncToPathOrientationRequest() {
