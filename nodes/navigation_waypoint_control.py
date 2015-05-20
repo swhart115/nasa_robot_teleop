@@ -490,7 +490,7 @@ class NavigationWaypointControl(threading.Thread) :
             elif handle == self.waypoint_menu_handles["Save Footstep Path"] :
                 self.save_footstep_path("")
             elif handle == self.waypoint_menu_handles["Snap PATH To Points"] :
-                self.snap_path_to_points()
+                self.snap_path_to_points(feedback.header.frame_id)
             elif handle == self.waypoint_menu_handles["Swap Start Feet"] :
                 self.footstep_controls.swap_footstep(0,1)
 
@@ -503,9 +503,9 @@ class NavigationWaypointControl(threading.Thread) :
         self.server.applyChanges()
         self.waypoint_poses[feedback.marker_name] = feedback.pose
        
-    def snap_path_to_points(self) :
+    def snap_path_to_points(self, frame_id) :
         if self.footstep_controls :
-            self.footstep_controls.snap_path_to_points()
+            self.footstep_controls.snap_path_to_points(frame_id)
         else :
             rospy.logwarn("NavigationControl::snap_path_to_points() -- has no footstep controls")
 

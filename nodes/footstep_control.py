@@ -306,7 +306,7 @@ class FootstepControl(object) :
             elif handle == self.footstep_menu_handles["Snap To Points"] :
                 self.snap_to_points(feedback.pose, feedback.header.frame_id, feedback.marker_name)
             elif handle == self.footstep_menu_handles["Snap PATH To Points"] :
-                self.snap_path_to_points()
+                self.snap_path_to_points(feedback.header.frame_id)
 
         elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(str("FootstepControl::footstep_callback() -- moved foot #" + str(feedback.marker_name)))
@@ -342,14 +342,18 @@ class FootstepControl(object) :
         else :
             self.full_footstep_controls[sid] = True
 
-    def snap_path_to_points(self) :
+    def snap_path_to_points(self, frame_id) :
 
+        print self.footstep_poses.keys()
+        print frame_id
         for f in self.footstep_poses.keys() :
-            rospy.sleep(0.25)
-            self.snap_to_points(self.footstep_poses[f], self.frame_id, f)
+            rospy.sleep(0.2)
+            self.snap_to_points(self.footstep_poses[f], frame_id, f)
 
     def snap_to_points(self, pose_in, frame_id, name) :
 
+        print name
+        print frame_id
         print pose_in
         pose = geometry_msgs.msg.PoseStamped()
         pose.pose = pose_in
