@@ -836,6 +836,34 @@ class AtlasHybridPathPlanner(PathPlanner) :
     def set_accommodate_terrain_in_navigation(self, val) :
         rospy.set_param("~atlas/assume_flat_ground", not bool(val))
 
+    def snap_footstep_to_points(self, pose) :
+
+        try :
+            rospy.wait_for_service("/step_snap_server", 0.25)
+        except Exception as e:
+            print e 
+            return None
+            
+        snap_srv = rospy.ServiceProxy('/step_snap_server', SnapStep)
+
+        try:
+            roll,pitch,yaw = euler_from_quaternion((pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w))
+            out = PoseStamped()
+            out.header.frame_id = pose.header.frame_id
+            pose2d = Pose2D( pose.pose.position.x,  pose.pose.position.y, yaw)
+
+            print "2D pose:"
+            print pose2d
+            out.pose = snap_srv(SnapStepRequest(pose2d)).pose
+
+            return out
+        except rospy.ServiceException as e:
+            print e
+
+        return None
+
+
+
     ##################################
     ######## PLANNING METHODS ########
     ##################################
