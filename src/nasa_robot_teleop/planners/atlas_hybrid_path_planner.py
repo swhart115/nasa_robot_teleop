@@ -74,7 +74,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         self.wait_for_service_timeout = 5.0
         self.last_plan_name = ""
 
-        self.manipulation_mode = "moveit"
+        self.manipulation_mode = "atlas"
 
         rospy.loginfo(str("============ Setting up MoveIt! for robot: \'" + self.robot_name + "\'"))
         self.robot = moveit_commander.RobotCommander()
@@ -102,7 +102,7 @@ class AtlasHybridPathPlanner(PathPlanner) :
         rospy.set_param("~atlas/reactive_walk/timeout", 0.0)
         rospy.set_param("~atlas/reactive_walk/enqueue", False)
 
-        rospy.set_param("~atlas/manipulation_mode", "atlas")
+        rospy.set_param("~atlas/manipulation_mode", self.manipulation_mode)
         rospy.set_param("~atlas/moveit/downsample_rate", 0.1)
 
         self.cartesian_reach_client = actionlib.SimpleActionClient('/planned_manipulation/server', matec_actions.msg.PlannedManipulationAction)
@@ -1451,7 +1451,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
             
             if msg.execution_progress > 0 and not msg.execution_complete :
                 self.plan_generated[g] = False
-                print "forcing plan gen false"
             else :
                 if msg.planning_complete :
                     new_plan_found = False
@@ -1459,7 +1458,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
                         if not self.plan_generated[g] :
                             new_plan_found = True
                             self.plan_generated[g] = True
-                            print "planning is now complete"
 
                     if new_plan_found:
                         jt = self.get_plan() 
@@ -1472,7 +1470,6 @@ class AtlasHybridPathPlanner(PathPlanner) :
             if msg.execution_complete :
                 if msg.execution_progress > rospy.get_param("~atlas/planned_manipulation/execution_success_threshold") :
                     self.execution_status[g] = True
-                    print "execution status is now complete"
         
 
     def planner_viz_feedback(self, data) :

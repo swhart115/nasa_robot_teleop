@@ -1,8 +1,8 @@
 joint:
   - head
 cartesian:
-  - left_arm
-  - right_arm
+  - left_full
+  - right_full
 endeffector:
   - right_hand
   - left_hand
