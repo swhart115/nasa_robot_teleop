@@ -9,6 +9,7 @@ import math
 import random
 import tf
 import pickle
+import PyKDL as kdl
 
 from copy import deepcopy
 
@@ -77,6 +78,7 @@ class FootstepControl(object) :
         self.footstep_menu_options.append("Add Footstep Before")
         self.footstep_menu_options.append("Add Footstep After")
         self.footstep_menu_options.append("Add Alternate Footstep")
+        self.footstep_menu_options.append("Zero Orientation")
         self.footstep_menu_options.append("Delete Footstep")
         self.footstep_menu_options.append("Save Footsteps")
         # self.footstep_menu_options.append("Execute")
@@ -303,6 +305,8 @@ class FootstepControl(object) :
                 self.add_footstep(feedback, "after")
             elif handle == self.footstep_menu_handles["Add Alternate Footstep"] :
                 self.add_footstep(feedback, "alternate")
+            elif handle == self.footstep_menu_handles["Zero Orientation"] :
+                self.zero_orientation(feedback.pose, feedback.header.frame_id, feedback.marker_name)
             elif handle == self.footstep_menu_handles["Snap To Points"] :
                 self.snap_to_points(feedback.pose, feedback.header.frame_id, feedback.marker_name)
             elif handle == self.footstep_menu_handles["Snap PATH To Points"] :
@@ -342,19 +346,29 @@ class FootstepControl(object) :
         else :
             self.full_footstep_controls[sid] = True
 
-    def snap_path_to_points(self, frame_id) :
+    def zero_orientation(self, pose_in, frame_id, name) :
+        pose = geometry_msgs.msg.PoseStamped()       
+        pose.pose = pose_in
+        R = kdl.Rotation.Quaternion(pose.pose.orientation.x, pose.pose.orientation.y, pose.pose.orientation.z, pose.pose.orientation.w)
+        rpy = list(R.GetRPY())
+        rpy[0] = 0
+        rpy[1] = 0
+        q =  kdl.Rotation.RPY(rpy[0], rpy[1], rpy[2]).GetQuaternion()
+        pose.pose.orientation.x = q[0]
+        pose.pose.orientation.y = q[1]
+        pose.pose.orientation.z = q[2]
+        pose.pose.orientation.w = q[3]
+        pose.header.frame_id = frame_id  
+        footstep_name = self.footstep_markers[name].description
+        self.server.setPose(name, pose.pose)
+        self.server.applyChanges()
 
-        print self.footstep_poses.keys()
-        print frame_id
+    def snap_path_to_points(self, frame_id) :
         for f in self.footstep_poses.keys() :
             rospy.sleep(0.4)
             self.snap_to_points(self.footstep_poses[f], frame_id, f)
 
     def snap_to_points(self, pose_in, frame_id, name) :
-
-        print name
-        print frame_id
-        print pose_in
         pose = geometry_msgs.msg.PoseStamped()
         pose.pose = pose_in
         pose.header.frame_id = frame_id      
@@ -402,11 +416,7 @@ class FootstepControl(object) :
         self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
         
     def swap_order(self) :   
-        print "swapping feet order"
-        print self.lift_heights
-        print self.footstep_markers
         for idx in range(0,len(self.footstep_markers.keys())-1,2) :
-            print "swapping feet ", idx, " and ", idx+1
             self.swap_footstep(idx,idx+1)
             idx += 2
 
