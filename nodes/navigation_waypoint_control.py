@@ -492,7 +492,7 @@ class NavigationWaypointControl(threading.Thread) :
             elif handle == self.waypoint_menu_handles["Snap PATH To Points"] :
                 self.snap_path_to_points(feedback.header.frame_id)
             elif handle == self.waypoint_menu_handles["Swap Start Feet"] :
-                self.footstep_controls.swap_footstep(0,1)
+                self.footstep_controls.swap_order()
 
     def save_footstep_path(self, filename) :
         self.footstep_controls.set_footstep_filename(filename)

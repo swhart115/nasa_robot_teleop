@@ -347,7 +347,7 @@ class FootstepControl(object) :
         print self.footstep_poses.keys()
         print frame_id
         for f in self.footstep_poses.keys() :
-            rospy.sleep(0.2)
+            rospy.sleep(0.4)
             self.snap_to_points(self.footstep_poses[f], frame_id, f)
 
     def snap_to_points(self, pose_in, frame_id, name) :
@@ -401,6 +401,14 @@ class FootstepControl(object) :
    
         self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
         
+    def swap_order(self) :   
+        print "swapping feet order"
+        print self.lift_heights
+        print self.footstep_markers
+        for idx in range(0,len(self.footstep_markers.keys())-1,2) :
+            print "swapping feet ", idx, " and ", idx+1
+            self.swap_footstep(idx,idx+1)
+            idx += 2
 
     def swap_footstep(self, id1, id2) :   
         
