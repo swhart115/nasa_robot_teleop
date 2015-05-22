@@ -295,8 +295,6 @@ class FootstepControl(object) :
             if handle == self.footstep_menu_handles["Toggle Full Controls"] :
                 self.toggle_foot_controls(feedback)
                 self.create_foot_interactive_markers()
-            elif handle == self.footstep_menu_handles["Save Footsteps"] :
-                self.save_footsteps()
             elif handle == self.footstep_menu_handles["Delete Footstep"] :
                 self.delete_footstep(feedback)
             elif handle == self.footstep_menu_handles["Add Footstep Before"] :
@@ -413,7 +411,7 @@ class FootstepControl(object) :
 
         new_poses = self.get_foot_poses(new_markers, filter=False)
    
-        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, False)
         
     def swap_order(self) :   
         for idx in range(0,len(self.footstep_markers.keys())-1,2) :
@@ -467,7 +465,7 @@ class FootstepControl(object) :
 
         new_poses = self.get_foot_poses(new_markers, filter=False)
 
-        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, False)
 
     def add_footstep(self, feedback, mode) :   
 
@@ -486,7 +484,8 @@ class FootstepControl(object) :
 
         current_pose = geometry_msgs.msg.PoseStamped()
         current_pose.pose = feedback.pose
-        current_pose.header.frame_id = self.frame_id
+        # current_pose.header.frame_id = self.frame_id
+        current_pose.header.frame_id = feedback.header.frame_id
         new_pose = copy.deepcopy(current_pose)
 
         idx = int(feedback.marker_name)
@@ -538,10 +537,10 @@ class FootstepControl(object) :
 
 
         else :
-            rospy.logerr(str("FootstepControl::add_footstep() -- unknown mode: " + mode))
+            rospy.logerr(str("FootstepControl::add_footstep() -- unknown mode: " + False))
 
 
-        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, True)
+        self.set_footstep_poses(new_poses, new_lift_heights, new_feet, False)
 
 
 

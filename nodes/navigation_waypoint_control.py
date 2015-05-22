@@ -487,8 +487,6 @@ class NavigationWaypointControl(threading.Thread) :
                 self.sync_orientation_to_robot()
             elif handle == self.waypoint_menu_handles["Sync Orientation to Path"] :
                 self.sync_orientation_to_path()
-            elif handle == self.waypoint_menu_handles["Save Footstep Path"] :
-                self.save_footstep_path("")
             elif handle == self.waypoint_menu_handles["Snap PATH To Points"] :
                 self.snap_path_to_points(feedback.header.frame_id)
             elif handle == self.waypoint_menu_handles["Swap Start Feet"] :
