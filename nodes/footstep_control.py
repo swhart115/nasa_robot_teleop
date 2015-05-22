@@ -10,6 +10,7 @@ import random
 import tf
 import pickle
 import PyKDL as kdl
+import rospkg, os, glob
 
 from copy import deepcopy
 
@@ -83,6 +84,9 @@ class FootstepControl(object) :
         self.footstep_menu_options.append("Save Footsteps")
         # self.footstep_menu_options.append("Execute")
         
+        rp = rospkg.RosPack()
+        self.save_path = rp.get_path("nasa_robot_teleop") + "/store/footpaths/"
+ 
         self.footstep_sub = rospy.Subscriber("/planner/footsteps_in", MarkerArray, self.footstep_callback)
         self.path_pub = rospy.Publisher("/planner/path", Path, queue_size=1)      
         
@@ -628,10 +632,7 @@ class FootstepControl(object) :
     def load_footsteps_from_file(self, filename) :
 
         print "load_footsteps_from_file() -- test 1"
-        import rospkg
-        rp = rospkg.RosPack()
         print "load_footsteps_from_file() -- test 2"
-        path = rp.get_path("nasa_robot_teleop")
         print "load_footsteps_from_file() -- test 3"
 
         recalled = pickle.load( open( filename, "rb") )
@@ -656,11 +657,7 @@ class FootstepControl(object) :
 
     def get_footstep_files(self) :
         
-        import rospkg, os, glob
-
-        rp = rospkg.RosPack()
-        path = rp.get_path("nasa_robot_teleop") + "/store/footpaths/"
-        os.chdir(path)
+        os.chdir(self.save_path)
 
         self.footpaths = []
         for ffile in glob.glob("*.fsp") :
