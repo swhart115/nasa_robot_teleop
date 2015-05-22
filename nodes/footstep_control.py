@@ -627,13 +627,18 @@ class FootstepControl(object) :
 
     def load_footsteps_from_file(self, filename) :
 
+        print "load_footsteps_from_file() -- test 1"
         import rospkg
         rp = rospkg.RosPack()
+        print "load_footsteps_from_file() -- test 2"
         path = rp.get_path("nasa_robot_teleop")
+        print "load_footsteps_from_file() -- test 3"
 
         recalled = pickle.load( open( filename, "rb") )
+        print "load_footsteps_from_file() -- test 4"
 
         step_poses = []
+        print "load_footsteps_from_file() -- test 5"
         for idx in range(len(recalled.step_poses)) :
             # if not idx in recalled.step_poses.keys() :
             #     continue 
@@ -642,9 +647,12 @@ class FootstepControl(object) :
             # self.tf_listener.waitForTransform("nav_goal", step.header.frame_id, rospy.Time(0), rospy.Duration(3.0))
             # new_step = self.tf_listener.transformPose("nav_goal", step)     
             step_poses.append(step)
-            
+            print "load_footsteps_from_file() -- test 6"
+    
+        print "load_footsteps_from_file() -- test 7"
         self.set_footstep_poses(step_poses, recalled.lift_heights, recalled.feet, False)
-        
+        print "load_footsteps_from_file() -- test 8"
+
 
     def get_footstep_files(self) :
         
