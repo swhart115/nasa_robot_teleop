@@ -83,6 +83,7 @@ class NavigationWaypointControl(threading.Thread) :
         self.last_waypoint_height = 2.0
 
         self.running = True  
+        self.setDaemon(True)
         self.start()
 
     def activate_navigation_markers(self, v) :

@@ -24,6 +24,8 @@ class PoseUpdateThread(threading.Thread) :
         if offset_pose != None :
             self.T_offset = fromMsg(self.offset_pose)
         self.running = True
+        self.setDaemon(True)
+        
 
     def run(self) :
         while self.running :
