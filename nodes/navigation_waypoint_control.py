@@ -197,7 +197,7 @@ class NavigationWaypointControl(threading.Thread) :
             req.name = self.waypoint_markers[N-1]
         
         rospy.loginfo(str("NavigationWaypointControl::set_pose() -- setting pose of nav marker: " + str(req.name)))
-        print ref_pose
+        # print ref_pose
         
         for id in self.waypoint_markers :
             n = self.get_waypoint_name(id)
