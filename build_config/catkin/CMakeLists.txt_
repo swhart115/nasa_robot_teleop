@@ -105,6 +105,7 @@ add_service_files(
   GetJointNames.srv
   InteractiveControlsInterface.srv
   GetHandType.srv
+  SetPose.srv
 )
 
 ## Generate actions in the 'action' folder

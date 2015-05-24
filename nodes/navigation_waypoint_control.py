@@ -20,6 +20,8 @@ from nasa_robot_teleop.path_planner import *
 from nasa_robot_teleop.util.marker_helper import *
 from nasa_robot_teleop.util.kinematics_util import *
 
+from nasa_robot_teleop.srv import *
+
 from footstep_control import *
 
 class NavigationWaypointControl(threading.Thread) :
@@ -81,6 +83,8 @@ class NavigationWaypointControl(threading.Thread) :
         self.use_footstep_planner = True
 
         self.last_waypoint_height = 2.0
+
+        self.set_pose = rospy.Service('~set_navigation_pose', SetPose, self.handle_set_pose)
 
         self.running = True  
         self.setDaemon(True)
@@ -172,6 +176,41 @@ class NavigationWaypointControl(threading.Thread) :
             return True
         else:
             return False
+
+    def handle_set_pose(self, req) :
+        
+        resp = SetPoseResponse()
+        resp.success = False
+        
+        ps = req.pose_stamped
+
+        node = self.waypoint_markers[0]
+
+        if ps.header.frame_id != self.frame_id :
+            self.tf_listener.waitForTransform(self.frame_id, ps.header.frame_id, rospy.Time(0), rospy.Duration(5.0))
+            ref_pose = self.tf_listener.transformPose(self.frame_id, ps)
+        else :
+            ref_pose = ps
+        
+        if req.name == "" :
+            N = len(self.waypoint_markers)
+            req.name = self.waypoint_markers[N-1]
+        
+        rospy.loginfo(str("NavigationWaypointControl::set_pose() -- setting pose of nav marker: " + str(req.name)))
+        print ref_pose
+        
+        for id in self.waypoint_markers :
+            n = self.get_waypoint_name(id)
+            if n == req.name :
+                pose = ref_pose.pose
+                self.server.setPose(n, pose)
+                resp.success = True
+                break
+
+        self.server.applyChanges()
+        return resp
+
+
 
     def insert_waypoint(self, offset, replace, full_controls=False) :
 
